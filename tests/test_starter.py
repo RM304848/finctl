@@ -111,3 +111,12 @@ def test_the_app_sets_itself_up_starts_and_quits(tmp_path):
     finally:
         if lauf.poll() is None:
             lauf.kill()
+
+
+def test_the_first_start_opens_the_setup_and_later_ones_the_overview(monkeypatch):
+    from finctl import konten
+
+    monkeypatch.setattr(konten, "laden", lambda *a, **k: [])
+    assert starter.startseite() == "einrichtung"
+    monkeypatch.setattr(konten, "laden", lambda *a, **k: [{"id": "giro"}])
+    assert starter.startseite() == ""

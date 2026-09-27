@@ -6,6 +6,9 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+- Beim ersten Öffnen – solange es kein Konto gibt – startet die App in der
+  Einrichtung statt im Monatsabschluss.
+
 ## 0.2.0 – 2026-09-27
 
 - Die App gibt es zum Doppelklicken: `.dmg` für den Mac (Apple-Chip), `.exe`

@@ -17,6 +17,11 @@ WAS ER ANDERS MACHT ALS `serve`:
   Antwortet dort etwas anderes, nimmt er einen freien Port.
 * Er laesst sich aus der App heraus beenden (Knopf "Beenden"): Auf dem Mac
   gibt es kein Fenster, das man schliessen koennte.
+* Solange es kein Konto gibt, oeffnet er die Einrichtung statt des
+  Monatsabschlusses. Wer die App zum ersten Mal oeffnet, soll dort landen,
+  wo es losgeht -- und nicht vor einer leeren Uebersicht. Eine Umleitung
+  ist das nicht: `/` fuehrt weiter zum Monatsabschluss, und wer die
+  Einrichtung wegklickt, kommt ueberall hin.
 """
 
 from __future__ import annotations
@@ -85,6 +90,13 @@ def einrichten_wenn_noetig() -> bool:
     return True
 
 
+def startseite() -> str:
+    """Wohin der Browser beim Start geht: ohne Konto in die Einrichtung."""
+    from finctl import konten
+
+    return "einrichtung" if not konten.laden() else ""
+
+
 def _browser_wenn_bereit(server, adresse: str) -> None:
     for _ in range(300):
         if server.started:
@@ -111,6 +123,7 @@ def main() -> None:
     from finctl.web.server import app
 
     server = uvicorn.Server(uvicorn.Config(app, host=HOST, port=port, log_level="warning"))
+    erste_seite = adresse + startseite()
 
     def beenden() -> None:
         server.should_exit = True
@@ -118,7 +131,8 @@ def main() -> None:
     basis.BEENDEN = beenden
     print(f"Finance OS laeuft: {adresse}\n"
           "Beenden: in der App oben rechts -- oder dieses Fenster schliessen.")
-    threading.Thread(target=_browser_wenn_bereit, args=(server, adresse), daemon=True).start()
+    threading.Thread(target=_browser_wenn_bereit, args=(server, erste_seite),
+                     daemon=True).start()
     server.run()
 
 

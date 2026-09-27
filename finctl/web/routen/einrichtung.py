@@ -299,7 +299,10 @@ async def api_datenordner_setzen(request: Request):
     if grund := ops.ziel_pruefen(ziel):
         return JSONResponse({"error": grund}, status_code=400)
 
+    from finctl.web import basis
+
     _p.ort_setzen(ziel)
+    wann = ("Gilt, sobald du die App beendest und neu öffnest"
+            if basis.app_modus() else "Gilt beim nächsten Start")
     return {"ok": True, "ordner": str(ziel), "zeiger": str(_p.zeiger()),
-            "hinweis": "Eingetragen. Gilt beim nächsten Start; vorhandene "
-                       "Daten werden nicht mitgenommen."}
+            "hinweis": f"Eingetragen. {wann}; vorhandene Daten werden nicht mitgenommen."}

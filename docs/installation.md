@@ -30,13 +30,22 @@ Unter **Releases** die neueste Version öffnen und die passende Datei laden:
 
 ## Benutzen
 
-Nach dem Start öffnet sich der Browser mit der App. Beim ersten Mal führt die
-**Einrichtung** durch alles Nötige. Beenden: **Beenden** oben rechts in der App.
+Nach dem Start öffnet sich der Browser mit der App. Beim ersten Mal – und
+solange noch kein Konto angelegt ist – öffnet sie die **Einrichtung**, die
+durch alles Nötige führt. Beenden: **Beenden** oben rechts in der App.
 
-Deine Daten liegen getrennt vom Programm:
+Deine Daten liegen getrennt vom Programm, **nicht** dort, wo die `.exe` oder
+die App liegt:
 
 - Mac: `~/Library/Application Support/Finance OS`
-- Windows: `%APPDATA%\Finance OS`
+- Windows: `C:\Users\<Name>\AppData\Roaming\Finance OS`
+
+Das Programm kannst du deshalb verschieben, löschen oder durch eine neue
+Version ersetzen, ohne dass etwas verloren geht. Wer die Daten lieber woanders
+hat (etwa unter „Dokumente“), trägt den Ordner in der Einrichtung unter
+**1 — Wo die Daten liegen** ein, beendet die App und öffnet sie neu.
+Vorhandene Daten zieht die App dabei nicht mit um: am besten gleich beim
+ersten Start entscheiden.
 
 Sichern geht über den Knopf **Sichern** im Monatsabschluss; das Ziel legst du
 in der Einrichtung fest.
