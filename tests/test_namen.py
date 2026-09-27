@@ -45,7 +45,7 @@ WURZEL = Path(__file__).resolve().parent.parent
 
 #: Wo gezaehlt wird. Dieselbe Reichweite, die CLAUDE.md nennt: Code, Tests,
 #: Kommentare und Vorlagen.
-ORDNER = ("finctl", "tests")
+ORDNER = ("finctl", "tests", "werkzeuge")
 
 #: Und in welchen Dateien. `.sql` und `.yaml` kamen am 23.09.2026 dazu: Das
 #: Datenbankschema nannte in einem Kommentar eine Wohnung, und die

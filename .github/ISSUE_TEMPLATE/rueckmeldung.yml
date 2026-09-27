@@ -1,0 +1,47 @@
+name: Rückmeldung
+description: Etwas geht nicht, ist unklar oder fehlt.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Bitte keine echten Daten hier hinein** – keine Kontoauszüge, Beträge,
+        Namen, IBANs oder Screenshots mit Zahlen. Was hier steht, liegt auf GitHub.
+        Braucht es einen Auszug, damit eine Bank erkannt wird: `finctl anonymisieren`
+        macht eine verfremdete Kopie, und nur die gehört hierher.
+  - type: dropdown
+    id: art
+    attributes:
+      label: Worum geht es?
+      options:
+        - Etwas geht nicht
+        - Etwas ist unklar
+        - Etwas fehlt
+        - Meine Bank wird nicht erkannt
+    validations:
+      required: true
+  - type: textarea
+    id: was
+    attributes:
+      label: Was hast du gemacht, und was ist passiert?
+      placeholder: Auf „Einlesen“ geklickt, eine CSV von … ausgewählt, dann kam …
+    validations:
+      required: true
+  - type: textarea
+    id: erwartet
+    attributes:
+      label: Was hättest du erwartet?
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Steht unten auf jeder Seite der App.
+      placeholder: "0.2.0"
+  - type: dropdown
+    id: system
+    attributes:
+      label: Rechner
+      options:
+        - Windows
+        - Mac mit Apple-Chip (M1 oder neuer)
+        - Mac mit Intel-Chip
+        - anderes

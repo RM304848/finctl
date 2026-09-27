@@ -34,8 +34,8 @@ import yaml
 
 WURZEL = Path(__file__).resolve().parent.parent
 
-ORDNER = ("finctl", "tests", "docs")
-DATEIEN = ("HANDBUCH.md", "CLAUDE.md", "pyproject.toml")
+ORDNER = ("finctl", "tests", "docs", "werkzeuge", ".github")
+DATEIEN = ("HANDBUCH.md", "CLAUDE.md", "CHANGELOG.md", "pyproject.toml")
 ENDUNGEN = {".py", ".html", ".sql", ".yaml", ".yml", ".md", ".csv", ".txt", ".toml", ".json"}
 #: Erfunden, und dort absichtlich.
 AUSSER = ("tests/musterhaushalt/", "tests/beispiele/")
