@@ -343,7 +343,15 @@ def neu_bauen(quelle: Path, stichtag: _dt.date, ziel: Path) -> None:
                         ignore=shutil.ignore_patterns("*.lock", ".DS_Store"))
         shutil.copytree(quelle / "data" / "statements", wurzel / "data" / "statements",
                         ignore=shutil.ignore_patterns(".DS_Store"))
-        env = {**os.environ, "FINCTL_DATEN": str(wurzel)}
+        # Auch das Heimatverzeichnis im Wegwerfordner, wie in tests/conftest.py:
+        # sonst liest der Neuaufbau einen eingetragenen Datenordner (ort.txt)
+        # dieses Rechners, und die Referenz haengt davon ab, ob in der
+        # Einrichtung jemand "Pruefen und eintragen" geklickt hat.
+        heim = wurzel / "_heim"
+        heim.mkdir()
+        env = {**os.environ, "FINCTL_DATEN": str(wurzel), "HOME": str(heim),
+               "USERPROFILE": str(heim), "APPDATA": str(heim / "appdata"),
+               "XDG_DATA_HOME": str(heim / "share")}
         lauf = subprocess.run(
             [sys.executable, __file__, "_bauen", str(quelle), str(ziel), stichtag.isoformat()],
             env=env, cwd=wurzel, capture_output=True, text=True, check=False)
