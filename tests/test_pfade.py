@@ -48,9 +48,10 @@ KONSTANTEN = [
 ]
 
 _PROBE = """
-import importlib, sys
+import importlib, pathlib, sys
 for modul, name, _ in {paare!r}:
-    print(getattr(importlib.import_module(modul), name))
+    # Mit `/` auch auf Windows: verglichen wird der Aufbau, nicht die Trenner.
+    print(pathlib.PurePath(getattr(importlib.import_module(modul), name)).as_posix())
 """
 
 
@@ -148,7 +149,7 @@ def test_the_data_root_moves_every_path(tmp_path):
     Handentscheidungen daneben im Code, und ein Backup traegt die Haelfte.
     """
     umgebung = {**_rein(tmp_path), "FINCTL_DATEN": str(tmp_path / "woanders")}
-    erwartet = [str(tmp_path / "woanders" / ziel) for _, _, ziel in KONSTANTEN]
+    erwartet = [(tmp_path / "woanders" / ziel).as_posix() for _, _, ziel in KONSTANTEN]
     assert _ausgeben(umgebung) == erwartet
 
 

@@ -830,7 +830,8 @@ def test_a_wegfall_still_saves_money_in_year_nineteen():
                     "amount_cents": 0, "frequenz": "monatlich",
                     "start": "2027-01", "kategorie": "wohnen/miete",
                     "buchungen": miete}]}]}
-    f = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False)
+    f = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False,
+                                    encoding="utf-8")
     yaml.safe_dump(spec, f, allow_unicode=True)
     f.close()
 

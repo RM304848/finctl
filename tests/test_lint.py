@@ -83,7 +83,9 @@ def _gemessen() -> dict[str, int]:
     gefunden = {}
     for zeile in lauf.stdout.splitlines():
         if treffer := _ZEILE.match(zeile.strip()):
-            schluessel = f"{treffer['datei']}::{treffer['name']}"
+            # Windows meldet `finctl\abos.py`; die Liste fuehrt `/`.
+            datei = treffer["datei"].replace("\\", "/")
+            schluessel = f"{datei}::{treffer['name']}"
             gefunden[schluessel] = max(gefunden.get(schluessel, 0), int(treffer["wert"]))
     return gefunden
 

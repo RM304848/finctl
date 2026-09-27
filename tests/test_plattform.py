@@ -98,3 +98,38 @@ def test_no_module_imports_a_unix_only_module():
                     treffer.append(f"{rel}:{knoten.lineno}: {name}")
     assert not treffer, (
         "Diese Importe gibt es auf Windows nicht:\n  " + "\n  ".join(treffer))
+
+
+# ------------------------------------------------------------------ Kodierung
+
+def _binaer(aufruf: ast.Call) -> bool:
+    modus = [a for a in aufruf.args[:2] if isinstance(a, ast.Constant)]
+    modus += [k.value for k in aufruf.keywords
+              if k.arg == "mode" and isinstance(k.value, ast.Constant)]
+    return any(isinstance(m.value, str) and "b" in m.value for m in modus)
+
+
+def test_every_text_file_is_read_and_written_as_utf8():
+    """Ohne `encoding=` nimmt Python die Kodierung des Systems.
+
+    Auf macOS ist das UTF-8, auf einem deutschen Windows cp1252. Eine Datei,
+    die so geschrieben und als UTF-8 gelesen wird, bricht beim ersten
+    Umlaut -- gefunden im ersten Windows-Lauf, an "Miete entfällt". Gilt fuer
+    App und Tests: ein Test, der anders schreibt als die App, prueft nichts.
+    """
+    namen = {"read_text", "write_text", "open", "NamedTemporaryFile", "TemporaryFile"}
+    fremd = {"pdfplumber", "tarfile", "zipfile", "webbrowser", "os"}
+    treffer = []
+    for pfad in sorted([*(WURZEL / "finctl").rglob("*.py"), *(WURZEL / "tests").rglob("*.py")]):
+        for knoten in ast.walk(ast.parse(pfad.read_text(encoding="utf-8"))):
+            if not isinstance(knoten, ast.Call):
+                continue
+            f = knoten.func
+            name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+            if name not in namen or _binaer(knoten):
+                continue
+            if isinstance(f, ast.Attribute) and getattr(f.value, "id", "") in fremd:
+                continue
+            if not any(k.arg == "encoding" for k in knoten.keywords):
+                treffer.append(f"{pfad.relative_to(WURZEL).as_posix()}:{knoten.lineno}")
+    assert not treffer, "Ohne encoding=:\n  " + "\n  ".join(treffer)

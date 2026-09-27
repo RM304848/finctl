@@ -11,6 +11,8 @@ ein eingetragenes Ziel vor dem Speichern wirklich beschrieben wurde.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from finctl import ops
@@ -22,6 +24,8 @@ def test_an_unwritable_target_is_refused_before_it_is_saved(tmp_path):
     Ein Cloud-Ordner, der gerade nicht eingehaengt ist, sieht vorhanden aus
     und nimmt trotzdem nichts an. `os.access` sagt dazu das Falsche.
     """
+    if os.name == "nt":
+        pytest.skip("chmod setzt unter Windows kein Schreibverbot; geprueft auf macOS")
     gesperrt = tmp_path / "gesperrt"
     gesperrt.mkdir()
     gesperrt.chmod(0o500)                      # lesen ja, schreiben nein

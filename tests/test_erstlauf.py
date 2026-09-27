@@ -17,6 +17,7 @@ Import gelesen, im laufenden Prozess ist finctl laengst geladen.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -57,7 +58,12 @@ print("###" + json.dumps(ergebnis))
 def frisch(tmp_path_factory):
     """Ein leerer Datenordner, einmal eingerichtet -- wie bei einem Neuling."""
     daten = tmp_path_factory.mktemp("fos-daten")
-    umgebung = {"PATH": "/usr/bin:/bin", "HOME": str(daten),
+    # So wenig wie moeglich -- aber was Windows selbst zum Starten braucht,
+    # bleibt: ohne SYSTEMROOT laedt Python dort nicht einmal asyncio.
+    system = {k: v for k, v in os.environ.items()
+              if k.upper() in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP", "COMSPEC", "PATHEXT")}
+    umgebung = {**system, "PATH": "/usr/bin:/bin", "HOME": str(daten),
+                "USERPROFILE": str(daten), "APPDATA": str(daten / "appdata"),
                 "FINCTL_DATEN": str(daten)}
     fertig = subprocess.run([sys.executable, "-m", "finctl.cli", "init"],
                             cwd=WURZEL, env=umgebung, capture_output=True,
