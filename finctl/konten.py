@@ -73,16 +73,21 @@ def profile() -> list[str]:
     eingetragen werden muss, und die, die man vergisst.
     """
     import importlib
+    import pkgutil
 
-    ordner = Path(__file__).resolve().parent / "ingest" / "profiles"
+    from finctl.ingest import profiles
+
     namen = []
-    for datei in ordner.glob("*.py"):
-        if datei.stem.startswith("_"):
+    # Ueber das Paket, nicht ueber `*.py` im Ordner: in der App zum
+    # Doppelklicken liegen die Module in einem Archiv, und ein Ordner voller
+    # .py-Dateien existiert dort nicht -- die Auswahl der Profile war leer.
+    for info in pkgutil.iter_modules(profiles.__path__):
+        if info.name.startswith("_"):
             continue
         # Eine Sammlung beschriebener Exporte (banken_csv) bietet ihre
         # Eintraege an, nicht sich selbst.
-        modul = importlib.import_module(f"finctl.ingest.profiles.{datei.stem}")
-        namen += list(getattr(modul, "PARSERS", {})) or [datei.stem]
+        modul = importlib.import_module(f"finctl.ingest.profiles.{info.name}")
+        namen += list(getattr(modul, "PARSERS", {})) or [info.name]
     # Und die selbst beschriebenen Exporte aus config/.
     from finctl.ingest import zuordnung
 

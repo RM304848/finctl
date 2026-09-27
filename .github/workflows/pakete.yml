@@ -1,0 +1,92 @@
+# Die App zum Doppelklicken: .dmg fuer den Mac, .exe fuer Windows.
+#
+# Laeuft bei jedem Versions-Tag (werkzeuge/release.py setzt es) und von Hand
+# ueber "Run workflow". Jedes Paket wird gebaut und dann GESTARTET
+# (werkzeuge/paket/rauchtest.py): ein Paket, dem eine Vorlage fehlt, baut
+# sauber und stuerzt erst bei der ersten Seite ab.
+#
+# Bei einem Tag entsteht ein Release-ENTWURF mit beiden Dateien und dem
+# Abschnitt aus CHANGELOG.md. Sichtbar wird er erst mit "Publish release".
+#
+# Nicht signiert: macOS und Windows warnen beim ersten Oeffnen,
+# docs/installation.md sagt, wie man es trotzdem oeffnet.
+
+name: Pakete
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  bauen:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            system: mac
+          - os: windows-latest
+            system: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Installieren
+        run: python -m pip install . pyinstaller
+      - name: Version
+        id: version
+        shell: bash
+        run: echo "nummer=$(python -c 'import finctl; print(finctl.__version__)')" >> "$GITHUB_OUTPUT"
+      - name: Bauen
+        run: pyinstaller --noconfirm werkzeuge/paket/finance_os.spec
+
+      - name: Rauchtest (Mac)
+        if: matrix.system == 'mac'
+        run: python werkzeuge/paket/rauchtest.py "dist/Finance OS.app/Contents/MacOS/Finance OS"
+      - name: .dmg
+        if: matrix.system == 'mac'
+        run: |
+          mkdir dmg
+          cp -R "dist/Finance OS.app" dmg/
+          ln -s /Applications dmg/Programme
+          hdiutil create -volname "Finance OS" -srcfolder dmg -ov -format UDZO \
+            "FinanceOS-${{ steps.version.outputs.nummer }}-mac.dmg"
+
+      - name: Rauchtest (Windows)
+        if: matrix.system == 'windows'
+        run: python werkzeuge/paket/rauchtest.py dist/FinanceOS.exe
+      - name: .exe
+        if: matrix.system == 'windows'
+        shell: bash
+        run: cp dist/FinanceOS.exe "FinanceOS-${{ steps.version.outputs.nummer }}-windows.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paket-${{ matrix.system }}
+          path: FinanceOS-*
+          if-no-files-found: error
+
+  entwurf:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: bauen
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: pakete
+          merge-multiple: true
+      - name: Release-Entwurf
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          nummer="${GITHUB_REF_NAME#v}"
+          python3 werkzeuge/paket/notizen.py "$nummer" > notizen.md
+          gh release create "$GITHUB_REF_NAME" pakete/* --draft \
+            --title "Finance OS $nummer" --notes-file notizen.md

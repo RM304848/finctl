@@ -44,6 +44,13 @@ def _antwortet_finance_os(port: int) -> bool:
 
 def _frei(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        # Wie uvicorn selbst: Nach einem Beenden haengt der Port auf macOS
+        # und Linux noch eine Minute in TIME_WAIT. Ohne die Option galt er
+        # als belegt, und ein Neustart landete auf einem zufaelligen Port.
+        # Nicht auf Windows: dort erlaubt die Option, einen belegten Port
+        # zu uebernehmen.
+        if os.name != "nt":
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind((HOST, port))
         except OSError:

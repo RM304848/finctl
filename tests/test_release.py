@@ -53,3 +53,15 @@ def test_the_version_lives_in_one_place():
 def test_the_changelog_has_an_open_section():
     text = (WURZEL / "CHANGELOG.md").read_text(encoding="utf-8")
     assert release.OFFEN in text
+
+
+def test_the_release_notes_are_the_versions_own_section():
+    spec = importlib.util.spec_from_file_location(
+        "notizen", WURZEL / "werkzeuge" / "paket" / "notizen.py")
+    notizen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(notizen)
+    neu = release.changelog_schreiben(PROTOKOLL, "0.2.0", date(2026, 10, 1))
+    assert notizen.abschnitt(neu, "0.2.0") == "- Neu: etwas."
+    assert notizen.abschnitt(neu, "0.1.0") == "- Alt."
+    with pytest.raises(SystemExit):
+        notizen.abschnitt(neu, "9.9.9")
