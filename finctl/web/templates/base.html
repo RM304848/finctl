@@ -16,13 +16,13 @@ try {
      Auswahllisten im dunklen Thema hell -- die einzigen hellen Flecken auf
      der Seite, und ausgerechnet die Stellen, an denen man etwas eingibt. */
   /* Zwei Themen, ein Akzent (docs/design_conventions.yaml, themen und
-     textkontrast): hell warmes Papier mit Kobalt, dunkel kuehles Graphit mit
-     elektrischem Blau und kraeftigen Signalfarben. Blau, weil Gruen und Rot
-     schon "rein" und "raus" bedeuten -- ein gruener Knopf neben einer gruenen
-     Einnahme sagte zweimal dasselbe Wort fuer zwei Dinge. */
+     textkontrast): hell warmes Papier mit Petrol, dunkel kuehles Graphit mit
+     hellem Petrol und kraeftigen Signalfarben. Petrol und nicht Gruen, weil
+     Gruen und Rot schon "rein" und "raus" bedeuten -- ein gruener Knopf neben
+     einer gruenen Einnahme sagte zweimal dasselbe Wort fuer zwei Dinge. */
   :root{ color-scheme:light dark;
     --bg:#f6f2ea; --panel:#fffcf7; --ink:#201c17; --muted:#655d53;
-    --line:#e4dccf; --accent:#1d4ed8; --warn:#8f5200; --bad:#b3261e;
+    --line:#e4dccf; --accent:#1d7a82; --warn:#8f5200; --bad:#b3261e;
     --good:#1b7339; --on-accent:#ffffff; --feldrand:#8a8072;
   }
   /* Das dunkle Thema steht zweimal: einmal fuer "wie das Geraet", einmal
@@ -31,13 +31,13 @@ try {
      tests/test_design.py (docs/design_conventions.yaml, themen). */
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"]){ --bg:#0c0e12; --panel:#141820; --ink:#eef1f6; --muted:#9aa3b1;
-           --line:#252b35; --accent:#4d8eff; --warn:#f2b53a; --bad:#ff6e6e;
+           --line:#252b35; --accent:#75b5be; --warn:#f2b53a; --bad:#ff6e6e;
            --good:#3fd98a; --on-accent:#0c0e12;
            --feldrand:#5f6978; }
   }
   :root[data-theme="dark"]{ color-scheme:dark;
            --bg:#0c0e12; --panel:#141820; --ink:#eef1f6; --muted:#9aa3b1;
-           --line:#252b35; --accent:#4d8eff; --warn:#f2b53a; --bad:#ff6e6e;
+           --line:#252b35; --accent:#75b5be; --warn:#f2b53a; --bad:#ff6e6e;
            --good:#3fd98a; --on-accent:#0c0e12;
            --feldrand:#5f6978; }
   :root[data-theme="light"]{ color-scheme:light }

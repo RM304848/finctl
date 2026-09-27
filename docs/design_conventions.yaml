@@ -250,7 +250,7 @@ regeln:
     regel: >
       Jede Schriftfarbe -- Text, gedaempft, Akzent, Warnung, rot, gruen --
       haelt auf Grund und Flaeche mindestens 4,5:1, in beiden Themen. Der
-      Akzent ist blau und steht nie fuer eine Richtung: gruen und rot heissen
+      Akzent ist Petrol und steht nie fuer eine Richtung: gruen und rot heissen
       "rein" und "raus", Bernstein heisst Warnung.
     warum: >
       Der Akzent war gruen und damit dieselbe Farbe wie jede Einnahme; ein
@@ -298,7 +298,7 @@ regeln:
   - id: themen
     regel: >
       Hell ist warm (Papier, Creme, warmes Grau), dunkel sportlich (kuehles
-      Graphit, elektrisches Blau, kraeftige Signalfarben); beide teilen den
+      Graphit, helles Petrol, kraeftige Signalfarben); beide teilen den
       einen Akzent und den Akzentstrich ueber dem Kopf.
       Hell und dunkel folgen dem Geraet, bis man im Kopf umschaltet
       (wie das Geraet, hell, dunkel; gemerkt im Browser). Die dunklen Farben
