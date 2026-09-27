@@ -1,0 +1,303 @@
+{% extends "base.html" %}{% block n_abschluss %}on{% endblock %}
+{% block title %}Monatsabschluss{% endblock %}
+{% block body %}
+<h1>Monatsabschluss
+  <span class="muted zusatz">— {{ monat_name }} {{ jahr }},
+    {% if offen %}<strong class="neg">{{ offen }} von {{ gesamt }} offen</strong>
+    {%- else %}<strong class="pos">alles aktuell</strong>{% endif %}</span></h1>
+
+{# Nichts anzuklicken. Ein Haken waere eine Behauptung ueber die Daten, die
+   neben den Daten liegt und falsch werden kann, ohne dass es auffaellt --
+   abgehakt und trotzdem veraltet ist genau der Zustand, den diese Seite
+   verhindern soll. Jede Zeile liest deshalb ihren eigenen Beleg. #}
+<p class="zweck">Was am Monatsanfang zu tun ist — abgehakt von den Daten selbst, nicht von dir.</p>
+
+{# Der erste Start endet hier, nicht auf einer Assistentenseite: Eine
+   Umleitung steht beim zweiten Mal im Weg, ein Hinweis verschwindet von
+   selbst, sobald die drei Fragen beantwortet sind. #}
+{% if einrichtung_offen %}
+<div class="note bad">Die Einrichtung ist noch nicht fertig —
+  {{ einrichtung_offen }} von 3 Fragen offen.
+  <a class="plain" href="/einrichtung">Einrichtung öffnen →</a></div>
+{% endif %}
+
+{% include "_ops.html" %}
+
+{# Die Kacheln stehen hier, weil man diese Seite am Ersten ohnehin oeffnet:
+   "wie steht es" gleich neben "was ist zu tun". #}
+{% set k = kacheln %}
+{% if k.ungleich %}<div class="note bad">{{ k.ungleich }} Split-Ungleichgewichte — das ist ein Fehler, keine Warnung.</div>{% endif %}
+{% for g in k.luecken %}<div class="note bad">Lücke auf {{ g.account_id }}: {{ g.after }} → {{ g.before }},
+  {{ g.delta_cents|euro }} ungeklärt. Vermutlich fehlt ein Auszug.</div>{% endfor %}
+<div class="cards">
+  <div class="card"><div class="k">Einnahmen {{ k.jahr }}</div>
+    <div class="v pos">{{ k.einnahmen|euro }}</div>
+    <div class="muted klein">davon Gehalt <span class="{{ k.gehalt|vz }}">{{ k.gehalt|euro }}</span>
+      {% if k.einnahmen %}({{ '%.0f'|format(100.0 * k.gehalt / k.einnahmen) }} %){% endif %}</div></div>
+  <div class="card"><div class="k">Ausgaben {{ k.jahr }}</div>
+    <div class="v neg">{{ k.ausgaben|euro }}</div>
+    <div class="muted klein">
+      {% if k.einnahmen %}{{ '%.0f'|format(100.0 * (-k.ausgaben) / k.einnahmen) }} % der Einnahmen{% endif %}
+      {% if k.gehalt %}· {{ '%.0f'|format(100.0 * (-k.ausgaben) / k.gehalt) }} % vom Gehalt{% endif %}</div></div>
+  <div class="card"><div class="k">Saldo {{ k.jahr }}</div>
+    <div class="v {{ (k.einnahmen + k.ausgaben)|vz }}">{{ (k.einnahmen + k.ausgaben)|euro }}</div>
+    <div class="muted klein">ohne Investments und einmalige Objektkosten</div></div>
+  {% set ob = ohne_objekt %}
+  <div class="card"><div class="k">Cashflow ohne {{ ob.label }}{% if ob.letzter %} · {{ ob.letzter.monat.strftime('%Y-%m') }}{% endif %}</div>
+    {% if ob.letzter %}
+    <div class="v {{ 'pos' if ob.letzter.cents >= ob.ziel_cents else 'neg' }}">{{ ob.letzter.cents|euro }}</div>
+    {% else %}<div class="v muted">—</div>{% endif %}
+    <div class="muted klein">Prognose Ø <span class="{{ (ob.schnitt_prognose_cents or 0)|vz }}">{{ (ob.schnitt_prognose_cents or 0)|euro }}</span> ·
+      <a class="plain" href="/konten#ohne-objekt">Verlauf →</a></div></div>
+  {# Eine Kachel fuer beide Reiter: fuenf Kacheln fuellen eine Reihe. #}
+  <div class="card"><div class="k">Transaktionen offen</div>
+    <div class="v">{{ k.review + k.flagged }}</div>
+    <div class="muted klein"><a class="plain" href="/transactions?ansicht=offen">{{ k.review }} zuordnen →</a>
+      · <a class="plain" href="/transactions?ansicht=aufteilen">{{ k.flagged }} aufteilen →</a></div></div>
+</div>
+
+{# Je Position eine Zeile: ob sie aktuell ist, ihr Wert, die Notiz. Belegt
+   ist Text, getippt ein Feld -- ein Stand wird dort gepflegt, wo man
+   bemerkt, dass er alt ist. #}
+<style>
+  table.staende{table-layout:fixed}
+  table.staende col.haken{width:34px}
+  table.staende col.pos{width:14rem}
+  table.staende col.wert{width:9rem}
+  table.staende col.stand{width:12rem}
+  table.staende col.tun{width:11rem}
+  table.staende td{vertical-align:middle}
+  table.staende td.haken{text-align:center;font-size:15px}
+  table.staende input,table.staende textarea{width:100%;box-sizing:border-box}
+  table.staende td.stand input{max-width:9rem}
+  table.staende input.betrag{text-align:right}
+  table.staende input.alt{color:var(--bad)}
+  table.staende label.bezug{display:flex;gap:.4rem;align-items:center;margin-top:.25rem}
+  table.staende label.bezug input{width:6.5rem}
+  /* Die Notiz liest sich als Text und wird erst beim Zeigen zum Feld. */
+  table.staende .still{border-color:transparent;background:transparent;resize:none;
+    overflow:hidden;font:inherit;line-height:1.35}
+  /* Zwei Zeilen; eine laengere Begruendung blendet aus und oeffnet sich beim Klick. */
+  table.staende .still{max-height:calc(2.7em + .7rem)}
+  table.staende .still.lang{-webkit-mask-image:linear-gradient(#000 55%,transparent);
+    mask-image:linear-gradient(#000 55%,transparent)}
+  table.staende .still:focus{max-height:none;-webkit-mask-image:none;mask-image:none}
+  table.staende .still:hover,table.staende .still:focus{
+    border-color:var(--feldrand);background:var(--panel)}
+  @media (max-width:700px){
+    table.staende,table.staende tbody{display:block}
+    table.staende colgroup,table.staende tr.kopf{display:none}
+    table.staende tr{display:grid;grid-template-columns:28px 1fr 8.5rem;
+      column-gap:.4rem;border-bottom:1px solid var(--line);padding:.35rem 0}
+    table.staende td{border:0;padding:.15rem 0}
+    table.staende td.stand{grid-column:2}
+    table.staende td.tun{grid-column:3;grid-row:2}
+    table.staende td.notiz{grid-column:2 / -1}
+  }
+</style>
+{% set bearbeiten = bestand is not none %}
+{% for g in staende %}
+{% set konten = g.id == 'konten' %}
+<h2 id="{{ g.id }}">{{ g.titel }}
+  <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">
+    — {{ g.erledigt }} von {{ g.zeilen|length }} aktuell
+    {%- if g.id != 'renten' %} · <span class="{{ g.summe|vz }}">{{ g.summe|euro }}</span>{% endif %}
+    {%- if g.ohne_wert %} · {{ g.ohne_wert }} ohne Wert{% endif %}</span></h2>
+<p class="muted klein" style="margin:-.3rem 0 .6rem">{{ g.erklaerung }}</p>
+<div class="wrap"><table class="staende">
+  <colgroup><col class="haken"><col class="pos"><col class="wert"><col class="stand">
+    <col class="notiz"><col class="tun"></colgroup>
+  <tr class="kopf"><th></th><th>{{ 'Konto' if konten else 'Position' }}</th>
+    <th class="num">{{ ('Saldo ' ~ g.stichtag) if konten and g.stichtag else 'Wert' }}</th>
+    <th>{{ 'Beleg' if konten else 'Stand' }}</th><th>Notiz</th><th></th></tr>
+  {% for z in g.zeilen %}{% set p = z.p %}
+  {% set feld = bearbeiten and not z.auszug %}
+  {# Eine Rente kann wie ihre Police heissen: eigener Praefix fuer die id. #}
+  <tr id="pos-{{ 'rente-' if g.id == 'renten' }}{{ z.key|e }}" data-key="{{ z.key|e }}"{% if z.api %} data-api="{{ z.api }}"{% endif %}
+      data-cents="{{ z.cents if z.cents is not none }}">
+    <td class="haken">{% if p.erledigt %}<span class="pos" title="aktuell">✓</span>
+      {%- else %}<span class="neg" title="veraltet">○</span>{% endif %}</td>
+    {# Konten als Kennung (konten-als-kennung), der Anzeigename als Titel. #}
+    <td>{% if konten %}<span title="{{ p.name }}">{{ z.key }}</span>{% else %}{{ p.name }}{% endif %}
+      {%- if g.id == 'renten' %}<br><span class="muted fein">{{ p.zusatz }}</span>
+      {%- if feld %}<label class="bezug fein muted">Bezug ab <input data-feld="ab" value="{{ z.ab }}"
+          placeholder="{{ z.ab_vorgabe or '2061-03' }}" title="Leer: ab dem Rentenbeginn aus der Einrichtung"
+          oninput="standGeaendert(this)" onkeydown="standTaste(event)"></label>
+      {%- elif z.ab %}<br><span class="muted fein">Bezug ab {{ z.ab }}</span>{% endif %}{% endif %}
+      {%- if z.eigen %} <span class="pill eigen" title="Hier geändert. In {{ 'renten.yaml' if g.id == 'renten' else 'balances.yaml' }}:
+        {{ z.base_cents|euro if z.base_cents is not none else 'kein Wert' }}
+        {%- if z.base_note %} · {{ z.base_note }}{% endif %}">eigen</span>{% endif %}</td>
+    {% if feld %}
+    <td class="num"><input class="betrag" data-feld="wert" value="{{ z.cents|betrag }}"
+        placeholder="unbekannt" oninput="standGeaendert(this)"
+        onkeydown="standTaste(event)"></td>
+    <td class="stand"><input data-feld="stand" value="{{ z.as_of }}" placeholder="2026-01-01"
+        class="{{ 'alt' if not p.erledigt }}" oninput="standGeaendert(this)"
+        onkeydown="standTaste(event)"></td>
+    {% else %}
+    <td class="num {{ z.cents|vz }}">{{ z.cents|euro if z.cents is not none else '—' }}</td>
+    <td class="stand {{ 'neg' if not p.erledigt }}">{{ p.beleg or p.hinweis }}
+      {%- if p.zusatz %} <span class="muted fein">· {{ p.zusatz }}</span>{% endif %}</td>
+    {% endif %}
+    <td class="notiz">{% if bearbeiten and z.notiz %}<textarea class="still" data-feld="notiz" rows="1"
+        maxlength="2000" placeholder="Notiz — woher, wem gehört es?"
+        oninput="standGeaendert(this)" onkeydown="standTaste(event)">{{ z.note }}</textarea>
+      {%- else %}<span class="muted">{{ z.note }}</span>{% endif %}</td>
+    <td class="tun nobr">{% if bearbeiten %}
+      <button class="ghost" data-knopf onclick="standAblegen(this)"
+        {%- if z.auszug or p.erledigt or z.cents is none %} hidden{% endif %}
+        title="Denselben Wert mit heutigem Datum ablegen">unverändert</button>
+      {%- if z.eigen %} <button class="ghost" onclick="standZurueck(this)"
+        title="Zurück auf {{ 'renten.yaml' if g.id == 'renten' else 'balances.yaml' }}">zurück</button>{% endif %}
+      <span class="meldung fein"></span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endfor %}
+
+{% if bestand and bestand.obligations %}
+{% set eine = bestand.obligations|length == 1 %}
+<div class="note">Noch {{ bestand.obligations|length }} Verbindlichkeit{{ '' if eine else 'en' }}
+  aus <code>balances.yaml</code> {{ 'zieht' if eine else 'ziehen' }} vom Vermögen ab, zusammen
+  {{ bestand.obligations|sum(attribute='cents')|euro }}. In der Planung als Verpflichtung
+  eintragen, dann hier streichen:
+  {% for o in bestand.obligations %}<button class="ghost" style="margin-left:.4rem"
+    onclick="verbindlichkeitStreichen('{{ o.kennung }}', '{{ o.name|e }}')">{{ o.name }} streichen</button>{% endfor %}
+  <span id="vm-streichen" class="muted fein"></span></div>
+{% endif %}
+
+<script>
+function standFeld(tr, name){ return tr.querySelector('[data-feld="' + name + '"]'); }
+// Das oertliche Datum: toISOString waere UTC und kurz nach Mitternacht gestern.
+function standHeute(){ return new Date().toLocaleDateString('sv'); }
+function standSagen(tr, text, art){
+  const m = tr.querySelector('.meldung');
+  m.textContent = text;
+  m.className = 'meldung fein ' + (art === 'pos' ? 'pos' : (art === 'bad' ? 'neg' : 'muted'));
+}
+// Wer tippt, speichert: derselbe Knopf heisst dann Speichern. Ein neuer Wert
+// zieht den Stand auf heute, solange der nicht selbst gesetzt wurde.
+// Eine lange Notiz bricht um, statt im Feld abgeschnitten zu stehen.
+function standHoehe(t){
+  t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px';
+  t.classList.toggle('lang', t.scrollHeight > t.clientHeight + 2);
+}
+document.querySelectorAll('table.staende textarea').forEach(standHoehe);
+function standGeaendert(el){
+  const tr = el.closest('tr');
+  if (el.tagName === 'TEXTAREA') standHoehe(el);
+  const geaendert = new Set((tr.dataset.geaendert || '').split(' ').filter(Boolean));
+  geaendert.add(el.dataset.feld);
+  if (el.dataset.feld === 'wert'){
+    const d = standFeld(tr, 'stand');
+    if (d && !geaendert.has('stand')){ d.value = standHeute(); d.classList.remove('alt'); }
+  }
+  tr.dataset.geaendert = [...geaendert].join(' ');
+  const k = tr.querySelector('[data-knopf]');
+  k.hidden = false; k.textContent = 'Speichern'; k.title = '';
+}
+function standTaste(e){
+  if (e.key === 'Enter'){ e.preventDefault(); standAblegen(e.target.closest('tr').querySelector('[data-knopf]')); }
+}
+// Nur was geaendert wurde, geht an den Server (nur-abweichungen-speichern).
+function standKoerper(tr){
+  const geaendert = (tr.dataset.geaendert || '').split(' ');
+  const body = {key: tr.dataset.key};
+  if (!tr.dataset.geaendert) return {...body, cents: Number(tr.dataset.cents), as_of: standHeute()};
+  if (geaendert.includes('wert') || geaendert.includes('stand')){
+    const w = standFeld(tr, 'wert');
+    const cents = centsAus(w.value);
+    if (cents === null){ w.classList.add('feld-fehlt'); return null; }
+    body.cents = cents;
+    body.as_of = standFeld(tr, 'stand').value.trim();
+  }
+  if (geaendert.includes('notiz')) body.note = standFeld(tr, 'notiz').value;
+  if (geaendert.includes('ab')) body.ab = standFeld(tr, 'ab').value.trim();
+  return body;
+}
+async function standPost(tr, body){
+  try {
+    const r = await fetch(tr.dataset.api || '/api/bestand', {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    const j = await r.json();
+    if (j.error){ standSagen(tr, 'Fehler: ' + j.error, 'bad'); return; }
+    standSagen(tr, 'gespeichert', 'pos');
+    tr.classList.add('gespeichert');
+    setTimeout(() => location.reload(), 900);
+  } catch(e){ standSagen(tr, 'Fehler: ' + e, 'bad'); }
+}
+function standAblegen(knopf){
+  const tr = knopf.closest('tr');
+  const body = standKoerper(tr);
+  if (!body){ standSagen(tr, 'keine Zahl', 'bad'); return; }
+  standPost(tr, body);
+}
+function standZurueck(knopf){ const tr = knopf.closest('tr'); standPost(tr, {key: tr.dataset.key, remove: true}); }
+async function verbindlichkeitStreichen(kennung, name){
+  if (!confirm(name + ' aus dem Vermögen streichen? Die Begründung in balances.yaml bleibt.')) return;
+  const box = document.getElementById('vm-streichen');
+  const r = await fetch('/api/verpflichtung', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({kennung: kennung, remove: true})});
+  const j = await r.json();
+  if (j.error){ box.textContent = 'Fehler: ' + j.error; box.className = 'neg fein'; return; }
+  location.reload();
+}
+</script>
+
+{% for schluessel, titel, erklaerung in gruppen %}
+{% set zeilen = posten|selectattr('gruppe', 'equalto', schluessel)|list %}
+{% if zeilen %}
+<h2>{{ titel }}
+  <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">
+    — {{ zeilen|length }} offen</span></h2>
+<p class="muted klein" style="margin:-.3rem 0 .6rem">{{ erklaerung }}</p>
+<div class="wrap"><table>
+  <tr><th style="width:34px"></th><th>Position</th><th>Was fehlt</th></tr>
+  {% for p in zeilen %}
+  <tr>
+    <td style="text-align:center;font-size:15px"><span class="neg">○</span></td>
+    <td>{% if p.ziel %}<a class="plain" href="{{ p.ziel }}">{{ p.name }}</a>
+        {%- else %}{{ p.name }}{% endif %}</td>
+    <td class="muted">{{ p.hinweis }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+{% endfor %}
+
+
+<h2>Ablauf</h2>
+<p class="muted klein" style="margin:-.3rem 0 .6rem">
+  Die Seiten in der Reihenfolge, in der sie Sinn ergeben.</p>
+<div class="wrap"><table>
+  {# Eine echte Kopfzeile, sonst erklaert der Sortierer die erste Datenzeile
+     dazu und haengt ihr Sortierpfeile an. #}
+  <tr><th style="width:34px"></th><th style="width:130px">Schritt</th><th>Stand</th></tr>
+  {% for s in schritte %}
+  <tr>
+    <td style="width:34px;text-align:center;font-size:15px">
+      {% if s.warnung %}<span class="neg">!</span>{% else %}<span class="muted">·</span>{% endif %}</td>
+    <td style="width:130px"><a class="plain" href="{{ s.ziel }}">{{ s.titel }}</a></td>
+    <td class="{{ 'neg' if s.warnung }}">{{ s.text }}
+      {%- if s.cents is not none %} <strong>{{ s.cents|euro }}</strong>{% endif %}
+      {%- if s.warnhinweis %} <span class="muted">— {{ s.warnhinweis }}</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+
+{% include "_klappzustand.html" %}
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/balances.yaml', 'Die Stände, deren Alter hier geprüft wird.'),
+  ('config/balances_custom.yaml', 'Was an Werten und Notizen hier geändert wurde.'),
+  ('config/renten.yaml', 'Rentenquellen mit Art, Beginn und Herleitung.'),
+  ('config/renten_custom.yaml', 'Betrag und Stand der Renten von hier.'),
+  ('config/accounts.yaml', 'Welche Konten einen Auszug liefern müssen.'),
+  ('config/backup.yaml', 'Wohin das Backup schreibt und wie viele Stände bleiben.'),
+  ('config/szenarien.yaml', 'Welche Pläne eingeschaltet sind.'),
+  ('config/goals.yaml', 'Das Barista-FIRE-Ziel in der Fortschrittszeile.'),
+  ('config/forecast.yaml', 'Die Kontenvorschau in der Ablaufzeile.'),
+  ('finctl/web/templates/monatsabschluss.html', 'Die Texte dieser Seite.'),
+], handbuch='monatsabschluss') }}
+{% endblock %}

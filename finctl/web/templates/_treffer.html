@@ -1,0 +1,49 @@
+{# Der Treffer-Check: Prognose vom Vormonat gegen das Ist. Aus dem Ledger
+   nachgerechnet, nichts gespeichert. Δ = Ist minus Prognose; positiv heisst
+   besser als erwartet. #}
+<p class="muted klein" style="margin:-.3rem 0 .6rem">
+  Δ ist Ist minus Prognose; positiv heißt besser als erwartet.</p>
+
+<h3>Jahresbasis</h3>
+<div class="wrap"><table>
+  <tr><th>Monat</th>
+    {% for b in treffer.bloecke %}<th class="num">{{ b }}</th>{% endfor %}
+    <th class="num">Saldo Prognose</th><th class="num">Saldo Ist</th><th class="num">Δ</th>
+    <th class="num">nicht vorhersehbar</th></tr>
+  {% for j in treffer.jahres %}
+  <tr><td>{{ j.monat.strftime('%Y-%m') }}</td>
+    {% for b in treffer.bloecke %}{% set d = j.delta(b) %}
+    <td class="num {{ 'muted' if d is none or not d else ('neg' if d < 0 else 'pos') }}"
+        title="Prognose {{ j.soll.get(b, 0)|euro }} · Ist {{ j.ist.get(b, 0)|euro }}">
+      {{ '—' if d is none else d|euro }}</td>{% endfor %}
+    <td class="num {{ j.sparrate_soll|vz }}">{{ j.sparrate_soll|euro }}</td>
+    <td class="num {{ j.sparrate_ist|vz }}">{{ j.sparrate_ist|euro }}</td>
+    {% set ds = j.sparrate_ist - j.sparrate_soll %}
+    <td class="num {{ ds|vz }}"><strong>{{ ds|euro }}</strong></td>
+    <td class="num muted">{{ j.unvorhersehbar_cents|euro }}</td></tr>
+  {% endfor %}
+  <tr><td class="muted">Ø Abweichung</td>
+    {% for b in treffer.bloecke %}{% set w = treffer.mittel.get(b) %}
+    <td class="num {{ w|vz if w else 'muted' }}">{{ '—' if w is none else w|euro }}</td>{% endfor %}
+    <td></td><td></td>
+    <td class="num {{ treffer.mittel.sparrate|vz }}"><strong>{{ treffer.mittel.sparrate|euro }}</strong></td><td></td></tr>
+</table></div>
+
+<h3>Konten</h3>
+<div class="wrap"><table>
+  <tr><th>Monat</th>
+    {% for k in treffer.konten_ids %}<th class="num">{{ k }}</th>{% endfor %}</tr>
+  {% for m in treffer.monate %}
+  <tr><td>{{ m.strftime('%Y-%m') }}</td>
+    {% for k in treffer.konten_ids %}
+    {% set z = (treffer.konten|selectattr('konto', 'equalto', k)|selectattr('monat', 'equalto', m)|list) %}
+    {% if z %}{% set z = z[0] %}
+    <td class="num {{ 'muted' if not z.delta_cents else ('neg' if z.delta_cents < 0 else 'pos') }}"
+        title="Prognose {{ z.soll_cents|euro }} · Ist {{ z.ist_cents|euro }}{{ ' · ohne Kreditbuchungen' if z.ohne_kredit }}">
+      {{ z.delta_cents|euro }}</td>
+    {% else %}<td class="num muted">—</td>{% endif %}
+    {% endfor %}</tr>
+  {% endfor %}
+  <tr><td class="muted">Ø Abweichung</td>
+    {% for k in treffer.konten_ids %}<td class="num {{ treffer.konten_mittel[k]|vz }}"><strong>{{ treffer.konten_mittel[k]|euro }}</strong></td>{% endfor %}</tr>
+</table></div>

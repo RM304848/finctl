@@ -1,0 +1,4 @@
+einstellungen:
+  floor_cents:giro: 150000
+  floor_cents:alltag: 20000
+  floor_cents:tagesgeld: 0

@@ -1,0 +1,387 @@
+{% extends "base.html" %}{% block n_einrichtung %}on{% endblock %}
+{% block title %}Einrichtung{% endblock %}
+{% block body %}
+<h1>Einrichtung</h1>
+<p class="zweck">Wo die Daten liegen, wohin gesichert wird, welche Konten
+es gibt, wer plant und was die App zeigen soll.</p>
+
+{# Der Stand kommt aus den Daten, nicht aus einem Haken: ein anklickbarer
+   Haken waere eine Behauptung daneben, die falsch werden kann, ohne dass es
+   auffaellt. Dieselbe Entscheidung wie auf /monatsabschluss. #}
+<div class="wrap"><table>
+  <tr><th style="width:40px" class="num">#</th><th style="width:230px">Frage</th>
+      <th>Stand</th><th style="width:90px">Erledigt</th></tr>
+  {% for s in schritte %}
+  <tr id="zeile-{{ s.id }}">
+    <td class="num muted">{{ s.nr }}</td>
+    <td>{{ s.titel }}</td>
+    <td class="muted fein" id="stand-{{ s.id }}">{{ s.stand }}</td>
+    {# `.pos`/`.neg` wie auf /monatsabschluss. `.pill ok` war falsch: `.ok`
+       faerbt den LINKEN RAND eines Hinweiskastens, und an einer runden Pill
+       wurde daraus eine Klammer vor dem Wort. #}
+    <td>{% if s.fertig %}<span class="pos">ja</span>
+        {%- else %}<span class="neg">offen</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+
+{# Die Nummer steht in der Klappleiste und nicht als eigene Ueberschrift
+   darueber: zwei Zeilen mit demselben Text lesen sich als Fehler. #}
+<details class="klapp"{% if zuerst == 'datenordner' %} open{% endif %}>
+  <summary>1 — Wo die Daten liegen</summary>
+  <div class="zeile" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+    <label for="d-ordner">Ordner</label>
+    <input id="d-ordner" style="flex:1;min-width:18rem"
+           placeholder="{{ vorgabe }}">
+    <button class="ghost" onclick="ordnerSpeichern()">Prüfen und eintragen</button>
+  </div>
+  <div class="muted klein" id="d-stand"></div>
+  {# Kurze Absaetze, weil jeder einzeln zaehlt -- ein Hilfebereich ist kein
+     Ort fuer Fliesstext. #}
+  <details class="hilfe">
+    <summary>Was dieser Eintrag tut</summary>
+    <p>Er sagt, wo gesucht wird, und verschiebt nichts.</p>
+    <p>Wer Daten mitnehmen will, kopiert sie selbst.</p>
+    <p>Es gilt ab dem nächsten Start.</p>
+    <p>Ohne Eintrag zählt ein <code>config/</code> im Arbeitsverzeichnis.</p>
+  </details>
+</details>
+
+{% with auf = (zuerst == 'sicherung'), nummer = '2 — ' %}
+  {% include "_sicherungsziel.html" %}
+{% endwith %}
+
+{# Das Kontenregister steht hier und nicht auf einer eigenen Seite: dort,
+   wo ein Konto angelegt wird, sieht man auch, welche es schon gibt. #}
+<details class="klapp" id="konten"{% if zuerst == 'konten' %} open{% endif %}>
+  <summary>3 — Welche Konten es gibt
+    {%- if konten %} <span class="zahl">— {{ konten|length }}</span>{% endif %}</summary>
+  {# Andersherum als ein Formular: erst die Datei, dann das Konto. Wer zum
+     ersten Mal hier ist, kennt seine Bank, aber kein Parserprofil. #}
+  <div class="card" id="erkennen">
+    <label for="ae-datei">Auszug oder CSV-Export aus dem Online-Banking</label>
+    <div class="zeile" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.3rem">
+      <input type="file" id="ae-datei" accept=".csv,.pdf,.txt">
+      <button type="button" onclick="auszugErkennen(this)">Erkennen</button>
+      <span class="meldung muted klein" id="ae-meldung"></span>
+    </div>
+    <div id="ae-ergebnis" hidden></div>
+    <div id="ae-zuordnung" hidden>
+      <h3>Spalten zuordnen</h3>
+      <div class="wrap"><table class="detail" id="ae-beispiel"></table></div>
+      <div class="felder" id="ae-rollen" style="margin-top:.6rem"></div>
+      <p class="zeilen-knoepfe">
+        <button type="button" class="ghost" onclick="zuordnungVorschau(this)">Vorschau</button>
+        <label>Kennung <input id="ae-kennung" placeholder="meine-bank" size="14"></label>
+        <button type="button" onclick="zuordnungSpeichern(this)">Als Profil speichern</button>
+        <span class="meldung muted klein" id="ae-z-meldung"></span></p>
+      <div id="ae-vorschau"></div>
+    </div>
+    <details class="hilfe">
+      <summary>Was mit der Datei passiert</summary>
+      <p>Zum Erkennen wird sie nur gelesen und nirgends abgelegt.</p>
+      <p>Abgelegt wird sie erst im Auszugsordner des Kontos, das sie aufnimmt.</p>
+      <p>Ohne Saldo im Export prüft nur der Anschluss an den vorigen.</p>
+    </details>
+  </div>
+  {% if konten %}
+  <div class="wrap">
+  <table>
+    <tr><th style="width:150px">Konto</th><th style="width:150px">Institut</th>
+        <th style="width:100px">Art</th><th style="width:100px">Einlesen</th>
+        <th style="width:140px">Parserprofil</th>
+        <th class="num" style="width:110px"
+            title="Fällt der Tiefpunkt eines Monats darunter, warnt die Prognose">Warnen unter</th>
+        <th>Auszüge</th></tr>
+    {% for k in konten %}
+    <tr{% if not k.aktiv %} class="muted"{% endif %}>
+      <td>{{ k.id }}{% if not k.aktiv %} <span class="pill">geschlossen</span>{% endif %}
+        <br><span class="muted fein">{{ k.display_name }}</span></td>
+      <td class="muted">{{ k.institution }}</td>
+      <td><span class="pill">{{ k.account_type }}</span></td>
+      <td class="muted">{{ k.ingest_mode }}</td>
+      <td class="muted">{{ k.parser_profile or '—' }}</td>
+      <td class="num muted">{{ k.dispo_threshold_cents|euro if k.dispo_threshold_cents else '—' }}</td>
+      <td class="muted fein">{{ k.ordner }}
+        {%- if k.ohne_backup %} <span class="pill">nicht im Backup</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% endif %}
+  {% include "_neues_konto.html" %}
+</details>
+
+{# Aus dem Geburtstag wird jede Altersschwelle ein Datum. Die Frist fuer die
+   Rueckkehr in die GKV gibt es nur fuer Privatversicherte. #}
+<details class="klapp" id="person"{% if zuerst == 'person' %} open{% endif %}>
+  <summary>4 — Wer plant</summary>
+  <div class="zeilen-form">
+    <label>Geburtsdatum<input id="p-geburt" placeholder="1990-05-17"
+      value="{{ person.geburtsdatum.isoformat() if person.geburtsdatum else '' }}"></label>
+    <label>Krankenversicherung<select id="p-kv" data-no-combo>
+      <option value="">— wählen —</option>
+      {% for k, name in kv_arten.items() %}<option value="{{ k }}"
+        {%- if k == person.krankenversicherung %} selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select></label>
+    <label>Rente ab Alter<input id="p-rente" value="{{ person.rente_ab_alter }}"></label>
+  </div>
+  <p class="zeilen-knoepfe"><button type="button" onclick="personSpeichern(this)">Speichern</button></p>
+  <details class="hilfe">
+    <summary>Wozu diese Angaben</summary>
+    <p>Das Rentenalter setzt den Rentenbeginn.</p>
+    <p>Privatversicherte sehen die Frist für die Rückkehr in die GKV.</p>
+  </details>
+</details>
+
+{# Die Basis steht als Text da, nicht als Feld: sie laesst sich nicht
+   ausschalten, und ein ausgegrauter Haken saehe aus wie ein Fehler. #}
+<details class="klapp" id="module"{% if zuerst == 'module' %} open{% endif %}>
+  <summary>5 — Was die App zeigen soll</summary>
+  <div class="wrap"><table>
+    <tr><th style="width:200px">Modul</th><th>Wofür</th>
+        <th style="width:70px">An</th><th style="width:230px">Hinweis</th></tr>
+    {% for m in module %}
+    <tr>
+      <td>{{ m.name }}</td>
+      <td class="muted fein">{{ m.frage }}</td>
+      <td>{% if m.basis %}<span class="muted">immer</span>
+          {%- else %}<input type="checkbox" class="modul" data-id="{{ m.id }}"
+                 {% if m.an %}checked{% endif %}>{% endif %}</td>
+      <td class="muted klein">
+        {%- if m.braucht %}braucht {{ m.braucht|join(', ') }}{% endif %}
+        {%- if m.eintraege %}{% if m.braucht %} · {% endif %}aus, Einträge in {{ m.eintraege|join(', ') }} zählen weiter{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  <div class="zeile" style="display:flex;gap:.6rem;align-items:center">
+    <button class="ghost" onclick="moduleSpeichern()">Speichern</button>
+    <span class="muted klein" id="m-stand"></span>
+  </div>
+  <details class="hilfe">
+    <summary>Was Ausschalten tut</summary>
+    <p>Seiten und Navigation des Moduls verschwinden.</p>
+    <p>Gelöscht wird nichts; Eingetragenes bleibt in <code>config/</code>.</p>
+    <p>Nach dem Einschalten ist alles wieder da.</p>
+    <p>Was ein Modul braucht, wird mit eingeschaltet.</p>
+  </details>
+</details>
+
+{# Wer das Werkzeug uebernimmt, beginnt mit Startwerten. Diese Liste sagt,
+   welche Bereiche er durch seine eigenen Angaben ersetzt und wo das geht --
+   der Stand kommt aus den Daten. Ausgeschaltete Module fehlen. #}
+<details class="klapp" id="eigene">
+  <summary>6 — Eigene Angaben <span class="zahl">— was du selbst einträgst</span></summary>
+  <div class="wrap"><table>
+    <tr><th>Was</th><th style="width:260px">Datei</th><th style="width:260px">Stand</th></tr>
+    {% for e in eigene %}
+    <tr><td><a class="plain" href="{{ e.wo }}">{{ e.was }}</a></td>
+      <td><code class="muted">{{ e.datei }}</code></td>
+      <td class="muted klein">{{ e.stand }}</td></tr>
+    {% endfor %}
+  </table></div>
+</details>
+
+{% include "_klappzustand.html" %}
+<script>
+async function schritteLaden(){
+  try {
+    const d = await (await fetch('/api/datenordner')).json();
+    document.getElementById('stand-datenordner').textContent =
+      d.ordner + ' — ' + d.grund;
+    /* Das Feld steht auf dem Ordner, der GERADE gilt. Wer die Vorgabe des
+       Systems behalten will, klickt einmal und ist fertig -- vorher lief
+       genau dieser Fall, der haeufigste, in "Kein Ordner angegeben". */
+    const feld = document.getElementById('d-ordner');
+    if(!feld.value) feld.value = d.ordner;
+    document.getElementById('d-stand').textContent =
+      d.eingetragen ? 'Eingetragen in ' + d.zeiger
+                    : 'Noch nichts eingetragen — ' + d.zeiger;
+  } catch(e){ /* Die Tabelle steht serverseitig schon richtig da. */ }
+}
+
+async function ordnerSpeichern(){
+  const stand = document.getElementById('d-stand');
+  const res = await fetch('/api/datenordner', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ordner: document.getElementById('d-ordner').value})});
+  const o = await res.json();
+  if(!res.ok){ stand.textContent = 'Nicht eingetragen: ' + (o.error || res.status); return; }
+  stand.textContent = o.hinweis;
+  schrittFertig();
+}
+
+/* Die Zeile oben sagt "offen", bis die Seite sie neu liest. Sie nur im
+   Aufklappbereich zu aktualisieren hiesse: gespeichert, und die Uebersicht
+   widerspricht -- genau das, was diese Seite verhindern soll. Dieselbe Geste
+   wie beim Anlegen eines Kontos. */
+function schrittFertig(){ setTimeout(() => location.reload(), 900); }
+
+async function personSpeichern(knopf){
+  const res = await fetch('/api/person', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      geburtsdatum: document.getElementById('p-geburt').value.trim(),
+      krankenversicherung: document.getElementById('p-kv').value,
+      rente_ab_alter: document.getElementById('p-rente').value.trim()})});
+  const o = await res.json().catch(() => ({}));
+  if(!res.ok){ meldenNeben(knopf, o.error || 'Speichern fehlgeschlagen', true); return; }
+  meldenNeben(knopf, 'gespeichert', false);
+  schrittFertig();
+}
+
+async function moduleSpeichern(){
+  const stand = document.getElementById('m-stand');
+  const wahl = {};
+  document.querySelectorAll('input.modul').forEach(k => { wahl[k.dataset.id] = k.checked; });
+  const res = await fetch('/api/module', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({wahl})});
+  const o = await res.json();
+  if(!res.ok){ stand.textContent = 'Nicht gespeichert: ' + (o.error || res.status); return; }
+  stand.textContent = 'gespeichert — Navigation wird neu geladen …';
+  schrittFertig();
+}
+
+/* ---------------------------------------------------- Auszug erkennen */
+const ROLLEN = [['datum', 'Datum *'], ['betrag', 'Betrag *'], ['wertstellung', 'Wertstellung'],
+                ['gegenpartei', 'Gegenpartei'], ['zweck', 'Verwendungszweck'], ['iban', 'IBAN'],
+                ['buchungstext', 'Buchungsart'], ['saldospalte', 'Saldo je Zeile']];
+let analyse = null;
+
+function datei(){ return document.getElementById('ae-datei').files[0]; }
+function aeSagen(id, text, fehler){
+  const m = document.getElementById(id);
+  m.textContent = text; m.className = 'meldung klein ' + (fehler ? 'neg' : 'muted');
+}
+function euroText(c){ return centsAlsText(c) + ' €'; }
+
+async function auszugErkennen(knopf){
+  if(!datei()){ document.getElementById('ae-datei').classList.add('feld-fehlt'); return; }
+  aeSagen('ae-meldung', 'wird gelesen …');
+  const form = new FormData(); form.append('datei', datei());
+  const res = await fetch('/api/einlesen/erkennen', {method: 'POST', body: form});
+  const o = await res.json().catch(() => ({}));
+  document.getElementById('ae-ergebnis').hidden = true;
+  document.getElementById('ae-zuordnung').hidden = true;
+  if(!res.ok){ aeSagen('ae-meldung', o.error || 'nicht lesbar', true); return; }
+  aeSagen('ae-meldung', '');
+  if(o.erkannt) zeigeErkannt(o.erkannt, o.konten || []);
+  else { analyse = o.analyse; zeigeZuordnung(); }
+}
+
+function zusammenfassung(e){
+  const pruefung = e.abgestimmt && !e.warnungen.length
+    ? '<span class="pos">geht auf</span>'
+    : (e.abgestimmt ? '<span class="muted">' + e.warnungen.join(' ') + '</span>'
+                    : '<span class="neg">geht nicht auf</span>');
+  return '<p><strong>' + esc(e.bank) + '</strong>' + (e.konto ? ' · ' + esc(e.konto) : '')
+    + ' · ' + e.umsaetze + ' Umsätze vom ' + e.von + ' bis ' + e.bis
+    + ' · Saldo ' + euroText(e.anfang_cents) + ' → ' + euroText(e.ende_cents) + ' · ' + pruefung + '</p>';
+}
+function esc(s){ const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+function zeigeErkannt(e, konten){
+  const box = document.getElementById('ae-ergebnis');
+  let h = zusammenfassung(e) + '<p class="zeilen-knoepfe">';
+  konten.forEach(k => { h += '<button type="button" class="ghost" onclick="ablegen(this, \'' + esc(k)
+                              + '\')">In ' + esc(k) + ' ablegen</button> '; });
+  window.erkannt = e;
+  h += '<button type="button" onclick="kontoVorbelegen(window.erkannt)">Neues Konto damit</button>'
+     + ' <span class="meldung muted klein"></span></p>';
+  box.innerHTML = h; box.hidden = false;
+}
+
+function kennungAus(text){
+  return (text || 'konto').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'konto';
+}
+function kontoVorbelegen(e){
+  neuesKonto(true);
+  nf('id').value = kennungAus(e.bank) + '-giro';
+  nf('name').value = e.bank + ' Giro';
+  nf('institut').value = e.bank;
+  nf('modus').value = 'parsed'; neuSperren();
+  nf('profil').value = e.profil;
+  neuOrdner();
+  // Nach dem Anlegen wandert die gewaehlte Datei in den neuen Auszugsordner.
+  window.nachKontoAnlegen = async konto => {
+    const form = new FormData(); form.append('datei', datei()); form.append('konto', konto.id);
+    await fetch('/api/einlesen/ablegen', {method: 'POST', body: form});
+  };
+}
+async function ablegen(knopf, konto){
+  const form = new FormData(); form.append('datei', datei()); form.append('konto', konto);
+  const res = await fetch('/api/einlesen/ablegen', {method: 'POST', body: form});
+  const o = await res.json().catch(() => ({}));
+  const m = knopf.parentElement.querySelector('.meldung');
+  m.textContent = res.ok ? 'abgelegt — mit Update im Monatsabschluss einlesen' : (o.error || 'fehlgeschlagen');
+  m.className = 'meldung klein ' + (res.ok ? 'pos' : 'neg');
+}
+
+function zeigeZuordnung(){
+  const a = analyse;
+  const tab = document.getElementById('ae-beispiel');
+  tab.innerHTML = '<tr>' + a.spalten.map(s => '<th>' + esc(s) + '</th>').join('') + '</tr>'
+    + a.beispiele.slice(0, 4).map(z => '<tr>' + z.map(w => '<td>' + esc(w) + '</td>').join('') + '</tr>').join('');
+  const optionen = sel => '<option value="">—</option>' + a.spalten.filter(s => s)
+    .map(s => '<option' + (s === sel ? ' selected' : '') + '>' + esc(s) + '</option>').join('');
+  let h = ROLLEN.map(([rolle, name]) => '<label>' + name + '<select data-no-combo data-rolle="' + rolle + '">'
+    + optionen(a.vorschlag[rolle]) + '</select></label>').join('');
+  h += '<label>Datumsformat<input data-feld="datumsformat" value="' + esc(a.datumsformat) + '"></label>'
+     + '<label>Dezimal<select data-no-combo data-feld="dezimal"><option value=","' + (a.dezimal === ',' ? ' selected' : '')
+     + '>Komma</option><option value="."' + (a.dezimal === '.' ? ' selected' : '') + '>Punkt</option></select></label>'
+     + '<label>Bank<input data-feld="bank" placeholder="Name der Bank"></label>';
+  document.getElementById('ae-rollen').innerHTML = h;
+  document.getElementById('ae-zuordnung').hidden = false;
+}
+function zuordnung(){
+  const z = {trenner: analyse.trenner, saldo: 'keiner'};
+  document.querySelectorAll('#ae-rollen [data-rolle]').forEach(s => { if(s.value) z[s.dataset.rolle] = s.value; });
+  document.querySelectorAll('#ae-rollen [data-feld]').forEach(f => { if(f.value.trim()) z[f.dataset.feld] = f.value.trim(); });
+  if(z.saldospalte) z.saldo = 'spalte';
+  return z;
+}
+async function zuordnungVorschau(knopf){
+  const form = new FormData(); form.append('datei', datei());
+  form.append('zuordnung', JSON.stringify({zuordnung: zuordnung(), spalten: analyse.spalten}));
+  const res = await fetch('/api/einlesen/vorschau', {method: 'POST', body: form});
+  const o = await res.json().catch(() => ({}));
+  if(!res.ok){ aeSagen('ae-z-meldung', o.error || 'nicht lesbar', true); return; }
+  aeSagen('ae-z-meldung', '');
+  const v = o.vorschau;
+  document.getElementById('ae-vorschau').innerHTML = zusammenfassung(v)
+    + '<table class="detail">' + v.beispiele.map(b => '<tr><td>' + b.datum + '</td><td class="num '
+      + (b.cents < 0 ? 'neg' : 'pos') + '">' + euroText(b.cents) + '</td><td>' + esc(b.text) + '</td></tr>').join('')
+    + '</table>';
+}
+async function zuordnungSpeichern(knopf){
+  const kennung = document.getElementById('ae-kennung').value.trim();
+  if(!kennung){ document.getElementById('ae-kennung').classList.add('feld-fehlt'); return; }
+  const res = await fetch('/api/einlesen/profil', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({kennung, zuordnung: zuordnung(), spalten: analyse.spalten})});
+  const o = await res.json().catch(() => ({}));
+  if(!res.ok){ aeSagen('ae-z-meldung', o.error || 'nicht gespeichert', true); return; }
+  aeSagen('ae-z-meldung', 'gespeichert als ' + o.profil + ' — jetzt erkennen');
+  auszugErkennen();
+}
+
+document.addEventListener('DOMContentLoaded', schritteLaden);
+// Ein Link auf einen Schritt (#konten, #module) klappt ihn auf -- nach dem
+// gemerkten Klappzustand, sonst schloesse der ihn wieder.
+window.addEventListener('load', () => {
+  const d = location.hash && document.getElementById(location.hash.slice(1));
+  if (d && d.tagName === 'DETAILS') { d.open = true; d.scrollIntoView(); }
+});
+</script>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/backup.yaml', 'Wohin gesichert wird und wie viele Stände bleiben.'),
+  ('config/backup_custom.yaml', 'Das hier eingetragene Ziel.'),
+  ('config/accounts.yaml', 'Welche Konten es gibt — mit der Begründung.'),
+  ('config/accounts_custom.yaml', 'Die hier angelegten Konten.'),
+  ('config/lebensplan.yaml', 'Geburtstag und Rentenalter — mit der Herleitung.'),
+  ('config/lebensplan_custom.yaml', 'Geburtstag, Krankenversicherung und Rentenalter von hier.'),
+  ('config/module_custom.yaml', 'Welche Module eingeschaltet sind.'),
+  ('config/csv_profile_custom.yaml', 'Selbst zugeordnete CSV-Exporte.'),
+  ('finctl/web/templates/einrichtung.html', 'Die Texte dieser Seite.'),
+], handbuch='einrichtung') }}
+{% endblock %}

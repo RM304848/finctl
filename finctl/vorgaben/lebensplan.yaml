@@ -1,0 +1,29 @@
+# Der Lebensplan -- Startwerte.
+#
+# Was hier steht, sind Schwellen des eigenen Lebens: ab wann Rente, ab wann
+# Teilzeit, bis zu welchem Alter das Kapital reichen muss. Keine Prognose,
+# sondern Vorgaben, gegen die gerechnet wird.
+#
+# Das Geburtsjahr ist die einzige Angabe, ohne die nichts geht: jede
+# Altersschwelle unten wird daraus zu einer Jahreszahl.
+
+person:
+  # Beides setzt man auf /einrichtung. Die Krankenversicherung ist
+  # "gesetzlich" oder "privat"; nur Privatversicherte haben eine Frist
+  # fuer die Rueckkehr in die GKV.
+  birth_date: null
+  krankenversicherung: null
+  birth_year: null
+  birth_year_confirmed: false
+
+schwellen:
+  grv_ab_alter: 67
+  private_rente_ab_alter: 67
+
+erwerbseinkommen:
+  netto_100_monatlich_cents: 200000
+
+kapital:
+  # Real, also nach Inflation -- die Groesse, in der ein Plan ueber
+  # Jahrzehnte ueberhaupt lesbar bleibt.
+  reale_rendite_pa: 0.03

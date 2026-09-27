@@ -1,0 +1,60 @@
+# Musterhaushalt: Objekte, erfunden.
+#
+# Nord ist vermietet und ueber 001 finanziert, Sued vermietet mit geplantem
+# Verkauf, Ferienhaus im Bau mit eigener Prognose.
+
+properties:
+  - id: nord
+    name: Wohnung Nord
+    address: "Lindenweg 3, 12345 Beispielstadt"
+    acquired_on: 2016-03-15
+    contract_on: 2016-03-15
+    handover_on: 2016-04-01
+    living_space_sqm: 72
+    status: rented
+    afa_rate_pct: 2.0
+    afa_base_cents: 19000000       # 190.000
+    afa_start: 2016-04-01
+    filed_2025:
+      einnahmen_cents: 1080000
+      werbungskosten_cents: 1210000
+      ueberschuss_cents: -130000
+    ownership_share_pct: 100
+
+  - id: sued
+    name: Wohnung Sued
+    address: "Am Hang 9, 54321 Musterort"
+    acquired_on: 2019-11-20
+    contract_on: 2019-11-20
+    completed_on: 2020-01-10
+    afa_start: 2020-01-10
+    living_space_sqm: 48
+    status: rented
+    afa_rate_pct: 2.0
+    afa_base_cents: 12500000       # 125.000
+    filed_2025:
+      einnahmen_cents: 624000
+      werbungskosten_cents: 700000
+      ueberschuss_cents: -76000
+      schuldzinsen_cents: 359759
+    planned_sale_on: 2035-01-01
+    sale_constraint: vorfaelligkeitsentschaedigung
+
+  - id: ferienhaus
+    name: Ferienhaus
+    address: "Kuestenweg 1, Beispielland"
+    acquired_on: null
+    status: construction
+    tenure: leasehold
+    lease_term_years: 25
+    terminal_value_cents: 0
+    growth_rate_pa: 0.0
+    total_commitment_cents: 9000000    # 90.000
+    open:
+      - Verlaengerung des Pachtvertrags ist nicht vereinbart.
+    prognose:
+      miete_monatlich_cents: 90000        # 900
+      kosten_monatlich_cents: 40000       # 400
+      ab: '{J-1}-06'
+      bis: 2051-05
+      saison: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]

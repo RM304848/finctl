@@ -1,0 +1,11 @@
+# Welche Konten einen Stand tragen und woher er kommt.
+#
+# `kind: auszug` heisst: der Stand steht im eingelesenen Kontoauszug und ist
+# hier nicht aenderbar. `kind: getippt` heisst: er wird im Monatsabschluss unter Bestaende
+# eingetragen, weil es keinen Auszug gibt.
+#
+# Leer, solange keine Konten angelegt sind. /einrichtung fuellt das.
+
+as_of: null
+balances: []
+obligations: []

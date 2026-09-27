@@ -1,0 +1,7 @@
+anschluss: {}
+vorlagen:
+  '900':
+    annual_rate_pct: 4.2
+    ende: '2061-06-01'
+    principal_cents: 29000000
+    start: '2031-07-01'

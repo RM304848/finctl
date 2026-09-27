@@ -1,0 +1,111 @@
+[project]
+name = "finctl"
+version = "0.1.0"
+description = "Local financial ledger, forecast and decision engine"
+requires-python = ">=3.12"
+dependencies = [
+    "typer>=0.12",
+    "pyyaml>=6.0",
+    "pdfplumber>=0.11",
+    "openpyxl>=3.1",
+    "python-dateutil>=2.9",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",   # FastAPI form posts
+    "filelock>=3.13",            # Sperre beim Schreiben, auch auf Windows
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-xdist>=3.6", "ruff>=0.6", "httpx>=0.27"]  # httpx: FastAPI TestClient
+
+[project.scripts]
+finctl = "finctl.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["finctl*"]
+
+# Was NEBEN dem Python-Code ins Paket muss. Gemessen, nicht geraten: ein Rad
+# ohne diese Liste enthielt genau eine Nicht-Python-Datei (schema.sql), und
+# eine installierte App waere auf jeder Seite mit `TemplateNotFound`
+# abgestuerzt -- ohne dass hier etwas rot geworden waere.
+# `tests/test_paket.py` baut ein Rad und zaehlt nach.
+[tool.setuptools.package-data]
+"finctl" = ["HANDBUCH.md"]
+"finctl.ledger" = ["*.sql"]
+"finctl.web" = ["templates/*.html"]
+"finctl.vorgaben" = ["*.yaml"]
+
+[tool.pytest.ini_options]
+# Parallel auf allen Kernen. Das geht, weil jeder Testprozess in seiner eigenen
+# Kopie der Daten arbeitet (tests/conftest.py). `loadgroup` haelt Tests mit
+# derselben `xdist_group` in einem Prozess -- die Auszugspruefungen teilen sich
+# so das Einlesen eines Auszugs. Einzelner Test ohne Parallelstart: `-n 0`.
+addopts = "-n auto --dist loadgroup"
+markers = [
+    "langsam: rendert Seiten oder liest echte Auszuege; `-m 'not langsam'` fuer die schnelle Runde",
+]
+
+[tool.ruff]
+line-length = 100
+
+# Die Auswahl steht hier ausgeschrieben, weil Ruffs Vorgabe mit jeder Version
+# waechst: ohne feste Liste aendert ein Update die Zahl der Funde, ohne dass
+# sich eine Zeile Code geaendert haette. `tests/test_lint.py` haelt den Stand
+# auf null -- die Liste ist damit eine Ratsche wie `docs/design_conventions.yaml`.
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes: unbenutzte Namen, tote Importe
+    "I",        # Importreihenfolge
+    "N",        # Namen nach PEP 8
+    "UP",       # Schreibweisen, die 3.12 einfacher kann
+    "B",        # bugbear: die Fallen, die keinen Fehler werfen
+    "A",        # Namen, die eingebaute ueberdecken
+    "C4",       # comprehensions
+    "SIM",      # vermeidbare Umwege
+    "RET",      # return-Wege
+    "ISC",      # implizit verkettete Strings -- faengt das fehlende Komma
+    "PIE",
+    "RUF",
+]
+ignore = [
+    # Datumsangaben sind hier Kalendertage, keine Zeitpunkte: Gehalt am 30.,
+    # Zinsbindung bis zum 1. Der Rechner steht in einer Zeitzone und die Daten
+    # verlassen ihn nicht. Eine erzwungene tzinfo waere eine Genauigkeit, die
+    # es in dieser Domaene nicht gibt.
+    "DTZ",
+    # Die Texte sind deutsch und gesetzt: Gedankenstrich, typografische
+    # Anfuehrung, Nicht-Umbruch-Leerzeichen. Das ist Absicht, kein Tippfehler.
+    "RUF001", "RUF002", "RUF003",
+    # `int(round(x))` sagt: hier kommt Cent heraus, ganzzahlig. Dass round()
+    # das ohnehin liefert, macht die Aussage nicht falsch -- und "Geld in Cent"
+    # ist die Regel, an der dieses Programm haengt.
+    "RUF046",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.flake8-bugbear]
+# Typer und FastAPI lesen die Signatur: der Aufruf im Vorgabewert IST die
+# Deklaration des Parameters. Ein Modul-Singleton daraus zu machen wuerde die
+# Deklaration von der Stelle trennen, an der sie gilt.
+extend-immutable-calls = [
+    "typer.Option", "typer.Argument",
+    "fastapi.Query", "fastapi.Form", "fastapi.Body", "fastapi.Depends", "fastapi.File",
+    "Query", "Form", "Body", "Depends", "File",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# SIM115: Tests duerfen ein Tempverzeichnis offen halten, solange der Test
+# laeuft -- ein `with` drumherum wuerde es am Ende des Setups wieder loeschen.
+# C408: die `dict(...)` in den Tests sind Schluesselwortbeutel, die gleich
+# darauf als `**beutel` weitergereicht werden. Als Literal mit Anfuehrungs-
+# zeichen geschrieben liest sich das, als waeren es Daten, und nicht die
+# Argumentliste, die es ist.
+"tests/*" = ["SIM115", "C408"]

@@ -1,0 +1,5 @@
+# Umbenannte Kategorien: alter Name -> neuer Name.
+remap:
+  gastronomie/cafe-bar: gastronomie/restaurant
+  abo/streaming: abo/video-streaming
+  wohnen/telefon: abo/mobilfunk

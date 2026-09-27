@@ -1,0 +1,24 @@
+# Musterhaushalt: Annahmen, erfunden.
+
+inflation_pa: 0.02
+kapital:
+  rendite_nominal_pa: 0.025
+  rendite_depot_pa: 0.06
+  vorabpauschale:
+    basiszins_pa: 0.0253
+    teilfreistellung: 0.30
+    steuersatz: 0.26375
+erwerbseinkommen:
+  netto_floor_monatlich_cents: 360000
+  netto_median_monatlich_cents: 380000
+  gehalt_steigerung_pa: 0.02
+ziel:
+  entnahmerate: 0.04
+  jahreskosten_angesetzt_cents: 3000000
+# Was ein Objekt kuenftig abwirft, steht am Objekt (properties.yaml).
+immobilien: {}
+# Renten stehen in renten.yaml.
+ruhestand:
+  lebenserwartung: 95
+  abzug_renten: 0.25
+  aufbrauchen: 1.0

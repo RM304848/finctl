@@ -1,0 +1,16 @@
+{# Die Kopfzeile einer gefilterten Liste beantwortet "was hat das gekostet",
+   nicht "wie viele Zeilen". Raus und rein stehen daneben, weil eine
+   Nettosumme aus gemischten Vorzeichen luegt. Sie gilt fuer den FILTER, nicht
+   fuer die gedeckelte Anzeige. #}
+{% macro kopf(s, gezeigt=none) -%}
+<span class="muted zusatz">— {{ s.n }} Treffer,
+  Summe <strong class="{{ s.netto|vz }}">{{ s.netto|euro }}</strong>
+  {%- if s.raus and s.rein %}
+  <span style="opacity:.8">(<span class="neg">{{ s.raus|euro }}</span> raus,
+    <span class="pos">+{{ s.rein|euro }}</span> rein)</span>
+  {%- endif %}
+  {%- if gezeigt is not none and gezeigt < s.n %}
+  <span style="opacity:.8">· {{ gezeigt }} angezeigt</span>
+  {%- endif %}
+</span>
+{%- endmacro %}

@@ -1,0 +1,245 @@
+{# Verpflichtung und Plan rendern gleich; nur der Schalter fehlt der einen.
+   ZEILE ZEIGT, AUFKLAPPBEREICH BEARBEITET -- mit Feldern in der Zeile wird die
+   Tabelle breiter als der Bildschirm. #}
+{% set ns = namespace(rest=0) %}
+{% for z in k.lines %}{% set m = messungen.get(k.id ~ "-" ~ loop.index0) %}
+  {%- if m and z.frequency != 'einmalig' %}{% set ns.rest = ns.rest + m.rest %}{% endif %}
+{%- endfor %}
+<details class="klapp" id="klammer-{{ k.id }}"{% if k.active and k.lines %} open{% endif %}>
+  <summary>
+    {{ k.name }}
+    <span class="zahl">— {% if k.obligation %}Verpflichtung{% else %}Plan · {{ 'an' if k.active else 'aus' }}{% endif %}
+      {%- if k.summiert %} · wirkt noch <span class="{{ ns.rest|vz }}">{{ ns.rest|euro }}</span>/Monat
+      {%- else %}{% for z in k.lines %} · {{ (z.anteil * 100)|round|int }} % Gehalt ab {{ z.start.strftime('%Y-%m') }}{% endfor %}{% endif %}
+      {%- if k.one_off_cents() %} · einmalig <span class="{{ k.one_off_cents()|vz }}">{{ k.one_off_cents()|euro }}</span>{% endif %}</span>
+  </summary>
+
+  {# Der Titel ist aenderbar, die Kennung nicht: an ihr haengen die Zeilen. #}
+  <div class="klammer-kopf">
+    {% if not k.obligation %}
+    <button onclick="toggle('{{ k.id }}', {{ 'false' if k.active else 'true' }})">
+      {{ 'Ausschalten' if k.active else 'Einschalten' }}</button>
+    {% endif %}
+    <input id="n-{{ k.id }}" value="{{ k.name|e }}"
+           onkeydown="if(event.key==='Enter')umbenennen('{{ k.id }}')">
+    <button class="ghost" onclick="umbenennen('{{ k.id }}')">Umbenennen</button>
+    <span class="muted">Kennung <code>{{ k.id }}</code> bleibt</span>
+    <span id="meldung-{{ k.id }}" class="muted"></span>
+    {% if not k.obligation %}
+    <span style="flex:1"></span>
+    <button class="ghost" onclick="entfernen('{{ k.id }}', '{{ k.name|e }}')">Plan löschen</button>
+    {% endif %}
+  </div>
+
+  <div class="wrap"><table class="planzeilen">
+    <tr><th>Position</th><th style="width:150px">Art</th><th>zählt</th>
+        <th class="num" style="width:130px">geplant</th>
+        <th class="num" style="width:110px">wirkt noch</th><th></th></tr>
+    {% for z in k.lines %}
+    {% set zid = k.id ~ "-" ~ loop.index0 %}
+    {% set m = messungen.get(zid) %}
+    <tr class="klappbar" onclick="oeffneZeile('{{ zid }}')">
+      <td>{{ z.label }}</td>
+      {% set vk = verkauf_zeilen.get(zid) if z.kind == 'verkauf' else none %}
+      <td><span class="pill">{% if z.kind == 'verkauf' %}Verkauf · {{ z.property_id }}
+        {%- elif z.kind == 'teilzeit' %}Teilzeit · {{ (z.anteil * 100)|round|int }} %
+        {%- elif z.kind == 'wegfall' %}Wegfall · gemessen
+        {%- elif z.frequency == 'einmalig' %}einmalig{% else %}Betrag · {{ z.frequency }}{% endif %}</span></td>
+      <td class="muted">
+        {%- if z.kind == 'verkauf' %}{% if vk %}Restschuld {{ vk.restschuld_cents|euro if vk.restschuld_cents is not none else '—' }}
+          · netto <span class="{{ vk.netto_cents|vz }}">{{ vk.netto_cents|euro }}</span>
+          {%- if vk.steuerfrei == false %} · <span class="neg">vor Ende der §23-Frist {{ vk.frist_ende }}</span>{% endif %}
+          {%- endif %} · nur Jahresrechnung
+        {%- elif z.kind == 'teilzeit' %}Gehalt ab {{ z.start.strftime('%Y-%m') }}
+          {%- if z.end %} bis {{ z.end.strftime('%Y-%m') }}{% endif %} · nur Jahresrechnung
+        {%- elif z.frequency == 'einmalig' %}{{ 'bezahlt' if z.buchungen else 'noch nicht bezahlt' }}
+        {%- elif z.buchungen %}{{ z.buchungen|length }} zugeordnet
+          {%- if m and m.reihe %} + {{ m.reihe|length }} gleiche Reihe{% endif %}
+        {%- elif z.kind == 'wegfall' %}nichts zugeordnet — zieht nichts ab
+        {%- else %}nichts zugeordnet — zählt voll{% endif %}</td>
+      {% set geplant = 0 if z.kind == 'wegfall' else (z.amount_cents if z.kind == 'verkauf'
+           or z.frequency == 'einmalig' else z.monthly_equivalent_cents()) %}
+      <td class="num {{ geplant|vz }}">{% if z.kind == 'teilzeit' %}{{ (z.anteil * 100)|round|int }} % Gehalt
+        {%- elif z.kind == 'verkauf' %}{{ z.amount_cents|euro }}
+        {%- elif z.kind == 'wegfall' %}—
+        {%- elif z.frequency == 'einmalig' %}{{ z.amount_cents|euro }}
+        {%- else %}{{ z.monthly_equivalent_cents()|euro }}/Monat{% endif %}</td>
+      {% set zeigt_rest = m and z.frequency != 'einmalig' and z.kind != 'teilzeit' %}
+      <td class="num {{ m.rest|vz if zeigt_rest }}">{% if zeigt_rest %}{{ m.rest|euro }}{% else %}—{% endif %}</td>
+      <td class="aktionen"><button class="ghost"
+        onclick="event.stopPropagation();oeffneZeile('{{ zid }}')">Öffnen</button></td>
+    </tr>
+    <tr id="panel-{{ zid }}" class="panel" hidden>
+      <td colspan="6">
+        {% if z.kind == 'verkauf' %}
+        <div class="zeilen-form">
+          <label>Bezeichnung<input id="e-label-{{ zid }}" value="{{ z.label|e }}"></label>
+          <label>Objekt<select id="e-objekt-{{ zid }}" data-no-combo>
+            {% for o in objekte %}<option value="{{ o.id }}"{% if o.id == z.property_id %} selected{% endif %}>{{ o.id }}</option>{% endfor %}
+          </select></label>
+          <label>Preis<input id="e-amt-{{ zid }}" class="betrag" value="{{ z.amount_cents|betrag }}"></label>
+          <label>Verkaufskosten<input id="e-kosten-{{ zid }}" class="betrag" value="{{ z.kosten_cents|betrag if z.kosten_cents else '' }}" placeholder="Makler, Vorfälligkeit"></label>
+          <label>Monat<input id="e-von-{{ zid }}" value="{{ z.start.strftime('%Y-%m') if z.start else '' }}" placeholder="2030-07"></label>
+        </div>
+        {% if vk %}
+        <p class="muted klein" style="margin:.5rem 0 0">
+          Restschuld {{ vk.restschuld_cents|euro if vk.restschuld_cents is not none else '—' }}
+          {%- if vk.restschuld_stand %} (Stand {{ vk.restschuld_stand }}){% endif %},
+          netto <span class="{{ vk.netto_cents|vz }}">{{ vk.netto_cents|euro }}</span>, §23-Frist {{ vk.frist_ende or '—' }}
+          {%- if vk.steuerfrei == false %} <span class="neg">— davor, Steuer nicht gerechnet</span>{% endif %}.</p>
+        {% endif %}
+        <p class="zeilen-knoepfe">
+          <button onclick="saveVerkauf('{{ k.id }}', {{ loop.index0 }}, '{{ zid }}')">Speichern</button>
+          <button class="ghost" onclick="delZeile('{{ k.id }}', {{ loop.index0 }})">Zeile löschen</button>
+          <span id="meldung-{{ zid }}" class="muted"></span></p>
+        {% elif z.kind == 'teilzeit' %}
+        <div class="zeilen-form">
+          <label>Bezeichnung<input id="e-label-{{ zid }}" value="{{ z.label|e }}"></label>
+          <label>Anteil am Gehalt (%)<input id="e-anteil-{{ zid }}" value="{{ (z.anteil * 100)|round|int }}"></label>
+          <label>von<input id="e-von-{{ zid }}" value="{{ z.start.strftime('%Y-%m') if z.start else '' }}" placeholder="2045-01"></label>
+          <label>bis<input id="e-bis-{{ zid }}" value="{{ z.end.strftime('%Y-%m') if z.end else '' }}" placeholder="offen"></label>
+        </div>
+        <p class="zeilen-knoepfe">
+          <button onclick="saveTeilzeit('{{ k.id }}', {{ loop.index0 }}, '{{ zid }}')">Speichern</button>
+          <button class="ghost" onclick="delZeile('{{ k.id }}', {{ loop.index0 }})">Zeile löschen</button>
+          <span id="meldung-{{ zid }}" class="muted"></span></p>
+        {% else %}
+        <div class="zeilen-form">
+          <label>Bezeichnung<input id="e-label-{{ zid }}" value="{{ z.label|e }}"></label>
+          <label>Kategorie<select id="e-kat-{{ zid }}">
+            <option value="">—</option>
+            {% for c in categories %}<option value="{{ c.id }}"
+              {% if c.id == z.category_id %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+          </select></label>
+          <label>Konto<select id="e-konto-{{ zid }}" data-no-combo>
+            <option value="">{{ betriebskonto }} (Betriebskonto)</option>
+            {% for a in accounts %}<option value="{{ a }}"
+              {% if a == z.account_id %}selected{% endif %}>{{ a }}</option>{% endfor %}
+          </select></label>
+          <label>Frequenz<select id="e-freq-{{ zid }}" data-no-combo
+              {% if z.kind == 'wegfall' %}disabled{% endif %}>
+            {% for f in frequencies %}<option value="{{ f }}"
+              {% if f == z.frequency %}selected{% endif %}>{{ f }}</option>{% endfor %}
+          </select></label>
+          {# Die Richtung als Auswahl, der Betrag ohne Vorzeichen -- siehe
+             betragMitRichtung in planung.html. #}
+          <label>Richtung<select id="e-richtung-{{ zid }}" data-no-combo
+              {% if z.kind == 'wegfall' %}disabled{% endif %}>
+            <option value="-"{% if z.amount_cents < 0 %} selected{% endif %}>Ausgabe</option>
+            <option value="+"{% if z.amount_cents >= 0 %} selected{% endif %}>Einnahme</option>
+          </select></label>
+          <label>Betrag<input id="e-amt-{{ zid }}" value="{{ (z.amount_cents|abs)|betrag }}"
+            {% if z.kind == 'wegfall' %}disabled title="gemessen aus den zugeordneten Buchungen"{% endif %}></label>
+          <label>von<input id="e-von-{{ zid }}" value="{{ z.start or '' }}" placeholder="2027-03"></label>
+          <label>bis<input id="e-bis-{{ zid }}" value="{{ z.end or '' }}" placeholder="offen"></label>
+        </div>
+        <p class="zeilen-knoepfe">
+          <button onclick="saveZeile('{{ k.id }}', {{ loop.index0 }}, '{{ zid }}', '{{ z.kind }}')">Speichern</button>
+          <button class="ghost" onclick="delZeile('{{ k.id }}', {{ loop.index0 }})">Zeile löschen</button>
+          <span id="meldung-{{ zid }}" class="muted"></span></p>
+
+        {% if m %}
+        <div class="buchungen">
+          <strong>Buchungen</strong>
+          <p class="muted">zugeordnet =
+            {%- if z.frequency == 'einmalig' %} bezahlt
+            {%- elif z.kind == 'wegfall' %} fällt weg
+            {%- else %} schon gebucht{% endif %}</p>
+          <table class="detail">
+            {% for b in m.zugeordnet %}
+            <tr><td class="muted">{{ b.booking_date }}</td><td class="muted">{{ b.account_id }}</td>
+              <td>{{ b.text }}</td><td class="num {{ b.amount_cents|vz }}">{{ b.amount_cents|euro }}</td>
+              <td class="muted">zugeordnet</td>
+              <td class="aktionen"><button class="ghost" onclick="buchungWeg('{{ zid }}', '{{ b.dedup_hash }}')">entfernen</button></td></tr>
+            {% endfor %}
+            {% for b in m.reihe %}
+            <tr><td class="muted">{{ b.booking_date }}</td><td class="muted">{{ b.account_id }}</td>
+              <td>{{ b.text }}</td><td class="num {{ b.amount_cents|vz }}">{{ b.amount_cents|euro }}</td>
+              <td class="muted">gleiche Reihe</td><td></td></tr>
+            {% endfor %}
+            {% if not m.zugeordnet and not m.reihe %}
+            <tr><td class="muted" colspan="6">Noch nichts zugeordnet.</td></tr>
+            {% endif %}
+          </table>
+          {# Eine Liste, ein Filter. Vorbelegt mit der Kategorie der Zeile und dem
+             Messfenster; Text und Kategorie lassen sich frei aendern, Ein- und
+             Ausgaenge kommen beide. #}
+          <form class="suchzeile" onsubmit="event.preventDefault();buchungSuchen('{{ zid }}')">
+            <input id="bq-{{ zid }}" data-no-combo placeholder="Text, etwa bundeskasse">
+            <select id="bk-{{ zid }}" data-placeholder="alle Kategorien">
+              <option value="">alle Kategorien</option>
+              {% for c in categories %}<option value="{{ c.id }}"
+                {% if c.id == z.category_id %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+            </select>
+            <button type="submit">Filtern</button></form>
+          <p class="vorschlag-kopf muted" id="bkopf-{{ zid }}">
+            {%- if m.kandidaten %}Passende Buchungen im Messfenster
+            {%- else %}Keine weiteren Buchungen dieser Kategorie{% endif %}
+            <button class="ghost" onclick="buchungenAlle('{{ zid }}')"{% if not m.kandidaten %} hidden{% endif %}
+              id="balle-{{ zid }}">alle zuordnen</button></p>
+          <table class="detail" id="bt-{{ zid }}">
+            {% for b in m.kandidaten %}
+            <tr><td class="muted">{{ b.booking_date }}</td><td class="muted">{{ b.account_id }}</td>
+              <td>{{ b.text }}</td><td class="num {{ b.amount_cents|vz }}">{{ b.amount_cents|euro }}</td>
+              <td class="muted">{{ kategorie_namen.get(b.kategorie, b.kategorie or '') }}</td>
+              <td class="aktionen"><button class="ghost" onclick="buchungZu('{{ zid }}', '{{ b.dedup_hash }}')">zuordnen</button></td></tr>
+            {% endfor %}
+          </table>
+        </div>
+        {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted">Noch keine Position.</td></tr>
+    {% endfor %}
+    {# Eine neue Position entsteht IN ihrer Klammer, als letzte Zeile -- nicht in
+       einem Formular oben auf der Seite, in das man den Klammernamen tippen
+       musste. Derselbe Aufklappbereich wie beim Bearbeiten. #}
+    {% set nid = k.id ~ "-neu" %}
+    <tr class="klappbar" onclick="oeffneZeile('{{ nid }}')">
+      <td colspan="5" class="muted">+ Position hinzufügen</td>
+      <td class="aktionen"><button class="ghost"
+        onclick="event.stopPropagation();oeffneZeile('{{ nid }}')">Hinzufügen</button></td>
+    </tr>
+    <tr id="panel-{{ nid }}" class="panel" hidden>
+      <td colspan="6">
+        <div class="zeilen-form">
+          <label>Art<select id="e-art-{{ nid }}" data-no-combo onchange="artWechsel('{{ nid }}')">
+            <option value="betrag">Betrag</option>
+            <option value="wegfall">Wegfall (gemessen)</option>
+            <option value="verkauf">Verkauf eines Objekts</option>
+            <option value="teilzeit">Teilzeit (Anteil am Gehalt)</option>
+          </select></label>
+          <label hidden id="l-anteil-{{ nid }}">Anteil am Gehalt (%)<input id="e-anteil-{{ nid }}" placeholder="70"></label>
+          <label hidden id="l-objekt-{{ nid }}">Objekt<select id="e-objekt-{{ nid }}" data-no-combo>
+            {% for o in objekte %}<option value="{{ o.id }}">{{ o.id }}</option>{% endfor %}
+          </select></label>
+          <label hidden id="l-kosten-{{ nid }}">Verkaufskosten<input id="e-kosten-{{ nid }}" class="betrag" placeholder="Makler, Vorfälligkeit"></label>
+          <label>Bezeichnung<input id="e-label-{{ nid }}" placeholder="Rate"></label>
+          <label>Kategorie<select id="e-kat-{{ nid }}">
+            <option value="">— wählen —</option>
+            {% for c in categories %}<option value="{{ c.id }}">{{ c.label }}</option>{% endfor %}
+          </select></label>
+          <label>Konto<select id="e-konto-{{ nid }}" data-no-combo>
+            <option value="">{{ betriebskonto }} (Betriebskonto)</option>
+            {% for a in accounts %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+          </select></label>
+          <label>Frequenz<select id="e-freq-{{ nid }}" data-no-combo>
+            {% for f in frequencies %}<option value="{{ f }}"{% if f == 'monatlich' %} selected{% endif %}>{{ f }}</option>{% endfor %}
+          </select></label>
+          <label>Richtung<select id="e-richtung-{{ nid }}" data-no-combo>
+            <option value="-">Ausgabe</option>
+            <option value="+">Einnahme</option>
+          </select></label>
+          <label>Betrag<input id="e-amt-{{ nid }}" class="betrag" placeholder="350,00"></label>
+          <label>von<input id="e-von-{{ nid }}" placeholder="2027-03"></label>
+          <label>bis<input id="e-bis-{{ nid }}" placeholder="offen"></label>
+        </div>
+        <p class="zeilen-knoepfe"><button onclick="neueZeile('{{ k.id }}')">Hinzufügen</button>
+          <span id="meldung-{{ nid }}" class="muted"></span></p>
+
+      </td>
+    </tr>
+  </table></div>
+</details>

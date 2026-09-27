@@ -1,0 +1,452 @@
+# STARTVORLAGE -- der Kategoriebaum, mit dem eine neue Einrichtung anfaengt.
+#
+# Kopiert nach `config/taxonomy.yaml`, sobald dort keine liegt; eine
+# vorhandene wird nie angefasst. Von da an ist es DEINE Datei: aendere,
+# loesche, ergaenze. Wer eine Kategorie umbenennt, traegt den alten Namen in
+# `taxonomy_migrations.yaml` unter `remap:` ein -- sonst zeigen die Buchungen,
+# die daran hingen, auf nichts mehr.
+#
+# Warum eine Vorlage und keine leere Datei: Ohne Kategoriebaum kann man nichts
+# zuordnen, und damit tut das Werkzeug nichts. Der Baum unten ist gewachsen,
+# nicht ausgedacht -- aus einem realen deutschen Haushalt mit Mietobjekten,
+# ueber ein Jahr Betrieb. Die Steuerpositionen folgen Anlage V und der Anlage
+# N; wer nicht vermietet, loescht den Immobilienast und behaelt den Rest.
+#
+# Alles unter `tax:` ist deutsches Steuerrecht, Stand 2026, und ersetzt keine
+# Beratung.
+#
+# ---------------------------------------------------------------------------
+
+# Classification taxonomy: two of the three axes.
+#
+#   management  -- how you steer the household. Two levels, Kategorie >
+#                  Subkategorie. Deliberately granular: the previous model
+#                  collapsed consumption into catch-alls because writing rules
+#                  by hand was too laborious, and that is now solved.
+#   tax         -- broad positions, independent of the management tree. The
+#                  same split carries both without either distorting the other.
+#
+# The third axis is free tags (a trip, a renovation, a purchase decision) and
+# needs no declaration -- it is open-ended by design.
+#
+# kind: income | expense | transfer | neutral
+#   transfer marks movement between your own accounts. Those must net to zero
+#   across parsed accounts and are excluded from spend reporting.
+#
+# THE SIGN CARRIES DIRECTION, THE CATEGORY CARRIES PURPOSE.
+#
+# A reimbursement belongs in the SAME category as the expense it offsets, as a
+# positive amount -- not in a separate "Erstattung" bucket. Someone else's
+# monthly share of a streaming subscription is Audio-Streaming, so that
+# category nets to what the subscription genuinely costs the household
+# instead of showing a gross charge with the refunds parked elsewhere.
+#
+# This is why there is no abo/erstattung, no steuern/erstattung and no
+# einkommen/erstattung: each would split one economic fact across two rows and
+# make every category total read too high.
+
+management:
+  einkommen:
+    name: Einkommen
+    kind: income
+    children:
+      gehalt:            Gehalt
+      gehalt-nebentaetig: Gehalt Nebentätigkeit
+      dividende:         Dividende
+      zinsen:            Zinsen
+      # Cashback, Saveback, Bonus -- money back on spending rather than earned.
+      cashback:          Cashback & Boni
+      schenkung:         Schenkung
+      sonstiges:         Sonstige Einnahmen
+
+  wohnen:
+    name: Wohnen
+    kind: expense
+    children:
+      miete:        {name: Miete, fix: true}
+      nebenkosten:  {name: Nebenkosten, fix: true}
+      strom:        {name: Strom, fix: true}
+      heizung:      {name: Heizung, fix: true}
+      internet:     {name: Internet, fix: true}
+      gez:          {name: Rundfunkbeitrag, fix: true}
+      # Umzug: einmalig, aber vierstellig, und steuerlich die Gabelung zwischen
+      # gar nichts und voll abzugsfähig. Ein Umzug besteht
+      # aus drei Sorten Geld, die in keine der bestehenden Kategorien passen:
+      # die Ablöse an die Vormieterin, der Mietwagen für den Transport und die
+      # Handwerker danach. In konsum/moebel oder mobilitaet/kraftstoff gebucht
+      # verschwinden sie zwischen laufenden Ausgaben und sind beim nächsten
+      # Umzug nicht wiederzufinden.
+      #
+      # Voreinstellung ist privat, weil das der teure Fall ist und weil ein
+      # falsch voreingestellter Abzug schlimmer ist als ein fehlender. Beruflich
+      # veranlasst (§9 EStG) wird pro Buchung auf anlage_n/umzugskosten gesetzt;
+      # der Lohnanteil einer Spedition geht auch privat über §35a.
+      umzug:        {name: Umzug, tax: privat/nicht-abzugsfaehig}
+      # Telefon ist ersatzlos weg, nicht verschoben: die Kategorie enthielt
+      # ausschliesslich Telekom MOBILFUNK, war also abo/mobilfunk unter anderem
+      # Namen. Zwei Orte für denselben Vertrag heisst, dass der Monatsbeitrag
+      # von der Zuordnung abhängt statt von der Sache.
+      #
+      # Ebenso Haushalt & Einrichtung: deckungsgleich mit konsum/moebel.
+      #
+      # internet-beruflich und telefon-beruflich hatten in zwei Jahren keine
+      # einzige Buchung. Eine Kategorie, die nie benutzt wird, macht jede
+      # Auswahlliste länger und keine Entscheidung leichter.
+
+  lebensmittel:
+    name: Lebensmittel
+    kind: expense
+    children:
+      # Eine Position. Bäckerei, Getränke und Sonstiges hatten zusammen keine
+      # einzige Buchung -- die Aufteilung war eine Vermutung darüber, wie man
+      # Einkäufe später einmal auseinanderhalten wollen würde.
+      supermarkt:  Lebensmittel
+
+  gastronomie:
+    name: Gastronomie
+    kind: expense
+    children:
+      # Lieferdienst war leer und ist dasselbe Geld für dasselbe Essen.
+      restaurant:   Restaurant, Café & Lieferdienst
+
+  mobilitaet:
+    name: Mobilität
+    kind: expense
+    children:
+      kraftstoff:       Kraftstoff
+      # Fixed costs that are also mobility costs. `fix` is what lets both be
+      # true at once: they stay under Mobilität, where they belong for
+      # "what does the car cost me", and appear in the Fixkosten view, where
+      # they belong for "what do I owe every month no matter what".
+      kfz-versicherung: {name: KFZ-Versicherung, fix: true}
+      kfz-wartung:      KFZ-Wartung & Reparatur
+      kfz-steuer:       {name: KFZ-Steuer, fix: true}
+      kfz-strafen:      KFZ-Strafen & Bußgelder
+      kfz-finanzierung: {name: KFZ-Finanzierung / Leasing, fix: true}
+      # Anschaffung, Reparatur, Zubehör. Unter Mobilität statt Konsum: die
+      # Frage, die diese Kategorie beantwortet, ist "was kostet mich
+      # Fortbewegung" -- ein Rad ersetzt hier Bahn und Auto, es ist kein
+      # Möbelstück. Rückzahlungen netten dagegen, siehe fahrrad-rate.
+      #
+      # STEUERLICH NICHT ABZIEHBAR, auch wenn du damit zur Arbeit fährst: der
+      # Arbeitsweg ist über die Entfernungspauschale abgegolten, unabhängig vom
+      # Verkehrsmittel, und die Anschaffung kommt nicht zusätzlich obendrauf.
+      fahrrad:          Fahrrad
+      # Nur bei überwiegend beruflicher Nutzung (§9 EStG): dann Arbeitsmittel,
+      # unter 800 EUR netto sofort, darüber über die Nutzungsdauer verteilt.
+      fahrrad-beruflich: {name: Fahrrad beruflich, tax: anlage_n/arbeitsmittel}
+      # Split by PURPOSE, not by mode. ÖPNV vs Bahn changes nothing; privat vs
+      # beruflich changes both the decision and the tax treatment, since work
+      # travel is Werbungskosten under Anlage N.
+      bahn-privat:      Bahn & ÖPNV privat
+      bahn-beruflich:   {name: Bahn & ÖPNV beruflich, tax: anlage_n/fahrtkosten}
+      parken:           Parken & Maut
+      # Same split as Bahn, for the same reason: only the purpose decides
+      # whether it is deductible, and the tax position follows the choice so it
+      # cannot be forgotten.
+      parken-beruflich: {name: Parken beruflich, tax: anlage_n/fahrtkosten}
+
+  # Eigener Ast, nicht unter Konsum. Ein berufsbegleitendes Masterprogramm
+  # kostet oft vierstellig pro Rate und ist als ZWEITausbildung
+  # nach abgeschlossener Erstausbildung in voller Höhe Werbungskosten
+  # (§9 Abs. 6 EStG) -- unbegrenzt, und in einem Jahr ohne ausreichendes
+  # Einkommen als Verlustvortrag fortschreibbar. Unter Konsum gebucht wäre das
+  # der grösste stille Steuerposten im ganzen Buch.
+  #
+  # Die Abgrenzung, an der alles hängt: Erstausbildung wären nur Sonderausgaben
+  # nach §10 Abs. 1 Nr. 7 EStG, gedeckelt auf 6.000 im Jahr und ohne Vortrag --
+  # also praktisch wertlos. Ein Master nach Bachelor plus Berufstätigkeit ist
+  # Zweitausbildung, deshalb steht anlage_n/fortbildung als Voreinstellung.
+  bildung:
+    name: Bildung
+    kind: expense
+    children:
+      studiengebuehren: {name: Studiengebühren, tax: anlage_n/fortbildung}
+      lernmittel:       {name: Lernmittel & Literatur, tax: anlage_n/arbeitsmittel}
+
+  reisen:
+    name: Reisen
+    kind: expense
+    children:
+      reise-privat:    Reise privat
+      reise-beruflich: {name: Reise beruflich, tax: anlage_n/fahrtkosten}
+
+  konsum:
+    name: Konsum
+    kind: expense
+    children:
+      kleidung:    Kleidung
+      elektronik:  Elektronik
+      gaming:      Gaming
+      moebel:      Möbel
+      drogerie:    Drogerie
+      medien:      Bücher & Medien
+      # Kino, Konzerte, Festivals -- a ticket bought for one occasion. The
+      # recurring counterpart is abo/sport or abo/zeitung.
+      event:       Events, Kino & Konzerte
+      geschenke:   Geschenke
+      # Discretionary leisure spend, moved here out of Gesundheit: a gym
+      # membership is a lifestyle choice, a doctor is not. Keeping it under
+      # Gesundheit meant that category mixed deductible medical cost with
+      # ordinary consumption, and the tax default below could not be set.
+      fitness:     Fitness & Sport
+      sonstiges:   Sonstiges
+
+  # Every child carries the tax position by default: once leisure sport is out,
+  # everything left here IS a Krankheitskost.
+  #
+  # Deductible as außergewöhnliche Belastung only ABOVE the zumutbare Belastung
+  # (§33 EStG) -- roughly 2-7% of income depending on bracket. The position is
+  # therefore always worth recording, but only sometimes worth anything.
+  gesundheit:
+    name: Gesundheit
+    kind: expense
+    children:
+      arzt:        {name: Arzt,        tax: sonderausgaben/krankheitskosten}
+      zahnarzt:    {name: Zahnarzt,    tax: sonderausgaben/krankheitskosten}
+      medikamente: {name: Medikamente, tax: sonderausgaben/krankheitskosten}
+      optik:       {name: Optik,       tax: sonderausgaben/krankheitskosten}
+
+  # Every insurance is a fixed cost, so the flag is declared once here
+  # rather than repeated on nine children that would drift apart.
+  versicherung:
+    name: Versicherung
+    kind: expense
+    fix: true
+    children:
+      bu:            Berufsunfähigkeit
+      phv:           Privathaftpflicht
+      hausrat:       Hausratversicherung
+      pkv:           Krankenversicherung
+      risiko-lv:     Risiko-Lebensversicherung
+      pkv-pflege:    Pflegeversicherung
+      rente:         Private Rentenversicherung
+      reise:         Reiseversicherung
+      rechtsschutz:  Rechtsschutz
+
+  # Same for subscriptions -- that is what a subscription is.
+  abo:
+    name: Abo
+    kind: expense
+    fix: true
+    children:
+      # Steht netto im PLUS, und das ist beabsichtigt, kein Zuordnungsfehler.
+      # Subventionierte Verträge werden gekauft, das mitgelieferte Gerät mit
+      # Gewinn verkauft; das Ergebnis ist Parität oder Überschuss. Dazu kommt
+      # die Verwaltung von Verträgen fuer Angehoerige,
+      # für die etwas mehr erstattet wurde als verbraucht.
+      #
+      # Bewusst NICHT als Einkommen geführt: das Vorzeichen trägt die Richtung,
+      # und die Kategorie trägt den Zweck. Was hier netto übrig bleibt, ist das
+      # Ergebnis der Mobilfunk-Sache -- genau so soll es zu lesen sein.
+      mobilfunk:        Mobilfunk
+      # Split audio from video: they are different decisions at different
+      # prices, and the Excel always tracked Spotify apart from Streaming.
+      audio-streaming:  Audio-Streaming
+      video-streaming:  Video-Streaming
+      cloud:            Cloud-Speicher
+      # KI and Office are capable of being Werbungskosten (Anlage N /
+      # Arbeitsmittel) where used for work. Kept as their own categories so
+      # the deductible share is visible rather than buried in "Software".
+      ki:               {name: KI-Dienste, tax: anlage_n/arbeitsmittel}
+      office:           {name: Office & Produktivität, tax: anlage_n/arbeitsmittel}
+      steuersoftware:   Steuersoftware
+      sport:            Sport & Verein
+      zeitung:          Zeitung & Magazine
+      spende:           Spenden
+      sonstiges:        Sonstige Abos
+
+  # Every position here has exactly one Anlage V counterpart, so it is declared
+  # rather than chosen per transaction. The object stays a separate field: the
+  # tax position says WHAT the cost is, property_id says WHOSE it is.
+  immobilie:
+    name: Immobilie
+    kind: expense
+    children:
+      mieteinnahme:    {name: Mieteinnahme, tax: anlage_v/mieteinnahmen}
+      # One Nebenkosten position, not two. Vorauszahlung and Abrechnung are the
+      # same economic thing in opposite directions, and the sign already says
+      # which -- the rule the owner set for reimbursements applies here too.
+      nebenkosten:     {name: Nebenkosten, tax: anlage_v/nebenkosten}
+      hausverwaltung:  {name: Hausverwaltung, tax: anlage_v/hausverwaltung}
+      # fix: true, und zwar aus demselben Grund wie bei Zinsen und Tilgung --
+      # die Gemeinde schickt einen Bescheid, keine Rechnung. Ohne das Flag
+      # faellt die Grundsteuer durch beide Siebe von `derive_recurring`:
+      # vier Quartale unterschreiten `min_occurrences`, und die Ausnahme
+      # fuer seltene Posten gilt nur fuer Fixkosten. 597 im Jahr, von denen
+      # die Kontoprognose schlicht nichts wusste.
+      grundsteuer:     {name: Grundsteuer, tax: anlage_v/grundsteuer, fix: true}
+      instandhaltung:  {name: Instandhaltung, tax: anlage_v/erhaltungsaufwand}
+      # NOT deductible: acquisition costs are capitalised into the AfA base
+      # under §6 EStG, not written off in the year they are paid.
+      kaufnebenkosten: Kaufnebenkosten
+      sonstiges:       {name: Sonstiges, tax: anlage_v/sonstige}
+
+  kredit:
+    name: Kredit
+    kind: expense
+    children:
+      # The largest fixed cost in the household by some distance, and the one
+      # that cannot be cancelled. Leaving it out of the Fixkosten view to avoid
+      # overlapping the Immobilien tab would understate the monthly obligation
+      # by more than everything else on that page combined.
+      zinsen:            {name: Zinsen, fix: true}
+      tilgung:           {name: Tilgung, fix: true}
+      # Voluntary, by definition -- not an obligation.
+      sondertilgung:     Sondertilgung
+      bereitstellungszins: Bereitstellungszins
+      gebuehren:         Gebühren
+
+  # Zwei Positionen, und die Trennung hat genau einen Grund: die Haltefrist.
+  #
+  # Ein Krypto-Verkauf innerhalb eines Jahres ist ein steuerpflichtiges privates
+  # Veräußerungsgeschäft nach §23 EStG, ein Wertpapierverkauf nie -- der läuft
+  # über die Abgeltungsteuer. Das ist der einzige Unterschied, der eine eigene
+  # Kategorie verdient.
+  #
+  # Sparplan und Altersvorsorge sind ersatzlos weg. Ein Sparplan ist ein
+  # MECHANISMUS, keine Anlageklasse -- er kauft Wertpapiere, und die stehen
+  # bereits dort. Altersvorsorge war deckungsgleich mit versicherung/rente:
+  # Beiträge zu einer Rentenversicherung sind Versicherungsbeiträge, keine
+  # Wertpapierkäufe, und gehören unter Vorsorgeaufwand statt in ein Depot.
+  # Beide hatten in zwei Jahren keine einzige Buchung.
+  #
+  # kind: neutral, weil hier nichts ausgegeben wird. Geld wechselt die Form.
+  investment:
+    name: Investment
+    kind: neutral
+    children:
+      wertpapier:     Wertpapier
+      krypto:         Krypto
+
+  steuern:
+    name: Steuern
+    kind: expense
+    children:
+      einkommensteuer:    Einkommensteuer
+      # What the Scalable and TR deductions actually are. They were landing in
+      # Einkommensteuer, which conflates withholding on interest with income
+      # tax proper.
+      kapitalertragsteuer: Kapitalertragsteuer & Soli
+
+  familie:
+    name: Familie & Partnerschaft
+    kind: expense
+    children:
+      fixkosten-partner:  {name: Fixkosten Partner, fix: true}
+      gemeinschaftskonto: Gemeinschaftskonto
+      eltern:             Eltern
+      katze:              Katze
+      unterstuetzung:     Unterstützung
+
+  transfer:
+    name: Transfer
+    kind: transfer
+    children:
+      eigenkonto: Zwischen eigenen Konten
+      extern:     An externes eigenes Konto
+
+  sonstiges:
+    name: Sonstiges
+    kind: expense
+    children:
+      gebuehren:       Bankgebühren
+      bargeld:         Bargeldabhebung
+      nicht-zugeordnet: Nicht zugeordnet
+
+
+# --------------------------------------------------------------------- tax
+#
+# Positions marked `property: true` are scoped by the split's property_id
+# rather than duplicated per object. Reports render them as
+# "<Objekt> - Erhaltungsaufwendungen", "<Objekt> - Zinsen" and so on, so adding
+# a fifth property needs no new categories -- and one object's cost cannot be filed
+# under another object's category, because the property is a separate field.
+
+tax:
+  privat:
+    name: Privat / nicht abzugsfähig
+    anlage: null
+    children:
+      nicht-abzugsfaehig: {name: Nicht abzugsfähig, deductible: false}
+
+  anlage_n:
+    name: Anlage N - Werbungskosten
+    anlage: N
+    children:
+      werbungskosten:  {name: Werbungskosten (allgemein), deductible: true}
+      telefonkosten:   {name: Telefonkosten, deductible: true}
+      internetkosten:  {name: Internetkosten, deductible: true}
+      arbeitsmittel:   {name: Arbeitsmittel, deductible: true}
+      fortbildung:     {name: Fortbildung, deductible: true}
+      fahrtkosten:     {name: Fahrtkosten / Entfernungspauschale, deductible: true}
+      berufsverband:   {name: Beiträge zu Berufsverbänden, deductible: true}
+      bewerbung:       {name: Bewerbungskosten, deductible: true}
+      arbeitszimmer:   {name: Häusliches Arbeitszimmer, deductible: true}
+      # §9 Abs. 1 EStG, beruflich veranlasster Umzug. Neben den belegten Kosten
+      # steht die Umzugskostenpauschale für alles Kleinteilige zu, ohne einen
+      # einzigen Beleg -- deshalb ist die Zeile auch dann etwas wert, wenn die
+      # Rechnungen fehlen. Sie muss aber einzeln gesetzt werden: die Kategorie
+      # wohnen/umzug ist bewusst auf privat voreingestellt.
+      umzugskosten:    {name: Umzugskosten (beruflich), deductible: true}
+
+  anlage_v:
+    name: Anlage V - Vermietung und Verpachtung
+    anlage: V
+    children:
+      mieteinnahmen:       {name: Mieteinnahmen, deductible: false, property: true}
+      umlagen:             {name: Umlagen / NK-Vorauszahlung, deductible: false, property: true}
+      zinsen:              {name: Zinsen, deductible: true, property: true}
+      erhaltungsaufwand:   {name: Erhaltungsaufwendungen, deductible: true, property: true}
+      hausverwaltung:      {name: Hausverwaltung, deductible: true, property: true}
+      grundsteuer:         {name: Grundsteuer, deductible: true, property: true}
+      nebenkosten:         {name: Nebenkosten, deductible: true, property: true}
+      versicherung:        {name: Versicherungen, deductible: true, property: true}
+      afa:                 {name: AfA / Abschreibung, deductible: true, property: true}
+      sonstige:            {name: Sonstige Werbungskosten, deductible: true, property: true}
+      # Kept separate from Erhaltungsaufwand on purpose: under
+      # §6 Abs. 1 Nr. 1a EStG, work exceeding 15% of the building's value
+      # within three years of acquisition is capitalised, not deducted.
+      herstellungskosten:  {name: Anschaffungsnahe Herstellungskosten, deductible: false, property: true}
+
+  anlage_kap:
+    name: Anlage KAP - Kapitalerträge
+    anlage: KAP
+    children:
+      kapitalertraege:  {name: Kapitalerträge, deductible: false}
+      kest:             {name: Kapitalertragsteuer, deductible: false}
+      soli:             {name: Solidaritätszuschlag, deductible: false}
+      kist:             {name: Kirchensteuer, deductible: false}
+      verluste:         {name: Verluste, deductible: false}
+
+  vorsorge:
+    name: Anlage Vorsorgeaufwand
+    anlage: VORSORGE
+    children:
+      kranken-pflege: {name: Kranken- und Pflegeversicherung, deductible: true}
+      bu:             {name: Berufsunfähigkeitsversicherung, deductible: true}
+      risiko-lv:      {name: Risiko-Lebensversicherung, deductible: true}
+      altersvorsorge: {name: Altersvorsorge (Rürup / Rente), deductible: true}
+      haftpflicht:    {name: Haftpflicht- und Unfallversicherung, deductible: true}
+
+  sonderausgaben:
+    name: Sonderausgaben und außergewöhnliche Belastungen
+    anlage: SO
+    children:
+      spenden:            {name: Spenden, deductible: true}
+      krankheitskosten:   {name: Krankheitskosten, deductible: true}
+      haushaltsnahe:      {name: Haushaltsnahe Dienstleistungen, deductible: true}
+      handwerkerleistung: {name: Handwerkerleistungen, deductible: true}
+      # Der Rückfallweg für Studienkosten: §10 Abs. 1 Nr. 7 EStG greift, wenn
+      # das Finanzamt den Master als ERSTausbildung wertet. Dann sind es
+      # Sonderausgaben statt Werbungskosten -- gedeckelt auf 6.000 im Jahr und
+      # ohne Verlustvortrag. Die Zeile existiert, damit diese Umdeutung im Tool
+      # abgebildet werden kann statt die Buchung unkategorisiert zu lassen.
+      ausbildungskosten:  {name: Ausbildungskosten (Erstausbildung), deductible: true}
+
+  paragraf_23:
+    name: §23 EStG - Private Veräußerungsgeschäfte
+    anlage: SO
+    children:
+      krypto:     {name: Krypto-Veräußerung, deductible: false}
+      immobilie:  {name: Immobilienveräußerung, deductible: false, property: true}

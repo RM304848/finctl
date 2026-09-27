@@ -1,0 +1,100 @@
+{% extends "base.html" %}{% block n_immo %}on{% endblock %}
+{% block body %}
+{% include "_combo.html" %}
+<h1>Immobilien</h1>
+<p class="zweck">Jedes Objekt mit Cashflow und steuerlichem Ergebnis nebeneinander.</p>
+<div class="wrap">
+<table>
+  <tr>
+    <th>Objekt</th>
+    <th class="num">Miete p.a.</th>
+    <th class="num">Kapital investiert</th>
+    <th class="num">Cashflow p.a.</th>
+    <th class="num">Tilgung p.a.</th>
+    <th class="num">AfA p.a.</th>
+    <th class="num">Gewinn p.a.</th>
+    <th class="num">Rendite</th>
+    <th class="num">Amortisation</th>
+    <th></th>
+  </tr>
+  {% for k in kpis %}
+  <tr>
+    <td><a class="plain" href="/immobilie/{{ k.property_id }}">{{ k.name }}</a></td>
+    {% set miete = k.rent_cents*12//(k.months_observed or 1) %}
+    <td class="num {{ miete|vz }}">{{ miete|euro }}</td>
+    <td class="num {{ k.capital_cents|vz }}">{{ k.capital_cents|euro }}</td>
+    <td class="num {{ k.cash_flow_annual_cents|vz }}">
+        {{ k.cash_flow_annual_cents|euro }}</td>
+    <td class="num {{ k.equity_build_annual_cents|vz }}">{{ k.equity_build_annual_cents|euro }}</td>
+    <td class="num {{ (-k.afa_annual_cents)|vz }}">{{ (-k.afa_annual_cents)|euro }}</td>
+    <td class="num {{ k.net_profit_cents|vz }}">
+        {{ k.net_profit_cents|euro }}</td>
+    <td class="num">{% if k.yield_pct is not none %}{{ '%.1f'|format(k.yield_pct) }} %{% else %}—{% endif %}</td>
+    <td class="num">{% if k.payback_years %}{{ '%.1f'|format(k.payback_years) }} J{% else %}—{% endif %}</td>
+    <td class="zeilen-knoepfe"><button type="button" class="ghost"
+        onclick="objektEntfernen('{{ k.property_id }}', '{{ k.name }}')">entfernen</button>
+      <span class="muted klein" id="weg-{{ k.property_id }}"></span></td>
+  </tr>
+  {% endfor %}
+  {# Angelegt, aber noch nicht in der Datenbank: erst `init` traegt es dort
+     ein. Ohne diese Zeilen sähe der Knopf aus, als täte er nichts. #}
+  {% for kennung, o in objekte.items() if kennung not in kpis|map(attribute='property_id')|list %}
+  <tr>
+    <td><a class="plain" href="/immobilie/{{ kennung }}">{{ o.name }}</a></td>
+    <td class="num muted" colspan="8">angelegt — Zahlen nach dem nächsten Update</td>
+    <td class="zeilen-knoepfe"><button type="button" class="ghost"
+        onclick="objektEntfernen('{{ kennung }}', '{{ o.name }}')">entfernen</button>
+      <span class="muted klein" id="weg-{{ kennung }}"></span></td>
+  </tr>
+  {% endfor %}
+
+  {# Neue Zeilen werden in einer letzten Zeile direkt eingetragen -- Muster
+     `bearbeitungstabellen`. #}
+  {# Drei Felder. Was ein Objekt gekostet hat, steht als einmaliger Betrag in
+     der Planung -- zweimal gefragt waeren zwei Wahrheiten. #}
+  <tr>
+    <td><input id="o-id" placeholder="kennung" maxlength="41" style="width:8rem"></td>
+    <td colspan="6"><input id="o-name" placeholder="Name" style="width:100%"></td>
+    <td><select id="o-status" data-no-combo style="width:100%">
+        {% for wert, text in zustaende.items() %}<option value="{{ wert }}">{{ text }}</option>{% endfor %}
+      </select></td>
+    <td colspan="2" class="zeilen-knoepfe"><button type="button" onclick="objektAnlegen()">Anlegen</button></td>
+  </tr>
+</table>
+</div>
+<div class="muted klein" id="o-meldung"></div>
+
+<script>
+const of_ = n => document.getElementById('o-' + n);
+
+async function objektAnlegen(){
+  const res = await fetch('/api/objekt-neu', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      id: of_('id').value, name: of_('name').value,
+      status: of_('status').value})});
+  const o = await res.json();
+  if(res.ok){ of_('meldung').textContent = 'angelegt…';
+              setTimeout(() => location.reload(), 600); }
+  else { of_('meldung').textContent = o.error || 'fehlgeschlagen'; }
+}
+
+async function objektEntfernen(id, name){
+  if(!confirm('Objekt „' + name + '“ entfernen? Es fällt aus jeder Rechnung.')) return;
+  const res = await fetch('/api/objekt-entfernen', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: id})});
+  const o = await res.json();
+  if(res.ok){ location.reload(); }
+  else { document.getElementById('weg-' + id).textContent = o.error || 'fehlgeschlagen'; }
+}
+</script>
+<p class="muted klein" style="margin-top:.7rem">
+  Rendite, Amortisation und AfA brauchen die Objektdaten — im Objekt eintragen.</p>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/properties.yaml', 'Die Objekte: Anschaffung, AfA, geplanter Verkauf.'),
+  ('config/properties_custom.yaml', 'Hier angelegte Objekte und was von der Objektseite aus eingetragen wurde.'),
+  ('config/loans.yaml', 'Der Kredit je Objekt.'),
+  ('finctl/web/templates/immobilien.html', 'Die Texte dieser Seite.'),
+], handbuch='immobilien') }}
+{% endblock %}

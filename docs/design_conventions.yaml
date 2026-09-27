@@ -1,0 +1,749 @@
+# Wie die Oberflaeche aussieht und sich verhaelt -- an einer Stelle.
+#
+# VOR JEDER AENDERUNG an finctl/web/templates nachschlagen. Eine neue Seite,
+# ein neues Feld, ein neuer Hinweis: erst hier nachsehen, wie es die anderen
+# Seiten tun, dann bauen. Wer eine neue Konvention einfuehrt, traegt sie hier
+# ein -- sonst ist sie beim naechsten Mal wieder eine Ausnahme.
+#
+# Jede Regel hat einen Grund. Wo sie sich maschinell pruefen laesst, steht die
+# Pruefung dabei, und tests/test_design.py fuehrt sie aus. `ausnahmen` sind
+# bekannte Altlasten, keine Erlaubnis: sie stehen unter `offen` und werden
+# weniger, nicht mehr.
+
+regeln:
+
+  # ------------------------------------------------------------ Eingaben
+
+  - id: datum-als-text
+    regel: >
+      Datumsfelder sind Textfelder mit ISO-Platzhalter -- `2026-01-01` fuer
+      einen Tag, `2026-11` fuer einen Monat. Kein type="date", kein
+      type="month".
+    warum: >
+      Der Browser-Datepicker sieht auf jeder Plattform anders aus, zeigt das
+      Datum in der Systemsprache statt im gespeicherten Format und kam auf
+      der Abo-Seite ploetzlich vor, waehrend ihn Transaktionen, Planung und
+      Tags nicht haben.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['type="(date|month)"']
+      ausnahmen: []
+
+  - id: datum-iso
+    regel: >
+      Ein Datum steht ueberall als ISO -- `2026-09-04` fuer einen Tag,
+      `2026-09` fuer einen Monat --, in Tabellen, Kacheln, Hinweisen und
+      Meldungen wie im Eingabefeld. Nur Achsen eines Diagramms kuerzen auf
+      `26-09`. Monatsnamen stehen nur in Ueberschriften und Saetzen
+      ("September 2026").
+    warum: >
+      Transaktionen, Immobilie, Vertraege, Planung und Ziele zeigten
+      `2026-09-04`, Geteilt, Salden, Energie und die Belege im
+      Monatsabschluss `04.09.2026`, die Kacheln `08/2026`. Dieselbe Angabe
+      sah auf jeder zweiten Seite anders aus als im Feld, in dem man sie
+      aendert -- und `%B` schrieb auf Englisch "October".
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ["strftime\\('%d\\.", "strftime\\('%m/", "\\[8:10\\] ~ '\\.'"]
+      ausnahmen: []
+
+  - id: dezimalkomma
+    regel: >
+      Betraege werden deutsch geschrieben und gelesen. Felder rendern mit dem
+      Filter `|betrag`, Skripte lesen mit `centsAus()` und schreiben mit
+      `centsAlsText()` aus _betrag.html. Kein Feld traegt eine Punktdezimale.
+    warum: >
+      "4671.00" las der Parser als 467.100,00 -- Faktor hundert, ausgeloest
+      von Speichern ohne Aenderung.
+    pruefung:
+      art: punktdezimalen
+      seiten: [/planung, /ziele, /konten, /einrichtung, /monatsabschluss, /immobilien,
+               /vertraege, '/vertraege?ansicht=versicherungen', /regeln,
+               /annahmen, /energie, /projekte, /geteilt/buchungen]
+
+  - id: betrag-parser-vor-main
+    regel: _betrag.html wird in base.html VOR <main> eingebunden.
+    warum: >
+      Danach eingebunden warf `const eur = centsAus;` einen ReferenceError und
+      riss den ganzen Skriptblock von /bestaende mit -- ein toter
+      Speichern-Knopf ohne jede Spur.
+    pruefung:
+      art: reihenfolge
+      datei: finctl/web/templates/base.html
+      vorher: '{% include "_betrag.html" %}'
+      nachher: '<main>{% block body %}'
+
+  - id: richtung-als-auswahl
+    regel: >
+      Wo ein Betrag Ausgabe ODER Einnahme sein kann, ist die Richtung eine
+      Auswahl ("Ausgabe"/"Einnahme") neben dem Feld, und der Betrag wird ohne
+      Vorzeichen gelesen. Gespeichert wird weiter wie im Ledger: negativ ist
+      Geld raus.
+    warum: >
+      Im Bearbeitungsbereich auf /planung machte ein vergessenes Minus eine
+      Rate von 362,50 und Stromkosten von 35 zu Einnahmen. Die Klammer zeigte
+      ein Plus, wo ein Minus stehen musste, und nichts sagte es.
+    pruefung:
+      art: datei_enthaelt
+      datei: finctl/web/templates/_klammer.html
+      muss: ['id="e-richtung-', 'z.amount_cents|abs']
+
+  - id: vertragsbetrag-ohne-vorzeichen
+    regel: >
+      Auf /vertraege, Abos wie Versicherungen, traegt das Betragsfeld kein Vorzeichen.
+      Gelesen wird es als Ausgabe; gespeichert wird wie im Ledger negativ,
+      und ein positiver Betrag wird beim Laden abgelehnt.
+    warum: >
+      Dieselbe stille Fehlerquelle wie auf /planung, nur ohne Wahl: ein
+      Vertrag mit Termin ist immer Geld raus. Ein vergessenes Minus haette
+      die Prognose um den doppelten Betrag verschoben -- Ausgabe weg,
+      Einnahme dazu.
+    pruefung:
+      art: datei_enthaelt
+      datei: finctl/web/templates/abos.html
+      muss: ['Ausgabe, ohne Vorzeichen', '-Math.abs(betrag)']
+
+  - id: vorschlagsliste
+    regel: >
+      Auswahl mit Tippen ist makeCombo() aus _combo.html. Kein <datalist>.
+      Ein <select>, das keine Vorschlagsliste werden soll, traegt
+      data-no-combo. Das Feld zeigt dasselbe wie die Liste -- den
+      Anzeigenamen --, die Kennung steht in `data-id` und wird gespeichert.
+      Ein ausgeschriebener Name oder eine getippte Kennung zaehlt wie ein
+      angeklickter Treffer.
+    warum: >
+      iOS Safari zeigt fuer <datalist> nichts an; das Klammerfeld sah auf dem
+      Telefon aus wie ein leeres Textfeld. Auf /abos zeigte das Kategoriefeld
+      `abo/office`, die Liste darunter "Abo / Office" -- und nach einer
+      Auswahl wurde der Anzeigename statt der Kennung gespeichert.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['<datalist', ' list="']
+      ausnahmen: []
+
+  - id: vorschlagsliste-telefon
+    regel: Die Vorschlagsliste passt auf einen Telefonbildschirm und reagiert auf Beruehrung.
+    warum: >
+      20rem sind 320 Pixel; auf 375 stand die Liste halb ausserhalb. Unter
+      iOS kommt mousedown erst nach dem Scrollen der Tastatur.
+    pruefung:
+      art: datei_enthaelt
+      datei: finctl/web/templates/_combo.html
+      muss: ['max-width:calc(100vw - 1.5rem)', 'ontouchstart', 'function platzieren()',
+             "window.addEventListener('scroll', platzieren"]
+
+  - id: suche-als-formular
+    regel: >
+      Ein Suchfeld steht in einem <form onsubmit>, damit Enter sucht. Keine
+      keydown-Handler fuer Enter.
+    warum: Ein keydown-Handler auf der Abo-Seite kam nicht an; Enter tat nichts.
+
+  - id: speichern-rueckmeldung
+    regel: >
+      Nach dem Speichern steht die Rueckmeldung als kurzer Text direkt neben
+      dem Knopf ("gespeichert — neu rechnen …"), Fehler ebenso. Keine
+      Dialoge ausser confirm() vor dem Loeschen.
+    warum: >
+      Eine Meldung weit weg vom Knopf wird nicht gesehen, und es sah aus, als
+      taete sich nichts. Bis zum 26.09.2026 standen noch zehn alert() auf
+      sieben Seiten; `meldenNeben(knopf, text, fehler)` in base.html schreibt
+      die Meldung neben den Knopf, auch wo die Zeile keinen Platz vorsah.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['\balert\(']
+      ausnahmen: []
+
+  - id: nur-abweichungen-speichern
+    regel: >
+      Was eine Seite speichert, landet in der *_custom.yaml neben der von Hand
+      geschriebenen Datei -- und nur, was von ihr abweicht.
+    warum: >
+      /abos schrieb das ganze Abo; danach stand der alte Betrag in der Kopie,
+      und eine Korrektur in abos.yaml kam nicht mehr an.
+
+  - id: auszug-ist-nicht-editierbar
+    regel: >
+      Was ein eingelesener Kontoauszug belegt -- Saldo und Stichtag jedes
+      Kontos mit Parser, Girokonto wie Tagesgeld --, steht als Text mit der
+      Beleg "Auszug bis …" daneben, nie als Feld, und die API lehnt ein
+      Ueberschreiben ab.
+      Stichtag ist das letzte Monatsende, das alle Auszuege abdecken; wie weit
+      der neueste Auszug reicht, steht in einer eigenen Spalte daneben.
+      Die NOTIZ zu einer solchen Position ist davon ausgenommen und bleibt
+      aenderbar: der Wert ist belegt, die Notiz ist eine Aussage des
+      Eigentuemers und steht in keinem Auszug.
+    warum: >
+      Auf /bestaende standen getippte Girostaende ("Auszugsende +
+      Verkaufserloes") neben den belegten, bei Scalable ein getippter
+      Livestand. /konten rechnete vom Auszug, /ziele vom getippten Wert, und
+      beide hiessen Stand.
+
+  - id: vorschau-vor-wirkung
+    regel: >
+      Was viele Buchungen auf einmal umschreibt -- eine Regel, eine
+      Kategorie stilllegen --, zeigt vorher, welche es trifft und was sich
+      aendert, und wendet es nach dem Speichern sofort an.
+    warum: >
+      Eine zu breite Regel ordnet still die Haelfte des Ledgers um, und man
+      findet es erst im naechsten Bericht. Ohne sofortiges Anwenden laedt die
+      Seite mit denselben Zahlen und sieht aus wie ein Knopf, der nichts tut.
+
+  # ------------------------------------------------------------- Anzeige
+
+  - id: farben
+    regel: >
+      Nur die Farbvariablen aus base.html. Hinweiskasten ist `.note`, Status
+      ist `.pill` oder `.pill.eigen`, Warnung ist Text in `.neg`, Erfolg in
+      `.pos`. Keine farbigen Flaechen oder Rahmen per style, auch nicht aus
+      Skripten: ein fehlendes Pflichtfeld traegt die Klasse `feld-fehlt`,
+      eine gerade gespeicherte Zeile kurz die Klasse `gespeichert`.
+      `.pill.solid` mit --bad nur fuer harte Grenzverletzungen in Tabellen.
+      Diagramme und ihre Legende duerfen die Farbvariablen nutzen, ueber
+      Klassen im Seitenstil.
+    warum: >
+      Gelbe Pills und gelb gerahmte Kaesten auf der Abo-Seite wirkten wie
+      eine andere App.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['background:var\(--warn\)', 'border-color:var\(--warn\)',
+               'style="[^"]*var\(--warn\)', "style\\.[a-zA-Z]+\\s*=\\s*'[^']*var\\(--(warn|bad|good)\\)"]
+      ausnahmen: []
+
+  - id: vorzeichenfarbe
+    regel: >
+      Ein Betrag, dessen Vorzeichen eine Richtung ist -- Buchung, Plan- und
+      Vertragsbetrag, Saldo, Kontostand, Cashflow, Abweichung, Summe --, ist
+      rot, wenn er negativ ist, und gruen, wenn er positiv ist, auch in einer
+      Liste nur aus Ausgaben. Null bleibt ohne Farbe. Die Klasse kommt aus
+      dem Filter `|vz`, nicht aus einer Bedingung je Vorlage. Ohne Farbe
+      bleiben Groessen ohne Richtung (Ziel, Grenze, Deckel, Budget, Rate,
+      Restschuld, Preis, Basis), Werte in Eingabefeldern und in Tooltips.
+      Rot als WARNUNG (unter Grenze, ueber Soll) ist davon getrennt und
+      bleibt, wo es steht.
+    warum: >
+      Rueckblick und Transaktionen faerbten jeden Betrag, Vertraege und
+      Planung zeigten dieselben Betraege in Textfarbe, der Monatsabschluss
+      nur negative rot -- drei Gewohnheiten statt einer Regel. Entschieden
+      am 26.09.2026: immer rot und gruen.
+
+  - id: schrift-auf-akzent
+    regel: >
+      Schrift auf einer gefuellten Flaeche -- der Knopf, die rote Pill
+      `.pill.solid` -- ist `var(--on-accent)`, nie eine feste Farbe. Das
+      Token steht in beiden Themen und haelt zu Akzent und --bad mindestens
+      4,5:1.
+    warum: >
+      Weiss auf dem hellen Gruen des dunklen Themas stand bei 2,37:1. Jeder
+      Speichern-Knopf der App war damit schlechter lesbar als sein Umfeld,
+      ausgerechnet der Knopf, auf den es ankommt. Die Pill "unter Grenze"
+      hatte denselben Fehler andersherum: festes Schwarz auf dem dunklen Rot
+      des hellen Themas, 2,79:1 bei 10 Pixeln.
+    pruefung:
+      art: kontrast
+      datei: finctl/web/templates/base.html
+      vorn: --on-accent
+      grund: [--accent, --bad]
+      mindestens: 4.5
+      muss: ['color:var(--on-accent)', '.pill.solid{color:var(--on-accent)']
+
+  - id: textkontrast
+    regel: >
+      Jede Schriftfarbe -- Text, gedaempft, Akzent, Warnung, rot, gruen --
+      haelt auf Grund und Flaeche mindestens 4,5:1, in beiden Themen. Der
+      Akzent ist blau und steht nie fuer eine Richtung: gruen und rot heissen
+      "rein" und "raus", Bernstein heisst Warnung.
+    warum: >
+      Der Akzent war gruen und damit dieselbe Farbe wie jede Einnahme; ein
+      Knopf und ein Betrag sprachen dasselbe Wort fuer zwei Dinge. Geprueft
+      war bisher nur die Schrift AUF Flaechen, nicht die Schrift selbst --
+      gedaempfter Text und farbige Betraege, die man am meisten liest.
+    pruefung:
+      art: kontrast
+      datei: finctl/web/templates/base.html
+      vorn: [--ink, --muted, --accent, --warn, --bad, --good]
+      grund: [--bg, --panel]
+      mindestens: 4.5
+
+  - id: fokus-und-druck
+    regel: >
+      Wo die Tastatur steht, zeigt ein Rahmen im Akzent (`:focus-visible`).
+      Ein Knopf gibt beim Druecken einen Pixel nach -- nur ohne
+      `prefers-reduced-motion`. Mehr Bewegung hat die App nicht.
+    warum: >
+      Der Standardrahmen des Browsers verschwand auf dem dunklen Grund, und
+      ohne Rueckmeldung beim Klick sah ein Knopf, der rechnet, aus wie einer,
+      der nichts tut.
+    pruefung:
+      art: datei_enthaelt
+      datei: finctl/web/templates/base.html
+      muss: [':focus-visible{outline:2px solid var(--accent)', '@media (prefers-reduced-motion:no-preference)']
+
+  - id: feldrand
+    regel: >
+      Eingabefelder, Textfelder und Auswahllisten tragen den Rand `var(--feldrand)`, der
+      sich in beiden Themen mit mindestens 3:1 vom Grund abhebt. --line
+      bleibt fuer Tabellenlinien und Kaesten, die zart sein duerfen.
+    warum: >
+      Mit --line stand der Feldrand bei 1,25:1; ein leeres Feld war von
+      einer leeren Flaeche kaum zu unterscheiden. 3:1 ist die WCAG-Grenze
+      fuer die Umrisse von Bedienelementen.
+    pruefung:
+      art: kontrast
+      datei: finctl/web/templates/base.html
+      vorn: --feldrand
+      grund: [--bg, --panel]
+      mindestens: 3.0
+      muss: ['select,input,textarea{border-color:var(--feldrand)}', 'color-scheme:light dark']
+
+  - id: themen
+    regel: >
+      Hell ist warm (Papier, Creme, warmes Grau), dunkel sportlich (kuehles
+      Graphit, elektrisches Blau, kraeftige Signalfarben); beide teilen den
+      einen Akzent und den Akzentstrich ueber dem Kopf.
+      Hell und dunkel folgen dem Geraet, bis man im Kopf umschaltet
+      (wie das Geraet, hell, dunkel; gemerkt im Browser). Die dunklen Farben
+      stehen dafuer zweimal in base.html, unter der Media-Query und unter
+      `:root[data-theme="dark"]`, und muessen gleich sein. Seiten fragen das
+      Thema nie selbst ab, sondern nutzen die Farbvariablen.
+    warum: >
+      Ohne Schalter liess sich das Thema nur ueber die Systemeinstellung
+      wechseln, also fuer alle Programme zugleich. Und eine Farbe, die nur
+      in einem der beiden Bloecke geaendert wird, faellt erst auf, wenn man
+      den Schalter benutzt.
+    pruefung:
+      art: themengleich
+      datei: finctl/web/templates/base.html
+      geraet: ':root:not([data-theme="light"]){'
+      schalter: ':root[data-theme="dark"]{'
+
+  - id: konten-als-kennung
+    regel: >
+      Konten stehen in Tabellen, Auswahlfeldern und Pills als Kennung
+      (`trade-republic`), wie auf Transaktionen und Review. Der Anzeigename
+      nur als Ueberschrift einer Kontoseite.
+    warum: Die Abo-Seite zeigte "Trade Republic", der Rest der App `trade-republic`.
+
+  - id: ueberschriften
+    regel: >
+      h2 und h3 sprechen mit derselben Stimme: versal, gedaempft, halbfett.
+      Keine Ueberschrift bringt einen eigenen Schriftgrad mit.
+    warum: h3 hatte keinen Stil und stach als einzige Ueberschrift heraus.
+    pruefung:
+      art: ueberschriften
+      datei: finctl/web/templates/base.html
+      css_regeln: ['h2{', 'h3{']
+      css_muss: ['text-transform:uppercase', 'color:var(--muted)', 'font-weight:600']
+      tags: ['<h1', '<h2', '<h3']
+      im_tag_verboten: font-size
+
+  - id: schriftgrade
+    regel: >
+      Kleine Schrift ist die Klasse `.klein` (12 px) oder `.fein` (11 px),
+      ein leichter Zusatz in einer Ueberschrift `.zusatz`. Kein kleiner
+      Schriftgrad als style am Element.
+    warum: >
+      98 feste Pixelwerte standen verstreut im Markup, von 10 bis 12 Pixel,
+      und in Ueberschriften vier verschiedene em-Werte fuer dasselbe. Die
+      Rollen-Pill auf /konten kam so auf 8 Pixel.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['style="[^"]*font-size:(1[0-2]px|\.\d+em)']
+      ausnahmen: []
+
+  - id: ecken
+    regel: >
+      Drei Radien: 6 px fuer Felder, Knoepfe und schwebende Listen, 9 px fuer
+      Tabellen, Karten und Kaesten, rund (999 px) fuer Pills und Balken.
+    warum: >
+      Daneben standen 3, 5, 7 und 8 Pixel -- keiner davon mit Absicht, und
+      nebeneinander sieht man es.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['border-radius:\s*(?!(0|6px|9px|999px)\b)\d']
+      ausnahmen: []
+
+  - id: bearbeitungstabellen
+    regel: >
+      In einer Tabelle zum Bearbeiten steht jede Zeile auf einer Linie. Was
+      nicht geaendert wird, ist Text, nur der aenderbare Wert ist ein Feld
+      (Betraege rechtsbuendig, Klasse `betrag`). Aktionen stehen rechts als
+      kurze Ghost-Knoepfe ohne Umbruch. Was zu einer Zeile gehoert --
+      Zahlungen einer Person, Vorschlaege, eine Suche -- steht als
+      eingerueckte, kleinere Unterzeile darunter, nicht als Kasten im
+      Kasten. Neue Zeilen werden in einer letzten Zeile direkt eingetragen.
+      Keine Knoepfe fuer Faelle, die nicht vorkommen: eine Zeile zu loeschen
+      genuegt. Wird eine Tabelle mit Feldern zu breit, zeigt die Zeile nur,
+      was sie tut, mit einem Knopf "Öffnen"; bearbeitet wird in einem
+      Bereich darunter, und offen ist immer nur einer. Wo etwas zugeordnet
+      ist, steht in der Zeile selbst, nicht erst im geoeffneten Bereich.
+    warum: >
+      Die Personentabelle auf /abos hatte Namen als Eingabefelder,
+      zweizeilige Knoepfe, versetzte Zeilen, Zahlungen in eine Spalte
+      gequetscht und einen "erlassen"-Knopf fuer einen Fall, der nicht
+      vorkommt und ohnehin sichtbar wird, wenn man die Zeile loescht. Auf
+      /planung lagen die Knoepfe hinter einer zu breiten Tabelle, und welche
+      Buchungen welcher Zeile zugeordnet waren, war nicht zu erkennen.
+
+  - id: eine-position-eine-zeile
+    regel: >
+      Was eine Seite prueft und was sie pflegt, steht in derselben Zeile: ob
+      die Position aktuell ist, ihr Wert (belegt als Text, getippt als Feld)
+      und die Notiz. Keine Position steht auf einer Seite zweimal. Der eine
+      Knopf der Zeile bietet an, was ohne Tippen geht ("unverändert"), und
+      heisst "Speichern", sobald getippt wurde. Eine lange Notiz zeigt zwei
+      Zeilen und oeffnet sich beim Klick.
+    warum: >
+      Auf dem Monatsabschluss stand jede Position zweimal -- oben in der
+      Checkliste mit ihrem Beleg, unten in den Bestaenden mit Wert und Notiz
+      --, jedes Konto dazu ein drittes Mal als Kachel. Wer oben einen alten
+      Stand sah, suchte ihn unten, um ihn zu aendern.
+
+  - id: knopfgewicht
+    regel: >
+      Gefuellt ist die eine Hauptaktion eines Bereichs -- Update, Anlegen,
+      das Speichern eines Formulars. Ein Knopf, der sich in jeder Zeile einer
+      Tabelle wiederholt, ist `ghost`. Ein Filterformular schickt mit
+      "Filtern", eine Ansichtswahl mit "Anzeigen".
+    warum: >
+      Auf Transaktionen standen zweihundert gefuellte blaue Knoepfe
+      untereinander; das Auge fand die Betraege zwischen ihnen nicht mehr, und
+      der eine Knopf, der wirklich zaehlt, sah aus wie alle anderen. "Filter"
+      und "Filtern" hiessen auf zwei Seiten dasselbe verschieden.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['<button[^>]*>\s*Filter\s*<']
+      ausnahmen: []
+
+  - id: kacheln
+    regel: >
+      Eine Kachelreihe (`.cards`) traegt hoechstens sechs Kacheln; eine
+      Kachel ist mindestens 160 Pixel breit, damit sechs bei voller Breite
+      in eine Reihe passen. Mehr Kennzahlen gehoeren in eine zweite Reihe
+      mit eigener Ueberschrift oder in eine Tabelle.
+    warum: >
+      Mit 190 Pixeln passten nur fuenf: auf /immobilie stand die sechste
+      Kachel allein in einer zweiten Reihe, im Monatsabschluss
+      "Aufzuteilen" -- eine Waise, die aussieht wie ein Fehler.
+    pruefung:
+      art: datei_enthaelt
+      datei: finctl/web/templates/base.html
+      muss: ['repeat(auto-fit,minmax(160px,1fr))']
+
+  - id: flussdiagramm
+    regel: >
+      Ein Flussdiagramm zeichnet `_fluss.html` aus der Geometrie von
+      `finctl/web/sankey.py`, auf jeder Seite gleich: rein gruen, raus rot,
+      die Differenz als "gespart" (Akzent) bzw. "aus Rücklagen" (Warnung),
+      Posten unter 1,5 % in "übrige" mit Namen im Tooltip, Betraege in ganzen
+      Euro. Jeder Knoten fuehrt dorthin, wo man ihn aendert oder nachliest.
+      Unter 700 Pixeln stehen dieselben Knoten als Liste mit Balken.
+    warum: >
+      Rueckblick und Annahmen zeigen dieselbe Form fuer zwei Fragen (wohin
+      ist es gegangen, wohin wird es gehen). Zwei Zeichnungen haetten
+      verschiedene Farben und Schwellen bekommen, und im 375-Pixel-Diagramm
+      waere die Schrift vier Pixel hoch.
+    pruefung:
+      art: datei_enthaelt
+      datei: finctl/web/templates/_fluss.html
+      muss: ['class="fluss-liste"', "@media (max-width:700px)"]
+
+  - id: klappbare-abschnitte
+    regel: >
+      Aufklappbares ist `details.klapp` mit `summary`; Seiten damit binden
+      _klappzustand.html ein, damit offene Abschnitte und die Scrollposition
+      ein Speichern ueberleben. Aufklappbare Tabellenzeilen tragen
+      `tr.klappbar`.
+    warum: Nach jedem Speichern sprang die Planungsseite nach oben, und alles war wieder zu.
+
+  - id: reiter
+    regel: >
+      Mehrere Ansichten einer Seite sind Reiter: `rt.reiter()` aus
+      _reiter.html direkt unter dem Zwecksatz, jeder Reiter ein Link mit
+      eigener Adresse (`?ansicht=…`), keine Skriptschalter. Ein Reiter
+      wechselt die Ansicht und laesst die uebrigen Filter stehen. Eine
+      zusammengelegte Seite leitet von ihrer alten Adresse auf ihren Reiter
+      um (`umleiten()` in finctl/web/basis.py).
+    warum: >
+      Review, Flagged und Transaktionen waren drei Seiten mit derselben
+      Tabelle und denselben Knoepfen, jede mit eigener Pflege; Report,
+      Fixkosten und Alle Kategorien drei Menuepunkte fuer eine Frage. Eine
+      Ansicht ohne eigene Adresse laesst sich nicht verlinken, und ein
+      Lesezeichen auf die alte Seite liefe ins Leere.
+    pruefung:
+      art: datei_enthaelt
+      datei: finctl/web/templates/_reiter.html
+      muss: ['<nav class="reiter">', 'href="{{ e.href }}"']
+
+  - id: auswahlzeile
+    regel: >
+      Eine kurze Wahl ohne Formular -- Jahr, Konto, Horizont -- ist eine
+      `nav.auswahl` mit Pillen; die gewaehlte traegt `on` und steht gefuellt
+      im Akzent. Kein Fettdruck und keine Unterstreichung per style. Ab mehr
+      als acht Optionen ist die Wahl eine Auswahlliste in derselben Zeile, die
+      beim Wechseln laedt. Braucht eine Wahl mehrere Felder zusammen, ist sie
+      ein Formular.
+    warum: >
+      Drei Seiten markierten die Wahl mit fett und unterstrichen, als
+      Inline-Stil: eine gewaehlte Option sah aus wie ein besuchter Link, und
+      jede Seite trennte die Optionen anders.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['style="[^"]*text-decoration:underline']
+      ausnahmen: []
+
+  - id: tabellen
+    regel: >
+      Jede Tabelle steht in `div.wrap` (waagerecht scrollbar statt
+      Seitenueberlauf), Zahlenspalten tragen `.num`.
+    warum: Auf 375 Pixeln schob eine breite Tabelle die ganze Seite zur Seite.
+
+  - id: seitenrhythmus
+    regel: >
+      Der Abstand zwischen zwei Bloecken einer Seite steht einmal in
+      base.html (`main > .wrap, .card, .cards, details, form, table`), nicht
+      an jedem Block. Eine Vorlage setzt an einem Block direkt unter `main`
+      kein `margin-bottom` per style. Ein negativer oberer Abstand, der eine
+      Bildunterschrift an ihre Ueberschrift zieht, ist etwas anderes und
+      bleibt erlaubt.
+    warum: >
+      Auf /konten stiessen die Kontentabelle und das Diagramm ohne Fuge
+      aufeinander und lasen sich als ein zerbrochener Kasten. Jede andere
+      Tabelle der App bekam ihren Abstand nur geschenkt, weil zufaellig eine
+      Ueberschrift folgte -- ein Rhythmus, der von der Reihenfolge des
+      Inhalts abhing statt von einer Regel.
+    pruefung:
+      art: seitenrhythmus
+      datei: finctl/web/templates/base.html
+      muss: ['main > .wrap', 'margin-bottom:1.1rem']
+      muster: 'style="[^"]*margin-bottom'
+      ausnahmen: []
+
+  - id: rechenweg-zu-jeder-prognose
+    regel: >
+      Jede projizierte Zahl auf /konten und /hochrechnung laesst sich bis auf ihre
+      Posten aufklappen: Bezeichnung, Quelle, Herleitung, Betrag. Die Quelle
+      ist eine Pill aus dem festen Satz in finctl/forecast/herkunft.py
+      (gemessen, annahme, vertrag, plan, rendite, regel). Blocksummen werden
+      aus den Posten gebildet, nie daneben gerechnet. Worin sich /konten und
+      die Jahresrechnung unterscheiden, steht je Kategorie auf /annahmen unter
+      Prognosebasis.
+    warum: >
+      Zwei Rechenmaschinen mit verschiedenen Basen -- Median und Floor auf
+      /konten, Zwoelfmonatsschnitt und Median in der Jahresrechnung -- fielen
+      erst im Chat auf. Das Basisjahr verzinste den ganzen Bestand ein ganzes
+      Jahr, und eine Schenkung wurde als Einkommen fortgeschrieben; beides
+      hatte niemand sehen koennen, weil nur Summen dastanden.
+    pruefung:
+      art: datei_enthaelt
+      datei: finctl/web/templates/hochrechnung.html
+      muss: ['class="panel rechenweg"', 'p.herleitung', 'p.quelle']
+
+  - id: erklaertes-wird-nicht-gemessen
+    regel: >
+      Was eine Handentscheidung erklaert -- ein Vertrag mit Termin, eine
+      Planzeile --, wird nicht zusaetzlich gemessen, und zwar nach EINER
+      Definition: die zugeordnete Buchung und ihre Reihe, also derselbe
+      Empfaenger in derselben Kategorie (`finctl/ledger/reihe.py`). Ein
+      Vertrag engt sie mit seinem Betrag ein. Jede Rechnung, die eine
+      Erklaerung gegen die Messung stellt -- Kontoprognose wie Jahresrechnung
+      --, nimmt dieselbe Definition; eine zweite daneben ist ein Fehler, kein
+      Feintuning. Wo eine Erklaerung nur einen Teil der Kategorie abdeckt,
+      sagt die Oberflaeche das, statt die Restzahl unkommentiert zu zeigen.
+      Das gilt auch fuer das ENDE einer Erklaerung: ein gekuendigter Vertrag
+      wirkt in beiden Rechnungen, ohne dass jemand die Kuendigung ein zweites
+      Mal als Planzeile eintraegt. Versprochen wird dabei nie mehr, als die
+      Erklaerung selbst sagt.
+    warum: >
+      Der Ausschluss lief genau ueber die angehakten Buchungen. Ein Vertrag,
+      von dem nur eine Handvoll angehakt war, liess den ganzen Rest im Median
+      stehen und buchte seinen Termin zusaetzlich: derselbe Beitrag zweimal,
+      Monat fuer Monat, ohne dass eine Seite es sagte. Gleichzeitig mass die
+      Kontoprognose einen Wegfall ueber die ganze Kategorie und die
+      Jahresrechnung ueber die zugeordneten Buchungen -- zwei Antworten auf
+      dieselbe Zeile. Zwei Rechenwege fallen niemandem auf; sie widersprechen
+      sich nur.
+
+  - id: schnitt-ueber-abgeschlossene-monate
+    regel: >
+      Ein "Ø / Monat" teilt nur durch abgeschlossene Monate, und der Zaehler
+      hoert an derselben Stelle auf: der laufende Monat steht in keiner der
+      beiden Zahlen. Die Spalte Summe daneben darf das ganze Jahr zeigen --
+      dann sagt die Spaltenueberschrift, ueber wie viele abgeschlossene
+      Monate der Schnitt laeuft. Gibt es noch keinen abgeschlossenen Monat,
+      zaehlt der angefangene, und die Ueberschrift sagt auch das.
+    warum: >
+      Auf /monitor stand am 21. September das Jahr 2026 mit neun Monaten im
+      Nenner, obwohl das Gehalt des Monats noch nicht gebucht war: das
+      Einkommen las sich als 5.486 statt 6.037 im Monat, und zwar umso
+      falscher, je frueher im Monat man die Seite aufschlug. Ein Schnitt, der
+      sich mit dem Kalender aendert, ohne dass sich etwas geaendert hat, ist
+      keine Kennzahl.
+
+  - id: kein-cdn
+    regel: Keine Bibliothek aus dem Netz. Diagramme sind handgezeichnetes SVG.
+    warum: Das Werkzeug muss ohne Netz laufen; ein CDN ist genau die Abhaengigkeit, die das bricht.
+    pruefung:
+      art: kein_cdn
+      seiten: ['/konten?months=6']
+      muster: [cdn., unpkg, jsdelivr, googleapis, chart.js, d3.]
+
+  # ---------------------------------------------------------------- Texte
+
+  - id: oberflaeche-auf-deutsch
+    regel: >
+      Knoepfe, Tabellenkoepfe und Rueckmeldungen sind deutsch. Ein Knopf,
+      der speichert, heisst "Speichern" -- auf jeder Seite gleich.
+    warum: >
+      Review, Transaktionen, Immobilie und Aufteilen sagten "Save", "Amount"
+      und "failed", der Rest der App "Speichern", "Betrag" und
+      "fehlgeschlagen". Zwei Woerter fuer dieselbe Handlung lesen sich wie
+      zwei Handlungen.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['>\s*(Save|Delete|Cancel|Remove|Apply)\b',
+               "'(saved|failed|could not save)",
+               '<th[^>]*>(Date|Account|Amount|Description)</th>']
+      ausnahmen: []
+
+  - id: ein-zwecksatz-je-seite
+    regel: >
+      Eine Seite traegt genau einen festen Satz: die FRAGE, die sie
+      beantwortet, generisch, ohne Zahl und ohne Namen, hoechstens 25 Woerter,
+      als `p.zweck` direkt unter der h1. Alles Weitere steht am Feld, das es
+      erklaert (Beschriftung, Spaltenkopf, title=, hoechstens zwoelf Woerter),
+      in einem aufklappbaren `details.hilfe` (hoechstens 60 Woerter je Bereich,
+      120 je Seite), als bedingt gerenderter Hinweis, der nur erscheint, wenn
+      der Fall eintritt (`div.note` in einem `{% if %}`, hoechstens 40
+      Woerter), oder in HANDBUCH.md. Freie Prosa dazwischen gibt es nicht.
+      Teilvorlagen (`_*.html`) tragen gar keinen Erklaertext: sie werden je
+      Datensatz gerendert, jedes Wort multipliziert sich also.
+    warum: >
+      Stichpunkte aus einem Gespraech sind nach zwei Monaten falsch und lassen
+      sich im Frontend nicht aendern. Der Kasten auf /konten wuchs auf
+      siebenhundert Woerter, /kredite nannte drei Vertraege und eine Bank beim
+      Namen, derselbe Absatz stand dreimal in der App. Wer eine Seite zum
+      ersten Mal oeffnet, liest den ersten Satz; wer sie kennt, liest auch den
+      nicht mehr.
+    pruefung:
+      art: zwecktext
+      zweck_woerter_max: 25
+      note_woerter_max: 40
+      hilfe_woerter_max: 60
+      hilfe_summe_max: 120
+      absatz_woerter_max: 12
+      teilvorlagen_praefix: "_"
+      # Beide Schreibweisen: die Auszuege drucken mal ss, mal ß.
+      #
+      # DIE LISTE STEHT IM DATENORDNER, nicht hier: sie besteht aus genau den
+      # Namen, die sie verbietet, und das Repository soll weitergegeben
+      # werden. Ohne die Datei (Musterhaushalt, automatische Pruefung) wird
+      # nicht nach Namen gesucht. Eine Liste belegt ohnehin nur, dass DIESE
+      # Namen fehlen -- was sonst aus dem Hauptbuch stammt, findet
+      # tests/test_leck.py.
+      #
+      # Banknamen stehen bewusst NICHT drauf: die Auszugsprofile heissen nach
+      # ihrer Bank und sind fuer andere in Deutschland genau deshalb
+      # brauchbar. Verboten sind Personen, Objekte und eigene Vertraege.
+      #
+      # Zu allgemein und deshalb draussen: `Pflege` (Pflegeversicherung),
+      # `Sommer` (Jahreszeit). Dort steht die laengere Form oder nichts.
+      verbotene_namen: config/verbotene_namen.yaml
+      ausnahmen: []
+
+  - id: jede-erklaerung-steht-einmal
+    regel: >
+      Derselbe Satz steht in genau einer Vorlage. Was zwei Seiten erklaeren
+      muessen, erklaert HANDBUCH.md.
+    warum: >
+      Der Absatz ueber die letzte Buchung stand dreimal in der App. Beim
+      naechsten Mal wird eine der Stellen korrigiert und die anderen bleiben
+      falsch, ohne dass es auffaellt.
+    pruefung:
+      art: textdubletten
+      mindestlaenge: 8
+      ausnahmen: []
+
+  - id: kommentare-begruenden-code
+    regel: >
+      Ein Jinja-Kommentar sagt, warum die Vorlage etwas tut oder bewusst nicht
+      tut -- in der Gegenwart, ohne Betrag, ohne Datum, ohne Namen, hoechstens
+      60 Woerter je Kommentar und 250 je Vorlage. Was einmal galt und gefunden
+      wurde, gehoert in die Notizen im Datenordner (notizen/archiv_notizen.yaml).
+    warum: >
+      Die Kommentare sind zusammen laenger als alles, was die Seiten anzeigen,
+      und niemand prueft sie: die Fliesstext-Pruefung entfernt sie
+      ausdruecklich, bevor sie misst. Ein Kommentar, der eine Zahl von
+      vorgestern erzaehlt, ist schlimmer als keiner -- er sieht aus, als
+      stimme er.
+    pruefung:
+      art: kommentare
+      woerter_je_kommentar_max: 60
+      woerter_je_vorlage_max: 250
+      verboten:
+        Geldbetrag: '\b\d{1,3}(?:\.\d{3})+(?:,\d+)?\b'
+        Datum: '\b\d{1,2}\.\d{1,2}\.20\d\d\b'
+        Erzaehlform: '(?i)\b(vorher stand|frueher stand|inzwischen|damals|im Chat|aufgefallen)\b'
+        # Dazu jeder Name aus config/verbotene_namen.yaml (tests/test_design.py).
+      ausnahmen: []
+
+  - id: fliesstext-altert-nicht
+    regel: >
+      Fest verdrahteter Text erklaert die REGEL, nicht die LAGE: keine
+      Betraege, keine Anzahlen. Zahlen werden gerendert. Wie viel Text eine
+      Seite ueberhaupt tragen darf, sagt `ein-zwecksatz-je-seite`.
+    warum: >
+      Ein Ziel von "1.092.608", laengst durch 831.000 ersetzt; "78.000 fuer ein Objekt",
+      inzwischen 178.000 -- Text, den niemand aendern kann, darf nichts
+      behaupten, was sich aendert.
+    pruefung:
+      art: fliesstext
+      verboten:
+        Geldbetrag: '\b\d{1,3}(?:\.\d{3})+(?:,\d+)?\b'
+        Mengenwort: '\b(?:zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|dreizehn|vierzehn|fünfzehn|sechzehn|siebzehn|achtzehn|neunzehn)\s+(?:Verträge|Objekte|Konten|Seiten|Kredite|Klammern|Ziele|Depots|Regeln|Positionen|Kategorien)\b'
+      erlaubt: '§\s?\d+|EStG|SGB|BGB|vor 1925|seit 2023|KVdR'
+
+  - id: keine-notizen-an-planklammern
+    regel: >
+      Planklammern tragen keine Freitextnotiz. Was ein Plan annimmt, steht in
+      seinen Zeilen, und die sind Platzhalter, die bei jedem neuen Angebot
+      ueberschrieben werden. Eine Erklaerung, wie Klammern funktionieren,
+      gehoert auf die Seite, nicht an den einzelnen Plan.
+    warum: >
+      Die Notiz an "Neues Auto 2028" sprach von Barkauf und einem Angebot
+      "im Oktober", waehrend die Zeilen laengst eine Finanzierung trugen --
+      eine Notiz neben Zahlen, die sich aendern, veraltet beim ersten
+      Bearbeiten und laesst sich im Dashboard nicht einmal aendern.
+    pruefung:
+      art: vorlagen_verbieten
+      muster: ['k\.note']
+      ausnahmen: []
+
+  - id: konfig-fuss
+    regel: >
+      Jede Seite endet mit dem Konfigurationsfuss (`kf.fuss` aus _konfig.html):
+      zuerst ihr Abschnitt im Handbuch (`handbuch='konten'`), dann welche
+      Dateien sie speisen, und die eigene Vorlage. Genannt wird nur, was
+      existiert -- ein Handbuchanker ebenso wie eine Datei. Ein verlinkter
+      Abschnitt bleibt kuerzer als 200 Woerter; der Monatsablauf davor darf
+      ausfuehrlich sein.
+    warum: >
+      Nach einem halben Jahr weiss niemand mehr, woher eine Zahl kommt. Eine
+      geloeschte config/planned.yaml stand noch im Text und schickte ins Leere.
+    pruefung:
+      art: konfig_fuss
+      handbuch_woerter_max: 200
+      darf_fehlen: [settings_custom.yaml, properties_custom.yaml, taxonomy_custom.yaml,
+                    prognosebasis_custom.yaml, forecast_custom.yaml,
+                    loans_custom.yaml, balances_custom.yaml, ziele_custom.yaml,
+                    abos_custom.yaml, rules_custom.yaml, strom.yaml, energie.yaml,
+                    geteilt_custom.yaml, versicherungen_custom.yaml,
+                    accounts_custom.yaml, backup_custom.yaml, module_custom.yaml,
+                    csv_profile_custom.yaml, lebensplan_custom.yaml,
+                    renten_custom.yaml]
+
+  - id: navigation
+    regel: Jede Seite steht in genau einer Gruppe der Navigation.
+    warum: Sechzehn gleichrangige Links zwangen dazu, den Namen einer Seite zu kennen, bevor man sie fand.
+    pruefung:
+      art: navigation
+      gruppen: [Überblick, Vorausschau, Objekte, Verträge, Geteilt, Stammdaten]

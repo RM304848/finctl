@@ -1,0 +1,145 @@
+# Musterhaushalt: Plaene, erfunden. Jede Art kommt einmal vor.
+
+szenarien:
+- id: ferienhaus
+  name: Ferienhaus
+  aktiv: true
+  pflicht: true
+  zeilen:
+  - label: Erste Baurate
+    art: betrag
+    amount_cents: -2000000
+    frequenz: einmalig
+    start: '2030-10-01'
+    kategorie: immobilie/kaufnebenkosten
+    konto: tagesgeld
+  - label: Zweite Baurate
+    art: betrag
+    amount_cents: -1500000
+    frequenz: einmalig
+    start: '2031-04-01'
+    kategorie: immobilie/kaufnebenkosten
+    konto: tagesgeld
+  - label: Jahresabgabe
+    art: betrag
+    amount_cents: -30000
+    frequenz: jaehrlich
+    start: 2030-11
+    kategorie: immobilie/nebenkosten
+    konto: giro
+- id: steuererstattung
+  name: Steuererstattung
+  aktiv: false
+  zeilen:
+  - label: Erstattung Vorjahr
+    art: betrag
+    amount_cents: 120000
+    frequenz: einmalig
+    start: 2030-06
+    kategorie: steuern/einkommensteuer
+    konto: giro
+- id: eigenheim
+  name: Eigenheim 2031
+  aktiv: false
+  zeilen:
+  - label: Eigenkapital
+    art: betrag
+    amount_cents: -6000000
+    frequenz: einmalig
+    start: 2031-07
+    kategorie: wohnen/miete
+    konto: tagesgeld
+  - label: Miete entfaellt
+    art: wegfall
+    amount_cents: 0
+    frequenz: monatlich
+    start: '2031-07-01'
+    kategorie: wohnen/miete
+    konto: giro
+  - label: Hausgeld und Ruecklage
+    art: betrag
+    amount_cents: -40000
+    frequenz: monatlich
+    start: 2031-07
+    kategorie: wohnen/miete
+    konto: giro
+- id: kinder
+  name: Kinder
+  aktiv: false
+  zeilen:
+  - label: Kind 0-6 Jahre
+    art: betrag
+    amount_cents: -25000
+    frequenz: monatlich
+    start: '2030-03-01'
+    kategorie: lebensmittel/supermarkt
+    konto: giro
+    ende: '2036-03-01'
+  - label: Kind 7-18 Jahre
+    art: betrag
+    amount_cents: -35000
+    frequenz: monatlich
+    start: '2036-03-01'
+    kategorie: lebensmittel/supermarkt
+    ende: '2048-03-01'
+- id: neues-auto
+  name: Neues Auto
+  aktiv: false
+  zeilen:
+  - label: Rate
+    art: betrag
+    amount_cents: -30000
+    frequenz: monatlich
+    start: 2030-05
+    kategorie: mobilitaet/kfz-finanzierung
+    ende: 2034-05
+  - label: Kraftstoff
+    art: wegfall
+    amount_cents: 0
+    frequenz: monatlich
+    start: 2030-05
+    kategorie: mobilitaet/kraftstoff
+  - label: Versicherung
+    art: betrag
+    amount_cents: -50000
+    frequenz: jaehrlich
+    start: 2030-05
+    kategorie: mobilitaet/kfz-versicherung
+- id: korrektur
+  name: Korrektur Forecast
+  aktiv: true
+  zeilen:
+  - label: Nebenverdienst
+    art: betrag
+    amount_cents: 60000
+    frequenz: einmalig
+    start: 2030-09
+    kategorie: einkommen/gehalt-nebentaetig
+    konto: tagesgeld
+  - label: Weniger Zinsen
+    art: betrag
+    amount_cents: -2000
+    frequenz: monatlich
+    start: '2030-09-01'
+    kategorie: einkommen/zinsen
+    konto: tagesgeld
+    ende: '2031-08-01'
+- id: verkauf-sued
+  name: Verkauf Wohnung Sued
+  aktiv: false
+  zeilen:
+  - label: Verkauf
+    art: verkauf
+    objekt: sued
+    amount_cents: 16000000
+    frequenz: einmalig
+    start: 2035-01
+- id: teilzeit
+  name: Teilzeit
+  aktiv: false
+  zeilen:
+  - label: 80 % ab 2040
+    art: teilzeit
+    anteil: 0.8
+    frequenz: monatlich
+    start: 2040-01

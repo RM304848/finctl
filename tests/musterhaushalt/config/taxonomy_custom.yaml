@@ -1,0 +1,12 @@
+management:
+  # Auf der Seite angelegt und spaeter in abo/mobilfunk aufgegangen
+  # (taxonomy_migrations.yaml): eine abgeloeste Kategorie ohne Buchungen.
+  wohnen:
+    children:
+      telefon: Telefon
+  versicherung:
+    children:
+      rente: Rente
+      bu: BU
+      phv: PHV
+      pkv: PKV

@@ -1,0 +1,46 @@
+<script>
+// EIN Betragsparser fuer die ganze Oberflaeche.
+//
+// Vorher stand in jeder Seite eine eigene Zeile derselben Art:
+//   value.replace(/\./g,'').replace(',','.')
+// also "wirf alle Punkte weg, der Punkt ist Tausendertrennung". Auf einer
+// deutschen Eingabe stimmt das -- 831.000 sind achthunderteinunddreissigtausend.
+// Nur schrieben die Felder ihre Werte als "4671.00" und "72.0" hinein, weil sie
+// mit Pythons %.2f gefuellt wurden. Daraus wurde 467.100,00 und 720,00: einmal
+// Faktor hundert, einmal Faktor zehn, ausgeloest davon, dass jemand auf
+// Speichern drueckt, ohne etwas geaendert zu haben.
+//
+// Die Felder schreiben jetzt deutsch (Filter `betrag`). Dieser Parser liest
+// trotzdem beide Schreibweisen, denn eine einzige uebersehene Stelle kostet
+// sonst wieder Faktor hundert -- und das faellt bei einem Kontostand auf, bei
+// einer Zeile in einer abgeschalteten Klammer aber vielleicht erst in Monaten.
+//
+// Die Regel: ein Punkt ist nur dann Tausendertrennung, wenn die Zifferngruppen
+// dazu passen (1.234, 12.345.678). "4671.00" und "72.0" passen nicht -- keine
+// Tausendergruppe hat zwei oder eine Ziffer --, also ist der Punkt dort ein
+// Dezimaltrennzeichen. Beim Komma andersherum: deutsch gelesen, also
+// Dezimaltrennzeichen, solange es nur eines gibt.
+function centsAus(v){
+  let t = String(v == null ? '' : v).trim().replace(/[\s€_]/g, '');
+  if (t === '') return null;
+  const kommas = (t.match(/,/g) || []).length;
+  const punkte = (t.match(/\./g) || []).length;
+  if (kommas && punkte){
+    // Beide da: das zuletzt stehende trennt die Nachkommastellen.
+    t = t.lastIndexOf(',') > t.lastIndexOf('.')
+      ? t.replace(/\./g, '').replace(',', '.')
+      : t.replace(/,/g, '');
+  } else if (kommas){
+    t = kommas === 1 ? t.replace(',', '.') : t.replace(/,/g, '');
+  } else if (punkte){
+    if (/^-?\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+  }
+  const n = parseFloat(t);
+  return isNaN(n) ? null : Math.round(n * 100);
+}
+// Die Gegenrichtung, fuer Anzeigen, die im Browser entstehen.
+function centsAlsText(c){
+  return (c / 100).toLocaleString('de-DE', {minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2});
+}
+</script>

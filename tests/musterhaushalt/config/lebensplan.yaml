@@ -1,0 +1,19 @@
+# Musterhaushalt: die Person hinter dem Plan, erfunden.
+
+person:
+  birth_date: 1988-07-14
+  krankenversicherung: privat
+  birth_year: 1988
+  birth_year_confirmed: true
+schwellen:
+  pkv_ausstieg_spaetestens_alter: 55
+  private_rente_ab_alter: 62
+  grv_ab_alter: 67
+  teilzeit_ab_alter: 52
+  teilzeit_ab: 2040-01
+  kvdr_erreichbar: false
+erwerbseinkommen:
+  netto_100_monatlich_cents: 380000
+  brutto_100_jaehrlich_cents: 6800000
+kapital:
+  reale_rendite_pa: 0.02

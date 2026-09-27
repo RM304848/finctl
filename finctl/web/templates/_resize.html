@@ -1,0 +1,210 @@
+{# Drag-to-resize table columns, applied to every table on every page.
+   Widths persist per table in localStorage, so a layout you tune once stays
+   tuned across reloads and navigation. No library: the tool works offline. #}
+<style>
+  table th { position: relative; }
+  th.sortable{ cursor:pointer; user-select:none; }
+  th.sortable:hover{ color:var(--ink); }
+  th.sortable .arrow{ opacity:.45; font-size:10px; margin-left:.25rem; }
+  th.sortable.sorted .arrow{ opacity:1; color:var(--accent); }
+  th .colgrip{
+    position:absolute; top:0; right:-3px; width:7px; height:100%;
+    cursor:col-resize; user-select:none; z-index:3;
+  }
+  th .colgrip:hover::after, th .colgrip.dragging::after{
+    content:''; position:absolute; top:0; right:3px; width:2px; height:100%;
+    background:var(--accent); opacity:.7;
+  }
+  table.resizable{ table-layout:fixed; width:100%; }
+  /* No text-overflow here: cells wrap, and .raw does its own 3-line clamp. */
+  table.resizable td, table.resizable th{ overflow:hidden; }
+</style>
+<script>
+(function(){
+  // A table's identity: page path plus its header labels. Column layouts then
+  // survive reordering of tables on a page, and do not leak between pages
+  // that happen to have the same number of tables.
+  function keyFor(table, index){
+    const heads = [...table.rows[0].cells].map(c => c.textContent.trim()).join('|');
+    return `colw:${location.pathname}:${index}:${heads}`;
+  }
+
+  function applySaved(table, key){
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem(key) || 'null'); } catch(e){ saved = null; }
+    if(!saved) return false;
+    const head = table.rows[0];
+    if(saved.length !== head.cells.length) return false;   // header changed
+    saved.forEach((w, i) => { if(w) head.cells[i].style.width = w + 'px'; });
+    return true;
+  }
+
+  function save(table, key){
+    const widths = [...table.rows[0].cells].map(c => Math.round(c.getBoundingClientRect().width));
+    try { localStorage.setItem(key, JSON.stringify(widths)); } catch(e){}
+  }
+
+  // Nur eine echte Kopfzeile aus <th> wird sortierbar und verschiebbar.
+  // Sonst hingen an der ersten DATENzeile einer Liste ohne Kopf Pfeile
+  // (Rueckblick "Teurer als", die Konditionen auf /kredite).
+  function hatKopf(table){
+    const r = table.rows[0];
+    return !!r && r.cells.length > 0 && [...r.cells].every(c => c.tagName === 'TH');
+  }
+
+  function makeResizable(table, index){
+    if(!hatKopf(table) || table.dataset.resizable) return;
+    table.dataset.resizable = '1';
+    const key = keyFor(table, index);
+    const head = table.rows[0];
+
+    // Pin current widths before switching to fixed layout, so applying it
+    // does not itself reflow the table the user is looking at.
+    if(!applySaved(table, key)){
+      [...head.cells].forEach(c => { c.style.width = c.getBoundingClientRect().width + 'px'; });
+    }
+    table.classList.add('resizable');
+
+    [...head.cells].forEach((cell, i) => {
+      if(i === head.cells.length - 1) return;      // last column absorbs slack
+      const grip = document.createElement('div');
+      grip.className = 'colgrip';
+      grip.title = 'Spaltenbreite ziehen · Doppelklick setzt zurück';
+      cell.appendChild(grip);
+
+      let startX = 0, startW = 0;
+      grip.addEventListener('mousedown', e => {
+        startX = e.pageX;
+        startW = cell.getBoundingClientRect().width;
+        grip.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        const move = ev => {
+          const w = Math.max(40, startW + (ev.pageX - startX));
+          cell.style.width = w + 'px';
+        };
+        const up = () => {
+          grip.classList.remove('dragging');
+          document.body.style.cursor = '';
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', up);
+          save(table, key);
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+        e.preventDefault();
+      });
+
+      grip.addEventListener('dblclick', e => {
+        try { localStorage.removeItem(key); } catch(err){}
+        [...head.cells].forEach(c => { c.style.width = ''; });
+        table.classList.remove('resizable');
+        table.dataset.resizable = '';
+        makeResizable(table, index);
+        e.preventDefault();
+      });
+    });
+  }
+
+  /* Sorting. Values are read from the cell, but numbers are parsed out of
+   * German formatting first -- "-1.234,56 €" must sort as -1234.56, not as the
+   * string it looks like, or every money column sorts nonsensically. */
+  /* An editable cell holds its value in a field, not in text. The property
+   * detail page renders Kategorie and Steuer as comboboxes, so sorting by
+   * category there compared empty strings and did nothing at all. */
+  function cellText(cell){
+    // Ein Eingabefeld IST der Inhalt seiner Zelle -- alles daneben ist
+    // Beiwerk. Die Kategoriespalte auf /transactions traegt neben dem
+    // Kombifeld ein Abzeichen wie "rule · w82a-hausgeld", und weil der
+    // Sortierer zuerst textContent nahm, sortierte die Spalte "Kategorie"
+    // nach dem REGELNAMEN. Sie sah sortierbar aus und ordnete etwas
+    // anderes, als in ihr steht.
+    //
+    // Ankreuz- und Auswahlkaestchen sind ausgenommen: die tragen "on" und
+    // nicht den Text, den man liest.
+    const feld = cell.querySelector(
+      'select, textarea, input:not([type=checkbox]):not([type=radio]):not([type=button])');
+    if(feld){
+      if(feld.tagName === 'SELECT'){
+        const opt = feld.selectedOptions[0];
+        return (opt ? opt.textContent : (feld.value || '')).trim();
+      }
+      // Auch ein LEERES Feld ist die Antwort: eine Zeile ohne Kategorie
+      // gehoert zu den anderen ohne Kategorie und nicht dorthin, wohin ihr
+      // Abzeichen sie sortieren wuerde.
+      return (feld.value || '').trim();
+    }
+    return cell.textContent.trim();
+  }
+
+  function sortValue(cell){
+    const raw = cellText(cell);
+    if(!raw || raw === '—') return {n: null, s: ''};
+    const money = raw.replace(/[^\d,.\-]/g, '');
+    if(/^-?[\d.]*,?\d*$/.test(money) && /\d/.test(money)){
+      // Derselbe Parser wie in den Eingabefeldern, damit eine Spalte nicht
+      // anders sortiert, als sie sich speichern laesst.
+      const c = centsAus(money);
+      if(c !== null) return {n: c / 100, s: raw.toLowerCase()};
+    }
+    // ISO dates sort correctly as strings; leave them alone.
+    return {n: null, s: raw.toLowerCase()};
+  }
+
+  function makeSortable(table){
+    if(!hatKopf(table) || table.dataset.sortable) return;
+    table.dataset.sortable = '1';
+    const head = table.rows[0];
+    if(head.cells.length < 2 || table.rows.length < 3) return;
+
+    [...head.cells].forEach((cell, col) => {
+      if(!cell.textContent.trim()) return;      // action columns
+      cell.classList.add('sortable');
+      const arrow = document.createElement('span');
+      arrow.className = 'arrow'; arrow.textContent = '\u2195';
+      cell.appendChild(arrow);
+
+      cell.addEventListener('click', e => {
+        if(e.target.classList.contains('colgrip')) return;   // resizing, not sorting
+        const asc = !(cell.dataset.dir === 'asc');
+        [...head.cells].forEach(c => {
+          c.classList.remove('sorted'); c.dataset.dir = '';
+          const a = c.querySelector('.arrow'); if(a) a.textContent = '\u2195';
+        });
+        cell.dataset.dir = asc ? 'asc' : 'desc';
+        cell.classList.add('sorted');
+        arrow.textContent = asc ? '\u2191' : '\u2193';
+
+        const body = [...table.rows].slice(1);
+        body.sort((ra, rb) => {
+          const a = sortValue(ra.cells[col]), b = sortValue(rb.cells[col]);
+          // Empty cells sink to the bottom either way, rather than clustering
+          // at whichever end the sort direction happens to put them.
+          if(a.s === '' && b.s !== '') return 1;
+          if(b.s === '' && a.s !== '') return -1;
+          let cmp;
+          if(a.n !== null && b.n !== null) cmp = a.n - b.n;
+          else cmp = a.s.localeCompare(b.s, 'de');
+          return asc ? cmp : -cmp;
+        });
+        body.forEach(r => table.tBodies[0].appendChild(r));
+      });
+    });
+  }
+
+  function init(){
+    // Auf dem Telefon wird nicht an Spalten gezogen -- es gibt keinen
+    // Mauszeiger, und die Griffe lägen im Weg beim Wischen. Schlimmer noch:
+    // `makeResizable` setzt die am Rechner gespeicherten Breiten, und eine
+    // Tabelle mit 800 Pixeln Desktop-Layout ist auf 375 Pixeln unlesbar,
+    // obwohl sie sich von selbst anpassen wuerde.
+    const schmal = window.innerWidth < 700;
+    // Detailtabellen haben keine Kopfzeile: ohne diesen Ausschluss wurde ihre
+    // erste Buchung zum "Kopf", bekam Sortierpfeile und gespeicherte Breiten.
+    document.querySelectorAll('table:not(.detail)').forEach((t, i) => {
+      if (!schmal) makeResizable(t, i);
+      makeSortable(t);           // Sortieren geht per Fingertipp
+    });
+  }
+  document.addEventListener('DOMContentLoaded', init);
+})();
+</script>

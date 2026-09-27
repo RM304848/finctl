@@ -1,0 +1,558 @@
+{% extends "base.html" %}
+{%- block n_vertraege %}on{% endblock %}
+{% block title %}Verträge{% endblock %}
+{% block body %}
+{% set wort = 'Versicherung' if art == 'versicherung' else 'Abo' %}
+{% include "_combo.html" %}
+<style>
+  .abo-form{display:grid;grid-template-columns:150px minmax(0,1fr);gap:.35rem .8rem;align-items:center;font-size:13px}
+  .abo-form label{color:var(--muted);margin:0}
+  .abo-form input,.abo-form select,.abo-form textarea{width:100%;max-width:26rem}
+  .hinweis{font-size:11px;color:var(--muted);margin-left:.4rem}
+  .zr{border:1px solid var(--line);border-radius:9px;padding:.5rem .7rem;margin:.5rem 0;background:var(--panel)}
+  .zr table,.abo-teil table{border:0;background:transparent}
+  .zr td,.zr th,.abo-teil td,.abo-teil th{padding:.25rem .4rem}
+  .abo-teil{margin-top:1rem;padding-top:.6rem;border-top:1px solid var(--line)}
+  .zr-kopf{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;font-size:13px;margin-bottom:.3rem}
+  .zr-kopf input{width:6.5rem}
+  table.besetzung input{width:100%}
+  table.personen td{vertical-align:middle}
+  table.personen input.betrag,table.besetzung input.betrag{width:6rem;text-align:right}
+  table.personen td.aktionen{white-space:nowrap;text-align:right;width:1%}
+  table.personen tr.unter td{border:0;padding:.1rem .4rem .1rem 1.4rem;font-size:12px}
+  table.personen tr.unter td.aktionen{padding-left:.4rem}
+  table.personen tr.neu td{border-bottom:0;padding-top:.5rem}
+  .suchzeile{display:flex;gap:.5rem;margin:.2rem 0 .4rem}
+  .suchzeile input{flex:1;max-width:24rem}
+  @media (max-width:700px){.abo-form{grid-template-columns:1fr}}
+</style>
+
+{% import "_reiter.html" as rt %}
+<h1>Verträge</h1>
+
+<p class="zweck">Verträge mit festem Termin, damit die Prognose sie am richtigen Tag erwartet.</p>
+{{ rt.reiter(reiter, ansicht) }}
+
+{% if fehler %}<div class="note"><strong class="neg">Die Dateien dieser Seite lassen sich nicht lesen:</strong>
+  {{ fehler }}</div>{% endif %}
+
+<div class="wrap"><table>
+  <tr><th>{{ wort }}</th><th class="num" style="width:110px">Betrag</th>
+      <th style="width:110px">Takt</th><th style="width:120px">Nächster Termin</th>
+      <th style="width:140px">Konto</th><th style="width:150px">Rückzahlungen</th></tr>
+  {% for a in abos %}
+  <tr class="klappbar" onclick="location.hash='abo-{{ a.id }}';oeffne('{{ a.id }}')">
+    <td>{{ a.name }}
+      {%- if a.weg %} <span class="muted klein">· {{ a.weg }}</span>{% endif %}
+      {%- if a.herkunft == 'eigen' %} <span class="pill eigen">angelegt</span>{% endif %}
+      {%- if a.gekuendigt_zum %} <span class="pill">gekündigt zum {{ a.gekuendigt_zum }}</span>{% endif %}
+      {%- if not a.belege %} <span class="pill">keine Buchung zugeordnet</span>
+      {%- elif a.preis %} <span class="neg klein">· letzter Beleg {{ a.preis.gebucht|euro }}</span>{% endif %}
+      {%- if a.vorschlaege %} <span class="pill eigen">neue Buchung</span>{% endif %}</td>
+    <td class="num {{ a.betrag_cents|vz }}">{{ a.betrag_cents|euro }}</td>
+    <td class="muted">{{ {1:'monatlich',2:'zweimonatlich',3:'vierteljährlich',4:'viermonatlich',6:'halbjährlich',12:'jährlich'}[a.takt] }}</td>
+    <td>{{ a.naechster or '—' }}</td>
+    <td class="muted">{{ a.konto }}</td>
+    <td>{% if not a.geteilt.zeitraeume %}<span class="muted">nicht geteilt</span>
+      {%- elif a.offen_cents %}<span class="{{ 'neg' if a.faellig_offen else 'muted' }}">{{ a.offen_cents|euro }} offen</span>
+      {%- else %}<span class="pos">abgerechnet</span>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">Noch nichts angelegt.</td></tr>
+  {% endfor %}
+</table></div>
+
+<p><button onclick="neuesAbo()">{{ "Neue Versicherung" if art == "versicherung" else "Neues Abo" }}</button></p>
+<div id="neu"></div>
+
+{% for a in abos %}
+<details class="klapp" id="abo-{{ a.id }}">
+  <summary>{{ a.name }} <span class="zahl">— <span class="{{ a.betrag_cents|vz }}">{{ a.betrag_cents|euro }}</span></span></summary>
+  <div id="editor-{{ a.id }}"></div>
+</details>
+{% endfor %}
+
+<script>
+const ABOS = {{ abos|tojson }};
+const ART = {{ art|tojson }};
+const WORT = ART === 'versicherung' ? 'Versicherung' : 'Abo';
+const KONTEN = {{ konten|tojson }};
+const KATS = {{ kategorien|tojson }};
+const TAKTE = [[1,'monatlich'],[2,'zweimonatlich'],[3,'vierteljährlich'],[4,'viermonatlich'],[6,'halbjährlich'],[12,'jährlich']];
+const DATUM = /^\d{4}-\d{2}-\d{2}$/;
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const eur = c => c === null || c === undefined ? '—' : centsAlsText(c) + ' €';
+
+function oeffne(id){
+  const d = document.getElementById('abo-' + id);
+  if(d){ d.open = true; d.scrollIntoView({block:'start'}); }
+}
+
+// Der Zustand eines Editors ist eine Kopie des Abos. Gespeichert wird immer das
+// ganze Abo; der Server legt davon nur ab, was von abos.yaml abweicht.
+function kopie(a){
+  return JSON.parse(JSON.stringify({
+    id: a.id, name: a.name, kategorie: a.kategorie, konto: a.konto,
+    betrag_cents: a.betrag_cents, takt: a.takt, faellig: a.faellig,
+    vorrat_bis: a.vorrat_bis, gekuendigt_zum: a.gekuendigt_zum,
+    weg: a.weg, warum: a.warum, buchungen: a.buchungen || [], ignoriert: a.ignoriert || [],
+    geteilt: a.geteilt || {besetzung: [], zeitraeume: []}
+  }));
+}
+
+function slug(text){
+  return String(text).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'')
+    .replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60);
+}
+
+function monatPlus(jjjjmm, n){
+  const [j, m] = jjjjmm.split('-').map(Number);
+  const idx = j * 12 + (m - 1) + n;
+  return `${Math.floor(idx / 12)}-${String(idx % 12 + 1).padStart(2,'0')}`;
+}
+
+function feld(label, html, hinweis){
+  return `<label>${label}</label><div>${html}${hinweis ? `<span class="hinweis">${hinweis}</span>` : ''}</div>`;
+}
+
+function buchungZeile(b, knopf){
+  return `<tr><td class="muted" style="width:95px">${esc(b.booking_date)}</td>
+    <td class="muted" style="width:120px">${esc(b.account_id)}</td><td>${esc(b.text)}</td>
+    <td class="num" style="width:95px">${eur(b.amount_cents)}</td><td style="width:110px">${knopf}</td></tr>`;
+}
+
+function editor(box, st, info, neu){
+  const takt = TAKTE.map(([t, l]) => `<option value="${t}" ${t == st.takt ? 'selected' : ''}>${l}</option>`).join('');
+  const konto = KONTEN.map(k => `<option value="${k.id}" ${k.id === st.konto ? 'selected' : ''}>${esc(k.id)}</option>`).join('');
+  const q = info.quelle || {};
+  let h = `<div class="abo-form">`;
+  if(neu) h += feld('Kennung', `<input data-f="id" value="${esc(st.id)}" placeholder="amazon-prime">`);
+  h += feld('Name', `<input data-f="name" value="${esc(st.name)}" placeholder="Amazon Prime">`);
+  // Der Betrag ohne Vorzeichen, wie die Richtung auf /planung: ein Vertrag
+  // mit Termin ist immer Geld raus, und ein vergessenes Minus hat dort aus
+  // einer Rate eine Einnahme gemacht.
+  h += feld('Betrag', `<input data-f="betrag" value="${st.betrag_cents ? centsAlsText(Math.abs(st.betrag_cents)) : ''}"
+      placeholder="89,90" style="max-width:9rem"> <span class="hinweis">Ausgabe, ohne Vorzeichen</span>`,
+    q.betrag || 'was bei der nächsten Verlängerung abgeht');
+  h += feld('Konto', `<select data-f="konto" data-no-combo>${konto}</select>`, q.konto);
+  const katTreffer = KATS.find(k => k.id === st.kategorie);
+  h += feld('Kategorie', `<input data-f="kategorie" value="${esc(katTreffer ? katTreffer.label : (st.kategorie || ''))}"
+    data-id="${esc(st.kategorie || '')}" placeholder="${WORT} / Sonstiges">`, q.kategorie);
+  h += feld('Takt', `<select data-f="takt" data-no-combo style="max-width:12rem">${takt}</select>`, q.takt);
+  h += feld('Nächster Termin', `<input data-f="faellig" value="${esc(st.faellig || '')}" placeholder="2027-04-13" style="max-width:9rem">`, q.faellig);
+  if(ART !== 'versicherung') h += feld('Vorrat bis', `<input data-f="vorrat_bis" value="${esc(st.vorrat_bis || '')}" placeholder="2028-04-06" style="max-width:9rem">`, 'nur bei vorausbezahlten Codes');
+  h += feld('Gekündigt zum', `<input data-f="gekuendigt_zum" value="${esc(st.gekuendigt_zum || '')}" placeholder="2027-12-31" style="max-width:9rem">`, 'danach rechnet die Prognose nicht mehr damit');
+  h += feld('Zahlweg', `<input data-f="weg" value="${esc(st.weg || '')}" placeholder="über Amazon">`);
+  // Stand bisher in der Datei, wurde gespeichert und nie angezeigt. "Warum
+  // habe ich das" ist genau die Frage, die man sich beim naechsten Termin
+  // stellt -- und die kein Betrag beantwortet.
+  h += feld('Warum', `<input data-f="warum" maxlength="200" value="${esc(st.warum || '')}"
+    placeholder="wofür es da ist, seit wann, worüber gekauft">`);
+  h += `</div>`;
+
+  // --------------------------------------------------------- Buchungen
+  const belege = info.belege || [];
+  h += `<div class="abo-teil"><strong>Buchungen</strong>
+    <p class="muted klein" style="margin:.2rem 0 .4rem">Was hier zugeordnet ist, ersetzt ${WORT === 'Abo' ? 'das Abo' : 'die Versicherung'}
+      in der Prognose. Die jüngste Buchung prüft den Betrag.</p>`;
+  if(info.preis){
+    h += `<p style="font-size:13px;margin:.2rem 0 .5rem"><span class="neg">Letzter Beleg ${eur(info.preis.gebucht)}
+      am ${esc(info.preis.datum)}, eingetragen sind ${eur(info.preis.erwartet)}.</span>
+      <button class="ghost" data-a="preis">Betrag übernehmen</button></p>`;
+  }
+  h += belege.length
+    ? `<table>${belege.map((b, i) => buchungZeile(b, `<button class="ghost" data-a="beleg-weg" data-i="${i}">entfernen</button>`)).join('')}</table>`
+    : `<p class="muted klein">Noch keine Buchung zugeordnet — der Vertrag steht zusätzlich in der Prognose.</p>`;
+  const vor = info.vorschlaege || [];
+  if(vor.length){
+    h += `<p class="muted klein" style="margin:.6rem 0 .2rem">Neue Buchungen derselben Gegenpartei:</p>
+      <table>${vor.map((b, i) => buchungZeile(b, `<button class="ghost" data-a="vorschlag" data-i="${i}">zuordnen</button>`)).join('')}</table>`;
+  }
+  const fr = info.fruehere || [];
+  if(fr.length){
+    const gruppen = {};
+    fr.forEach(b => { (gruppen[b.amount_cents] = gruppen[b.amount_cents] || []).push(b); });
+    const knoepfe = Object.entries(gruppen).sort((x, y) => y[1].length - x[1].length)
+      .map(([c, l]) => `<button class="ghost" data-a="frueher-alle" data-c="${c}">alle ${l.length}× ${eur(+c)} zuordnen</button>`).join(' ');
+    h += `<details style="margin:.6rem 0 .2rem"><summary class="muted klein">Frühere Buchungen derselben Gegenpartei (${fr.length}) —
+        solange sie fehlen, zählen sie in der Prognose doppelt</summary>
+      <p style="margin:.4rem 0">${knoepfe}</p>
+      <table>${fr.map((b, i) => buchungZeile(b, `<button class="ghost" data-a="frueher" data-i="${i}">zuordnen</button>`)).join('')}</table></details>`;
+  }
+  h += `<form data-suche style="display:flex;gap:.5rem;margin:.6rem 0 .3rem">
+      <input data-q data-no-combo placeholder="Buchung suchen" style="flex:1;max-width:26rem"><button type="submit">Suchen</button></form>
+    <div data-treffer></div></div>`;
+
+  h += teilenHtml(st, info);
+
+  h += `<div style="margin-top:1rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+    <button data-a="speichern">${neu ? 'Anlegen' : 'Speichern'}</button>
+    ${neu ? '<button class="ghost" data-a="abbrechen">Abbrechen</button>'
+          : `<button class="ghost" data-a="entfernen">${info.herkunft === 'eigen' ? 'Löschen' : 'Ausblenden'}</button>`}
+    <span data-msg class="muted klein"></span></div>`;
+
+  box.innerHTML = h;
+  verdrahten(box, st, info, neu);
+}
+
+function teilenHtml(st, info){
+  const g = st.geteilt;
+  const abr = {};
+  (info.abrechnung || []).forEach(z => abr[z.von] = z);
+  let h = `<div class="abo-teil"><strong>Geteilt</strong>
+    <p class="muted klein" style="margin:.2rem 0 .4rem">Die Besetzung ist die Vorlage für
+      neue Zeiträume. Ein angelegter Zeitraum behält seine Personen, auch wenn sich die Besetzung
+      später ändert. Rückzahlungen mit dem Namen einer Person werden automatisch erkannt; alles andere
+      ordnest du mit „Zahlung zuordnen" zu. Monate als Jahr-Monat.</p>
+    <table class="besetzung"><tr><th>Person</th><th class="num" style="width:120px">Anteil</th><th>Heißt auch</th><th style="width:110px">zahlt laufend seit</th><th style="width:40px"></th></tr>`;
+  g.besetzung.forEach((p, i) => {
+    h += `<tr><td><input data-b="${i}" data-k="name" value="${esc(p.name)}"></td>
+      <td class="num"><input data-b="${i}" data-k="anteil" value="${centsAlsText(p.anteil_cents)}" class="betrag"></td>
+      <td><input data-b="${i}" data-k="aliase" value="${esc((p.aliase || []).join(', '))}" placeholder="Name bei PayPal"></td>
+      <td><input data-b="${i}" data-k="seit" value="${esc(p.seit || '')}" placeholder="2026-08"></td>
+      <td><button class="ghost" data-a="b-weg" data-i="${i}" aria-label="Entfernen">×</button></td></tr>`;
+  });
+  h += `</table><button class="ghost" data-a="b-neu">Person hinzufügen</button>
+    <button class="ghost" data-a="zr-neu">Zeitraum anlegen</button>`;
+
+  // Laufend: wer jeden Takt selbst überweist, braucht keinen Zeitraum.
+  const lauf = info.laufend || [];
+  g.besetzung.forEach((p, j) => {
+    const rp = lauf.find(x => x.name === p.name);
+    if(!p.seit || !rp) return;
+    h += `<div class="zr"><div class="zr-kopf"><span>${esc(p.name)} zahlt laufend seit ${esc(p.seit)}</span>
+      <span style="flex:1"></span>${rp.offen ? `<span class="neg">${eur(rp.offen)} offen</span>` : '<span class="pos">ausgeglichen</span>'}</div>
+      <table class="personen"><tr><th>Person</th><th class="num" style="width:120px">Soll</th>
+        <th class="num" style="width:100px">zurück</th><th class="num" style="width:100px">offen</th><th></th></tr>
+      <tr><td>${esc(p.name)}</td><td class="num">${eur(rp.soll)}</td><td class="num">${eur(rp.zurueck)}</td>
+        <td class="num ${rp.offen ? 'neg' : 'pos'}">${rp.offen ? eur(rp.offen) : '✓'}</td>
+        <td class="aktionen"><button class="ghost" data-a="zahlung-suche" data-i="L:${j}">Zahlung zuordnen</button></td></tr>`;
+    rp.treffer.forEach(tr => {
+      h += `<tr class="unter"><td colspan="4">${esc(tr.datum)} · ${esc(tr.konto)} · ${eur(tr.cents)}
+          <span class="muted">· ${tr.art === 'zugeordnet' ? 'zugeordnet' : 'automatisch erkannt'}</span></td>
+        <td class="aktionen"><button class="ghost" data-a="zahlung-weg" data-i="L:${j}" data-h="${esc(tr.hash)}"
+          data-art="${tr.art}" aria-label="${tr.art === 'zugeordnet' ? 'Zuordnung lösen' : 'Treffer verwerfen'}">×</button></td></tr>`;
+    });
+    if(info.suche === `L:${j}`) h += zahlungPanel(rp, 'L', j, info);
+    h += `</table></div>`;
+  });
+
+  [...g.zeitraeume].map((z, i) => [z, i]).sort((a, b) => b[0].von.localeCompare(a[0].von)).forEach(([z, i]) => {
+    const r = abr[z.von];
+    const status = !r ? '' : r.status === 'abgerechnet' ? '<span class="pos">abgerechnet</span>'
+      : r.status === 'faellig' ? `<span class="neg">${eur(r.offen)} offen, fällig</span>`
+      : `<span class="muted">${eur(r.offen)} offen</span>`;
+    h += `<div class="zr"><div class="zr-kopf">
+      <input data-z="${i}" data-k="von" value="${esc(z.von)}" placeholder="2027-04"> bis
+      <input data-z="${i}" data-k="bis" value="${esc(z.bis)}" placeholder="2028-04">
+      <span class="muted">einsammeln</span>
+      <input data-z="${i}" data-k="einsammeln" value="${esc(z.einsammeln)}" placeholder="2028-04">
+      <span style="flex:1"></span>${status}
+      <button class="ghost" data-a="zr-weg" data-i="${i}" aria-label="Zeitraum entfernen">×</button></div>
+      <table class="personen"><tr><th>Person</th><th class="num" style="width:120px">Anteil</th>
+        <th class="num" style="width:100px">zurück</th><th class="num" style="width:100px">offen</th><th></th></tr>`;
+    z.personen.forEach((p, j) => {
+      const rp = r ? r.personen.find(x => x.name === p.name) : null;
+      const offen = rp ? rp.offen : null;
+      const offenKlasse = offen === null ? 'muted' : !offen ? 'pos' : r.status === 'faellig' ? 'neg' : 'muted';
+      h += `<tr><td>${esc(p.name)}</td>
+        <td class="num"><input data-zp="${i}:${j}" data-k="anteil" value="${centsAlsText(p.anteil_cents)}" class="betrag"></td>
+        <td class="num">${rp ? eur(rp.zurueck) : '—'}</td>
+        <td class="num ${offenKlasse}">${offen === null ? '—' : offen ? eur(offen) : '✓'}</td>
+        <td class="aktionen"><button class="ghost" data-a="zahlung-suche" data-i="${i}:${j}">Zahlung zuordnen</button>
+          <button class="ghost" data-a="zp-weg" data-i="${i}:${j}" aria-label="Person entfernen">×</button></td></tr>`;
+      (rp ? rp.treffer : []).forEach(tr => {
+        h += `<tr class="unter"><td colspan="4">${esc(tr.datum)} · ${esc(tr.konto)} · ${eur(tr.cents)}
+            <span class="muted">· ${tr.art === 'zugeordnet' ? 'zugeordnet' : 'automatisch erkannt'}</span></td>
+          <td class="aktionen"><button class="ghost" data-a="zahlung-weg" data-i="${i}:${j}" data-h="${esc(tr.hash)}"
+            data-art="${tr.art}" aria-label="${tr.art === 'zugeordnet' ? 'Zuordnung lösen' : 'Treffer verwerfen'}">×</button></td></tr>`;
+      });
+      if(info.suche === `${i}:${j}`) h += zahlungPanel(rp, i, j, info);
+    });
+    h += `<tr class="neu"><td><input data-zp-neu-name="${i}" placeholder="Person" style="width:100%"></td>
+        <td class="num"><input data-zp-neu-anteil="${i}" placeholder="0,00" class="betrag"></td>
+        <td colspan="2"></td>
+        <td class="aktionen"><button class="ghost" data-a="zp-neu" data-i="${i}">hinzufügen</button></td></tr>
+      </table></div>`;
+  });
+
+  return h + `</div>`;
+}
+
+function zahlungPanel(rp, i, j, info){
+  const zeile = e => `<tr class="unter"><td colspan="4">${esc(e.booking_date || e.datum)} · ${esc(e.account_id || e.konto)}
+      · ${esc(e.gegenpartei || e.text || '')} · ${eur(e.amount_cents ?? e.cents)}
+      <span class="muted">· ${esc(e.kategorie || 'ohne Kategorie')}</span></td>
+    <td class="aktionen"><button class="ghost" data-a="zahlung-zu" data-i="${i}:${j}"
+      data-h="${esc(e.dedup_hash || e.hash)}">zuordnen</button></td></tr>`;
+  const vor = rp && rp.vorschlaege ? rp.vorschlaege : [];
+  let h = '';
+  if(vor.length){
+    h += `<tr class="unter"><td colspan="5" class="muted">Eingänge mit diesem Namen, die noch nirgends zählen:</td></tr>`;
+    h += vor.map(zeile).join('');
+  }
+  h += `<tr class="unter"><td colspan="5"><form data-zsuche class="suchzeile">
+      <input data-zq data-no-combo placeholder="Eingang suchen, etwa ein Name">
+      <button type="submit">Suchen</button>
+      <button type="button" class="ghost" data-a="zahlung-zu-schliessen">schließen</button></form></td></tr>`;
+  const treffer = info.zahlTreffer || [];
+  if(treffer.length) h += treffer.map(zeile).join('');
+  else if(info.zahlGesucht) h += `<tr class="unter"><td colspan="5" class="muted">Kein Eingang gefunden.</td></tr>`;
+  return h;
+}
+
+function lesen(box, st){
+  const wert = f => { const el = box.querySelector(`[data-f="${f}"]`); return el ? el.value.trim() : ''; };
+  if(box.querySelector('[data-f="id"]')) st.id = wert('id') || slug(wert('name'));
+  st.name = wert('name');
+  // Immer Ausgabe: das Feld traegt kein Vorzeichen, gespeichert wird wie im
+  // Ledger negativ.
+  const betrag = centsAus(wert('betrag'));
+  st.betrag_cents = betrag === null ? null : -Math.abs(betrag);
+  st.konto = wert('konto');
+  // Wie auf Transaktionen: das Feld zeigt den Namen, gespeichert wird die
+  // Kennung. Ein ausgeschriebener Treffer zählt wie ein angeklickter.
+  const katFeld = box.querySelector('[data-f="kategorie"]');
+  if(katFeld){
+    const text = katFeld.value.trim();
+    const treffer = KATS.find(k => k.label === text || k.id === text);
+    st.kategorie = katFeld.dataset.id || (treffer ? treffer.id : text);
+  }
+  st.takt = Number(wert('takt'));
+  ['faellig','vorrat_bis','gekuendigt_zum','weg','warum'].forEach(f => st[f] = wert(f) || null);
+  const person = (p, el) => {
+    if(el.dataset.k === 'anteil') p.anteil_cents = centsAus(el.value) ?? 0;
+    else if(el.dataset.k === 'aliase') p.aliase = el.value.split(',').map(s => s.trim()).filter(Boolean);
+    else if(el.dataset.k === 'seit') p.seit = el.value.trim() || null;
+    else p.name = el.value.trim();
+  };
+  box.querySelectorAll('[data-b]').forEach(el => person(st.geteilt.besetzung[+el.dataset.b], el));
+  box.querySelectorAll('[data-z]').forEach(el => st.geteilt.zeitraeume[+el.dataset.z][el.dataset.k] = el.value.trim());
+  box.querySelectorAll('[data-zp]').forEach(el => {
+    const [i, j] = el.dataset.zp.split(':').map(Number);
+    person(st.geteilt.zeitraeume[i].personen[j], el);
+  });
+  // Wer Name und Anteil in die letzte Zeile tippt und dann speichert, meint
+  // die Person -- der Umweg über "hinzufügen" darf keine Eingabe verschlucken.
+  box.querySelectorAll('[data-zp-neu-name]').forEach(el => {
+    const name = el.value.trim();
+    if(!name) return;
+    const i = +el.dataset.zpNeuName;
+    const anteil = centsAus(box.querySelector(`[data-zp-neu-anteil="${i}"]`).value) ?? 0;
+    st.geteilt.zeitraeume[i].personen.push({name, anteil_cents: anteil, aliase: [], zahlungen: []});
+    el.value = '';
+    box.querySelector(`[data-zp-neu-anteil="${i}"]`).value = '';
+  });
+  return st;
+}
+
+function zuordnen(st, info, b){
+  if(!st.buchungen.includes(b.dedup_hash)) st.buchungen.push(b.dedup_hash);
+  info.belege = [b, ...(info.belege || []).filter(x => x.dedup_hash !== b.dedup_hash)]
+    .sort((x, y) => y.booking_date.localeCompare(x.booking_date));
+  info.vorschlaege = (info.vorschlaege || []).filter(x => x.dedup_hash !== b.dedup_hash);
+  info.fruehere = (info.fruehere || []).filter(x => x.dedup_hash !== b.dedup_hash);
+  const neuester = info.belege[0];
+  info.preis = neuester && neuester.amount_cents !== st.betrag_cents
+    ? {erwartet: st.betrag_cents, gebucht: neuester.amount_cents, datum: neuester.booking_date} : null;
+}
+
+// Nach jedem Zuordnen neu holen: die Gegenpartei der ersten Buchung sagt
+// erst, welche früheren es überhaupt gibt.
+async function frueherHolen(st, info){
+  const r = await fetch('/api/abos/fruehere', {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({kategorie: st.kategorie, buchungen: st.buchungen,
+                          ignoriert: st.ignoriert || []})});
+  if(!r.ok) return;
+  info.fruehere = (await r.json()).rows;
+}
+
+function verdrahten(box, st, info, neu){
+  const kat = box.querySelector('[data-f="kategorie"]');
+  if(kat) makeCombo(kat, KATS, () => {});
+  const msg = box.querySelector('[data-msg]');
+  const neuZeichnen = () => editor(box, st, info, neu);
+
+  box.querySelector('[data-suche]').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    lesen(box, st);
+    const q = box.querySelector('[data-q]').value.trim();
+    const ziel = box.querySelector('[data-treffer]');
+    if(q.length < 2){ ziel.textContent = 'Mindestens zwei Zeichen.'; return; }
+    const r = await fetch('/api/abos/buchungen?q=' + encodeURIComponent(q));
+    const out = await r.json();
+    info.treffer = out.rows.filter(b => !st.buchungen.includes(b.dedup_hash));
+    ziel.innerHTML = info.treffer.length
+      ? `<table>${info.treffer.map((b, i) => buchungZeile(b, `<button class="ghost" data-a="treffer" data-i="${i}">zuordnen</button>`)).join('')}</table>`
+      : '<span class="muted klein">Keine Abbuchung gefunden.</span>';
+  });
+
+  const zsuche = box.querySelector('[data-zsuche]');
+  if(zsuche) zsuche.addEventListener('submit', async ev => {
+    ev.preventDefault();
+    lesen(box, st);
+    const q = zsuche.querySelector('[data-zq]').value.trim();
+    if(q.length < 2){ msg.textContent = 'Mindestens zwei Zeichen.'; return; }
+    const r = await fetch('/api/abos/eingaenge?q=' + encodeURIComponent(q));
+    info.zahlTreffer = (await r.json()).rows;
+    info.zahlGesucht = true;
+    neuZeichnen();
+    const feld = box.querySelector('[data-zq]');
+    if(feld){ feld.value = q; feld.focus(); }
+  });
+
+  box._zustand = {st, info, neu};
+  if(box._verdrahtet) return;
+  box._verdrahtet = true;
+  box.addEventListener('click', async ev => {
+    const {st, info, neu} = box._zustand;
+    const neuZeichnen = () => editor(box, st, info, neu);
+    const msg = box.querySelector('[data-msg]');
+    const btn = ev.target.closest('[data-a]');
+    if(!btn || !box.contains(btn)) return;
+    const a = btn.dataset.a, i = btn.dataset.i;
+    if(a === 'zp-neu' && !box.querySelector(`[data-zp-neu-name="${i}"]`).value.trim()){
+      msg.textContent = 'Name der Person fehlt.'; return;
+    }
+    lesen(box, st);
+    if(a === 'preis'){ st.betrag_cents = -Math.abs(info.preis.gebucht); info.preis = null; return neuZeichnen(); }
+    if(a === 'vorschlag'){
+      zuordnen(st, info, info.vorschlaege[+i]);
+      neuZeichnen();
+      await frueherHolen(st, info);
+      return neuZeichnen();
+    }
+    if(a === 'frueher'){ zuordnen(st, info, info.fruehere[+i]); return neuZeichnen(); }
+    if(a === 'frueher-alle'){
+      info.fruehere.filter(b => b.amount_cents === +btn.dataset.c).forEach(b => zuordnen(st, info, b));
+      return neuZeichnen();
+    }
+    if(a === 'treffer'){
+      zuordnen(st, info, info.treffer[+i]); info.treffer = [];
+      neuZeichnen();
+      await frueherHolen(st, info);
+      return neuZeichnen();
+    }
+    if(a === 'beleg-weg'){
+      const b = info.belege[+i];
+      st.buchungen = st.buchungen.filter(h => h !== b.dedup_hash);
+      info.belege.splice(+i, 1);
+      const neuester = info.belege[0];
+      info.preis = neuester && neuester.amount_cents !== st.betrag_cents
+        ? {erwartet: st.betrag_cents, gebucht: neuester.amount_cents, datum: neuester.booking_date} : null;
+      return neuZeichnen();
+    }
+    if(a === 'b-neu'){ st.geteilt.besetzung.push({name: '', anteil_cents: 0, aliase: [], zahlungen: []}); return neuZeichnen(); }
+    if(a === 'b-weg'){ st.geteilt.besetzung.splice(+i, 1); return neuZeichnen(); }
+    if(a === 'zr-neu'){
+      const letzte = [...st.geteilt.zeitraeume].sort((x, y) => y.von.localeCompare(x.von))[0];
+      const von = letzte ? letzte.bis : (st.faellig || new Date().toISOString()).slice(0, 7);
+      st.geteilt.zeitraeume.push({von, bis: monatPlus(von, st.takt || 12), einsammeln: von,
+        personen: st.geteilt.besetzung.map(p => ({...JSON.parse(JSON.stringify(p)), zahlungen: [], seit: null}))});
+      return neuZeichnen();
+    }
+    if(a === 'zr-weg'){ if(confirm('Zeitraum entfernen?')) st.geteilt.zeitraeume.splice(+i, 1); return neuZeichnen(); }
+    if(a === 'zp-neu') return neuZeichnen();
+    if(a === 'zp-weg'){
+      const [zi, pj] = i.split(':').map(Number);
+      st.geteilt.zeitraeume[zi].personen.splice(pj, 1);
+      return neuZeichnen();
+    }
+    if(a === 'zahlung-suche'){ info.suche = i; info.zahlTreffer = []; info.zahlGesucht = false; return neuZeichnen(); }
+    if(a === 'zahlung-zu-schliessen'){ info.suche = null; return neuZeichnen(); }
+    if(a === 'zahlung-zu' || a === 'zahlung-weg'){
+      // Eine Zuordnung ändert die Abrechnung, und die rechnet der Server:
+      // deshalb wird sofort gespeichert statt erst beim Speichern-Knopf.
+      const [zi, pj] = i.split(':');
+      const person = zi === 'L' ? st.geteilt.besetzung[+pj] : st.geteilt.zeitraeume[+zi].personen[+pj];
+      const h = btn.dataset.h;
+      person.zahlungen = person.zahlungen || [];
+      st.ignoriert = st.ignoriert || [];
+      if(a === 'zahlung-zu'){
+        [st.geteilt.besetzung, ...st.geteilt.zeitraeume.map(z => z.personen)].forEach(l => l.forEach(p => {
+          p.zahlungen = (p.zahlungen || []).filter(x => x !== h); }));
+        person.zahlungen.push(h);
+        st.ignoriert = st.ignoriert.filter(x => x !== h);
+      } else if(btn.dataset.art === 'zugeordnet'){
+        person.zahlungen = person.zahlungen.filter(x => x !== h);
+      } else {
+        if(!st.ignoriert.includes(h)) st.ignoriert.push(h);
+      }
+      return speichern(st, msg);
+    }
+    if(a === 'speichern') return speichern(st, msg);
+    if(a === 'abbrechen'){ document.getElementById('neu').innerHTML = ''; return; }
+    if(a === 'entfernen'){
+      if(!confirm(info.herkunft === 'eigen' ? 'Löschen?' : 'Ausblenden? Die Begründung in der Basisdatei bleibt erhalten.')) return;
+      const r = await fetch(`/api/abos/${encodeURIComponent(st.id)}/entfernen?art=${ART}`, {method: 'POST'});
+      if(r.ok) location.reload(); else msg.textContent = 'fehlgeschlagen';
+    }
+  });
+}
+
+async function speichern(st, msg){
+  if(!st.name){ msg.textContent = 'Name fehlt.'; return; }
+  if(st.betrag_cents === null){ msg.textContent = 'Betrag ist keine Zahl.'; return; }
+  for(const [f, label] of [['faellig','Nächster Termin'],['vorrat_bis','Vorrat bis'],['gekuendigt_zum','Gekündigt zum']]){
+    if(f === 'faellig' && !st[f]){ msg.textContent = 'Nächster Termin fehlt.'; return; }
+    if(st[f] && !DATUM.test(st[f])){ msg.textContent = `${label} als Jahr-Monat-Tag, etwa 2027-04-13.`; return; }
+  }
+  msg.textContent = 'speichern …';
+  const r = await fetch('/api/abos?art=' + ART, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(st)});
+  const out = await r.json();
+  if(!r.ok){ msg.textContent = out.error || 'fehlgeschlagen'; return; }
+  msg.textContent = 'gespeichert — neu rechnen …';
+  setTimeout(() => { location.hash = 'abo-' + st.id; location.reload(); }, 400);
+}
+
+// ------------------------------------------------------------ neues Abo
+// Zuerst eine Buchung suchen und zuordnen: sie füllt Betrag, Konto, Kategorie
+// und Termin vor. Ein ganz neues Abo ohne Buchung wird direkt eingetragen.
+function neuesAbo(){
+  const box = document.getElementById('neu');
+  box.innerHTML = `<div class="card" style="margin-bottom:1rem"><strong>${ART === 'versicherung' ? 'Neue Versicherung' : 'Neues Abo'}</strong>
+    <p class="muted klein" style="margin:.2rem 0 .6rem">Unten unter Buchungen eine Abbuchung suchen
+      und zuordnen — sie füllt die Angaben vor. Ohne bisherige Buchung trägst du es direkt ein.</p>
+    <div id="neu-editor"></div></div>`;
+  const st = {id: '', name: '', kategorie: '', konto: KONTEN[0] ? KONTEN[0].id : '',
+    betrag_cents: null, takt: 12, faellig: '', vorrat_bis: null, gekuendigt_zum: null,
+    weg: '', warum: '', buchungen: [], geteilt: {besetzung: [], zeitraeume: []}};
+  const info = {herkunft: 'eigen', belege: [], vorschlaege: [], fruehere: [], quelle: {}};
+  const editorBox = document.getElementById('neu-editor');
+  editor(editorBox, st, info, true);
+  // Die erste zugeordnete Buchung füllt ein leeres Formular vor.
+  const original = zuordnen;
+  window.zuordnen = (s, inf, b) => {
+    original(s, inf, b);
+    if(s === st && inf.belege.length === 1 && s.betrag_cents === null){
+      const takt = b.takt || 12;
+      const d = new Date(b.booking_date + 'T12:00:00'); d.setMonth(d.getMonth() + takt);
+      Object.assign(s, {name: s.name || b.gegenpartei, betrag_cents: b.amount_cents,
+        konto: b.account_id, kategorie: s.kategorie || b.kategorie || '', takt,
+        faellig: d.toISOString().slice(0, 10)});
+      if(!s.id) s.id = slug(s.name);
+      inf.preis = null;
+      inf.quelle = {betrag: 'aus Buchung', konto: 'aus Buchung', kategorie: b.kategorie ? 'aus Buchung' : '',
+        takt: b.takt ? 'aus früheren Buchungen' : 'nur eine Buchung — bitte prüfen', faellig: 'Buchung plus Takt'};
+    }
+  };
+}
+
+ABOS.forEach(a => editor(document.getElementById('editor-' + a.id), kopie(a), a, false));
+if(location.hash.startsWith('#abo-')) oeffne(location.hash.slice(5));
+</script>
+{% include "_klappzustand.html" %}
+
+{% import "_konfig.html" as kf %}
+{% if art == 'versicherung' %}{% set basis, custom = 'config/versicherungen.yaml', 'config/versicherungen_custom.yaml' %}
+{% else %}{% set basis, custom = 'config/abos.yaml', 'config/abos_custom.yaml' %}{% endif %}
+{{ kf.fuss([
+  (basis, 'Verträge mit Begründung, von Hand geschrieben. Die Seite ändert diese Datei nie.'),
+  (custom, 'Was auf dieser Seite abweichend eingetragen wurde: Beträge, Termine, zugeordnete Buchungen, Besetzung, Zeiträume.'),
+  ('finctl/abos.py', 'Wie Abos und Versicherungen ihre Buchungen in der Prognose ersetzen und wie Rückzahlungen zugeordnet werden.'),
+  ('finctl/web/templates/abos.html', 'Die Texte dieser Seite.'),
+], handbuch='vertraege') }}
+{% endblock %}

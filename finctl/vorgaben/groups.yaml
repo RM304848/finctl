@@ -1,0 +1,32 @@
+# STARTVORLAGE -- Vorgaenge, leer zum Anfangen.
+#
+# Eine Gruppe spannt ueber Kategorien und mischt Einmaliges mit Laufendem --
+# Kaufpreis, Nebenkosten, Raten, Versicherung, Wartung, Verkauf. Sie sitzt
+# damit UEBER der Kategorie und beantwortet die Frage, die eine Kategorie
+# nicht beantworten kann: was hat mich dieses Auto insgesamt gekostet.
+#
+# EINE Gruppe je Transaktion. Ein Tag sagt "gehoert auch zu", eine Gruppe
+# sagt "ist Teil von".
+#
+# DAS DATUMSFENSTER IST DER PUNKT, nicht ein Zusatz. Derselbe Versicherer
+# gehoert vor und nach einem Fahrzeugwechsel in verschiedene Gruppen, und
+# ohne Fenster fielen zwanzig Jahre Beitraege in einen Topf. Deshalb ist
+# `von` verpflichtend und `bis` optional -- eine Gruppe, die noch laeuft, hat
+# kein Ende.
+#
+# NAMENSRAUM MIT SZENARIEN. Die Klammern in szenarien.yaml und die Gruppen
+# hier teilen ihre Namen: "neues-auto" verbindet damit den Plan mit dem Ist,
+# sobald das Auto gekauft ist.
+#
+# Reihenfolge zaehlt: die erste passende Regel gewinnt.
+#
+#   gruppen:
+#     - id: neues-auto
+#       name: Kombi, gekauft 2027
+#       von: 2027-01-01
+#       match:
+#         kategorie_prefix:
+#           - mobilitaet/kfz
+#           - mobilitaet/kraftstoff
+
+gruppen: []

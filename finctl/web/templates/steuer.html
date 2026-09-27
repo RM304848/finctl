@@ -1,0 +1,65 @@
+{% extends "base.html" %}{% block n_steuer %}on{% endblock %}
+{% block title %}Steuer{% endblock %}
+{% block body %}
+<h1>Steuer <span class="muted zusatz">— {{ year }}</span></h1>
+<p class="zweck">Was in welche Anlage gehört, je Jahr — jede Zeile führt auf ihre Buchungen.</p>
+
+<form method="get" style="display:flex;gap:.6rem;align-items:end;flex-wrap:wrap">
+  <label>Jahr<br><select name="year">
+    {% for y in years %}<option value="{{ y }}" {{ 'selected' if y==year }}>{{ y }}</option>{% endfor %}
+  </select></label>
+  <label>Anlage<br><select name="anlage" data-no-combo>
+    <option value="">alle</option>
+    {% for a in anlagen %}<option value="{{ a }}" {{ 'selected' if a==anlage }}>{{ a }}</option>{% endfor %}
+  </select></label>
+  <button>Anzeigen</button>
+</form>
+
+{% if untaxed.n %}
+<div class="note bad">
+  <strong>{{ untaxed.n }} Buchungen ohne Steuerposition</strong> ({{ untaxed.cents|euro }}).
+  Die stehen im Ledger, tauchen aber in keiner Anlage auf — das ist die Fehlerart, die am
+  spätesten auffällt, weil jede Haushaltssumme trotzdem stimmt.
+  <a class="plain" href="/transactions?tax=__none__&start={{ year }}-01-01&end={{ year }}-12-31">
+    ansehen →</a>
+</div>
+{% endif %}
+
+{% for anlage_id, g in groups.items() %}
+<h2>{{ g.name }}</h2>
+<div class="wrap">
+<table>
+  <tr><th>Position</th><th>Objekt</th><th class="num" style="width:90px">Buchungen</th>
+      <th class="num" style="width:130px">{{ year }}</th>
+      <th style="width:110px">abzugsfähig</th><th style="width:90px"></th></tr>
+  {% for r in g.rows %}
+  <tr>
+    <td>{{ r.pos_name }}</td>
+    <td class="muted">{{ r.property_name or ('—' if not r.requires_property else '⚠ ohne Objekt') }}</td>
+    <td class="num muted">{{ r.n }}</td>
+    <td class="num {{ r.cents|vz }}">{{ r.cents|euro }}</td>
+    <td class="muted">{{ 'ja' if r.deductible else 'nein' }}</td>
+    <td><a class="plain" href="/transactions?tax={{ r.pos_id }}&start={{ year }}-01-01&end={{ year }}-12-31">Belege →</a></td>
+  </tr>
+  {% endfor %}
+  <tr style="border-top:2px solid var(--line)">
+    <td><strong>Summe {{ g.code }}</strong></td><td></td><td></td>
+    <td class="num {{ g.cents|vz }}"><strong>{{ g.cents|euro }}</strong></td>
+    <td class="muted" colspan="2">davon abzugsfähig {{ g.deductible_cents|euro }}</td>
+  </tr>
+</table>
+</div>
+{% else %}
+<div class="note">Für {{ year }} trägt keine Buchung eine Steuerposition.</div>
+{% endfor %}
+
+
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/taxonomy.yaml', 'Die Steuerachse: Anlage V, N, KAP, Vorsorge.'),
+  ('config/properties.yaml', 'AfA und Objektdaten je Anlage V.'),
+  ('config/overrides.yaml', 'Manuell gesetzte Steuerpositionen.'),
+  ('config/rules.yaml', 'Welche Regel welche Steuerposition setzt.'),
+  ('finctl/web/templates/steuer.html', 'Die Texte dieser Seite.'),
+], handbuch='steuer') }}
+{% endblock %}

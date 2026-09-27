@@ -1,0 +1,8 @@
+﻿"Konto";"Girokonto DE89370400440532013000"
+""
+"Kontostand vom 31.08.2026:";"2.412,34 €"
+""
+"Buchungsdatum";"Wertstellung";"Status";"Zahlungspflichtige*r";"Zahlungsempfänger*in";"Verwendungszweck";"Umsatztyp";"IBAN";"Betrag (€)";"Gläubiger-ID";"Mandatsreferenz";"Kundenreferenz"
+"31.08.26";"31.08.26";"Vorgemerkt";"Erika Beispiel";"Kiosk Muster";"Kartenzahlung";"Ausgang";"";"-3,50";"";"";""
+"30.08.26";"30.08.26";"Gebucht";"Beispiel Arbeitgeber GmbH";"Erika Beispiel";"Lohn August";"Eingang";"DE02100100100006820101";"2.000,00";"";"";""
+"12.08.26";"12.08.26";"Gebucht";"Erika Beispiel";"Supermarkt Muster";"Einkauf";"Ausgang";"";"-87,66";"";"";""

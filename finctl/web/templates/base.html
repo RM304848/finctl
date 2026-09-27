@@ -1,0 +1,498 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Finance OS{% endblock %}</title>
+<script>
+// Vor dem Stil angewandt, damit die Seite nicht erst hell aufblitzt und dann
+// dunkel wird. Ohne gespeicherte Wahl folgt die Seite dem Geraet.
+try {
+  const thema = localStorage.getItem('thema');
+  if (thema === 'light' || thema === 'dark') document.documentElement.dataset.theme = thema;
+} catch (e) { /* privates Fenster: dann eben wie das Geraet */ }
+</script>
+<style>
+  /* color-scheme sagt dem Browser, dass es beide Themen gibt. Ohne die
+     Zeile blieben Haekchen, Datumsauswahl, Scrollbalken und aufgeklappte
+     Auswahllisten im dunklen Thema hell -- die einzigen hellen Flecken auf
+     der Seite, und ausgerechnet die Stellen, an denen man etwas eingibt. */
+  /* Zwei Themen, ein Akzent (docs/design_conventions.yaml, themen und
+     textkontrast): hell warmes Papier mit Kobalt, dunkel kuehles Graphit mit
+     elektrischem Blau und kraeftigen Signalfarben. Blau, weil Gruen und Rot
+     schon "rein" und "raus" bedeuten -- ein gruener Knopf neben einer gruenen
+     Einnahme sagte zweimal dasselbe Wort fuer zwei Dinge. */
+  :root{ color-scheme:light dark;
+    --bg:#f6f2ea; --panel:#fffcf7; --ink:#201c17; --muted:#655d53;
+    --line:#e4dccf; --accent:#1d4ed8; --warn:#8f5200; --bad:#b3261e;
+    --good:#1b7339; --on-accent:#ffffff; --feldrand:#8a8072;
+  }
+  /* Das dunkle Thema steht zweimal: einmal fuer "wie das Geraet", einmal
+     fuer den Schalter im Kopf. CSS kann eine Media-Query nicht per Klasse
+     einschalten. Dass beide Bloecke gleich bleiben, prueft
+     tests/test_design.py (docs/design_conventions.yaml, themen). */
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){ --bg:#0c0e12; --panel:#141820; --ink:#eef1f6; --muted:#9aa3b1;
+           --line:#252b35; --accent:#4d8eff; --warn:#f2b53a; --bad:#ff6e6e;
+           --good:#3fd98a; --on-accent:#0c0e12;
+           --feldrand:#5f6978; }
+  }
+  :root[data-theme="dark"]{ color-scheme:dark;
+           --bg:#0c0e12; --panel:#141820; --ink:#eef1f6; --muted:#9aa3b1;
+           --line:#252b35; --accent:#4d8eff; --warn:#f2b53a; --bad:#ff6e6e;
+           --good:#3fd98a; --on-accent:#0c0e12;
+           --feldrand:#5f6978; }
+  :root[data-theme="light"]{ color-scheme:light }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif}
+  /* Wo man mit der Tastatur steht, muss man sehen -- in beiden Themen im
+     Akzent, nicht im blassen Standardrahmen des Browsers. */
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  /* Der Akzentstrich oben ist das eine Markenzeichen, in beiden Themen. */
+  header{display:flex;gap:1.25rem;align-items:baseline;padding:.9rem 1.25rem;
+         border-top:3px solid var(--accent);
+         border-bottom:1px solid var(--line);background:var(--panel);
+         position:sticky;top:0;z-index:5;flex-wrap:wrap}
+  header strong{font-size:15px;letter-spacing:.01em}
+  header a{color:var(--muted);text-decoration:none;padding:.15rem 0;border-bottom:2px solid transparent}
+  header a:hover{color:var(--ink)}
+  header a.on{color:var(--ink);border-bottom-color:var(--accent)}
+  header a.marke{color:var(--ink)}
+  /* Der Kopf zeigt immer nur die Gruppennamen; die Links fahren senkrecht
+     darunter aus. EINE Darstellung statt zweier: vorher wechselte der Knopf
+     zwischen einem senkrechten Hovermenue und einer waagerechten Linkzeile,
+     also zwischen zwei verschiedenen Formen derselben Navigation. Jetzt oeffnet
+     er dieselben Menues, die auch beim Hovern aufgehen -- nur alle auf einmal
+     und bleibend.
+
+     ZWEI WEGE, weil einer allein jeweils jemanden ausschliesst: Hover ist
+     schneller, gibt es auf einem Touchgeraet aber nicht, und ein reiner
+     Klick-Kopf kostet bei jedem Seitenwechsel einen Klick mehr. Der Zustand
+     liegt in localStorage, damit die Entscheidung ueber Seiten hinweg haelt.
+     Ohne das klappte der Kopf bei jedem Klick wieder zu -- genau bei der
+     Person, die ihn offen haben wollte. */
+  .navgruppe{position:relative;display:flex;flex-direction:column;gap:.15rem;
+             padding-left:1.1rem;padding-bottom:.2rem;
+             border-left:1px solid var(--line)}
+  .navlinks{
+      display:none; position:absolute; top:100%; left:1.1rem; z-index:40;
+      flex-direction:column; gap:.35rem; padding:.6rem .9rem;
+      background:var(--panel); border:1px solid var(--line);
+      border-radius:0 6px 6px 6px; box-shadow:0 6px 24px rgba(0,0,0,.25);
+      min-width:11rem}
+  .navgruppe:hover .navlinks,
+  .navgruppe.offen .navlinks{display:flex}
+  /* Alle auf einmal offen: dann stehen die Gruppen NEBENeinander im Fluss
+     statt als schwebende Menues uebereinander. Absolut positioniert
+     ueberlappten sie sich, sobald mehr als eines offen war -- fuenf Karten,
+     die sich gegenseitig verdecken, sind keine geoeffnete Navigation. */
+  header.alleoffen .navlinks{
+      display:flex; position:static; min-width:0; padding:0;
+      background:none; border:0; box-shadow:none; border-radius:0;
+      gap:.15rem}
+  header.alleoffen .navgruppe{padding-bottom:0}
+  /* Waehrend alles offen ist, darf das Hovern nichts mehr aufklappen --
+     sonst faehrt ueber der stehenden Spalte noch eine schwebende aus. */
+  header.alleoffen .navgruppe:hover .navlinks,
+  header.alleoffen .navgruppe.offen .navlinks{position:static}
+  .navgruppe > span.navlabel{font-size:11px;letter-spacing:.08em;
+             text-transform:uppercase;color:var(--muted);opacity:.75;
+             cursor:pointer}
+  .navgruppe:hover > span.navlabel,
+  header.alleoffen .navlabel{color:var(--ink);opacity:1}
+  .navtoggle{margin-left:.4rem;cursor:pointer;color:var(--muted);
+             background:none;border:0;font-size:13px;padding:0 .2rem}
+  .navtoggle:hover{color:var(--ink)}
+  header.alleoffen .navtoggle{color:var(--ink)}
+  .themaknopf{margin-left:.4rem}
+  header{flex-wrap:wrap;row-gap:.5rem}
+  /* Auf dem Telefon ist der Kopf ein Kopf und kein Inhaltsverzeichnis.
+     Ausgeklappt nahm er drei Zeilen und 170 Pixel ein, bevor die Seite
+     ueberhaupt anfing -- auf 812 Pixel Hoehe ist das ein Fuenftel des
+     Bildschirms fuer Navigation, die man dreimal am Tag braucht.
+
+     Zugeklappt bleibt nur Titel und Schalter. Der Schalter oeffnet dann
+     nicht fuenf schwebende Menues nebeneinander -- dafuer ist kein Platz --,
+     sondern eine Liste untereinander, jede Gruppe ein Block. */
+  @media (max-width: 700px){
+    header{padding:.55rem .8rem;gap:.5rem;row-gap:.35rem}
+    header > .navgruppe{display:none}
+    header > .muted{display:none}          /* "localhost only" kostet eine Zeile */
+    .navtoggle{font-size:20px;padding:.1rem .5rem;line-height:1}
+    .themaknopf{margin-left:auto}          /* rechts, wie am Rechner */
+    header.alleoffen > .navgruppe{
+        display:flex;width:100%;padding-left:0;border-left:0;
+        border-top:1px solid var(--line);padding-top:.45rem;margin-top:.1rem}
+    header.alleoffen .navlinks{
+        position:static;flex-direction:row;flex-wrap:wrap;gap:.35rem 1rem;
+        padding:.1rem 0 .2rem;background:none;border:0;box-shadow:none;
+        border-radius:0;min-width:0}
+    header.alleoffen .navlinks a{padding:.2rem 0}   /* groessere Tippflaeche */
+    /* Hovern gibt es auf einem Telefon nicht; ausgeklappt wird getippt. */
+    header:not(.alleoffen) .navgruppe:hover .navlinks{display:none}
+    h1{font-size:1.05rem}
+    main{padding:1rem .8rem 3rem}
+    /* Raster mit festen Pixelspalten brechen auf dem Telefon aus dem
+       Bildschirm: 150 + 140 + 1fr passen nicht in 375 Pixel. Untereinander
+       statt nebeneinander -- Eingabefelder brauchen ohnehin Breite. */
+    .cards{grid-template-columns:1fr !important}
+    main div[style*="grid-template-columns"]{grid-template-columns:1fr !important}
+    /* Die Kennzahlenkarten der Objektseite bleiben zweispaltig: es sind
+       kurze Zahlen, und einspaltig waere die Seite doppelt so lang. */
+    .cards.eng{grid-template-columns:1fr 1fr !important}
+  }
+  main{max-width:1180px;margin:0 auto;padding:1.5rem 1.25rem 4rem}
+  /* Der Abstand zwischen zwei Bloecken gehoert hierher, nicht an jeden Block.
+     Ohne diese Regel bekam eine Tabelle ihren Abstand nur geschenkt, weil
+     zufaellig eine h2 folgte -- wo zwei gerahmte Panels direkt aufeinander
+     trafen, standen sie ohne Fuge und lasen sich als ein zerbrochener Kasten.
+     Nur direkte Kinder von main: ein .wrap in einem details oder in einer
+     Bearbeitungszeile ist Teil seines Kastens und braucht keine Fuge. */
+  main > .wrap, main > .card, main > .cards, main > details,
+  main > form, main > table{margin-bottom:1.1rem}
+  h1{font-size:1.15rem;margin:0 0 1rem}
+  h2{font-size:.95rem;margin:2rem 0 .6rem;color:var(--muted);
+     text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  /* h3 hatte keinen Stil und fiel damit auf die Browservorgabe zurueck:
+     groesser, fetter, nicht versal und in Textfarbe -- also auffaelliger als
+     die h2 darueber, obwohl es untergeordnet ist. Eine einzige Ueberschrift
+     im ganzen Werkzeug, und sie stach heraus. */
+  h3{font-size:.85rem;margin:1.2rem 0 .5rem;color:var(--muted);
+     text-transform:uppercase;letter-spacing:.06em;font-weight:600;opacity:.85}
+  /* 160 px: sechs Kacheln passen in eine Reihe (kacheln, design_conventions). */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.8rem}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:.85rem 1rem}
+  .card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+  .card .v{font-size:1.35rem;margin-top:.25rem;font-variant-numeric:tabular-nums;
+           font-weight:600;letter-spacing:-.01em}
+  table{width:100%;border-collapse:collapse;background:var(--panel);
+        border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;
+     color:var(--muted);padding:.55rem .7rem;border-bottom:1px solid var(--line);font-weight:600}
+  td{padding:.5rem .7rem;border-bottom:1px solid var(--line);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  /* Aufklappbare Zeile: dass der Monat ein Schalter ist, muss man sehen,
+     bevor man klickt -- sonst findet es niemand. */
+  tr.klappbar:hover{background:rgba(127,127,127,.07)}
+  tr.klappbar .pfeil{display:inline-block;width:.8em;font-size:10px}
+  table.detail{border:0;border-radius:0;background:transparent}
+  table.detail td{border:0;padding:.12rem .7rem;font-size:12px}
+  .neg{color:var(--bad)} .pos{color:var(--good)}
+  .muted{color:var(--muted)}
+  /* Die zwei kleinen Schriftgrade der App, als Klasse statt als style am
+     Element (docs/design_conventions.yaml, schriftgrade). Verstreut standen
+     98 feste Pixelwerte im Markup, und 10 Pixel waren darunter. */
+  .klein{font-size:12px}
+  /* Datum und Kontokennung brechen nie um: "2026-" ueber "09-04" liest niemand. */
+  .nobr{white-space:nowrap}
+  .fein{font-size:11px}
+  /* Ein Zusatz in einer Ueberschrift ("— September 2026"): leichter und
+     kleiner als der Titel. Vorher .7em, .75em und .85em je nach Seite. */
+  .zusatz{font-weight:400;font-size:.8em}
+  /* Ein Pflichtfeld, das noch fehlt. Als Klasse, nicht per style -- siehe
+     docs/design_conventions.yaml, Regel farben. */
+  .feld-fehlt{outline:2px solid var(--bad);outline-offset:1px}
+  /* Eine gerade gespeicherte Zeile blitzt kurz auf -- ueberall dieselbe Geste. */
+  .gespeichert{outline:2px solid var(--good);outline-offset:-2px}
+  /* Verwendungszweck wraps rather than truncating on one line: the useful
+     part of a German bank reference is often at the end, so an ellipsis hides
+     exactly what identifies the payment. Clamped to three lines so a long
+     SEPA mandate cannot turn one row into a paragraph, and the full text is
+     still on the title attribute. */
+  .raw{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+       overflow:hidden;font-size:12px;color:var(--muted);
+       white-space:normal;overflow-wrap:anywhere;word-break:break-word;
+       line-height:1.35}
+  /* Multi-line text cells need their row aligned to the top, or the controls
+     beside them float to the middle of a three-line block. */
+  td{vertical-align:top}
+  td.num,td.row-actions{vertical-align:middle}
+  .wrap{overflow-x:auto}
+  select,input,textarea,button{font:inherit;color:var(--ink);background:var(--bg);
+    border:1px solid var(--line);border-radius:6px;padding:.32rem .45rem}
+  /* Ein Feld muss sich als Feld vom Grund abheben (3:1, docs/design_conventions.yaml,
+     feldrand). --line ist fuer Tabellenlinien gedacht und stand bei 1,25:1:
+     ein leeres Feld sah aus wie eine leere Flaeche. */
+  select,input,textarea{border-color:var(--feldrand)}
+  button{cursor:pointer;background:var(--accent);color:var(--on-accent);border-color:transparent;
+         padding:.35rem .8rem;white-space:nowrap}
+  button.ghost{background:transparent;color:var(--muted);border-color:var(--line)}
+  button:hover{filter:brightness(1.08)}
+  /* Ein Druck gibt nach -- kurz, und ohne Bewegung fuer die, die keine wollen. */
+  @media (prefers-reduced-motion:no-preference){
+    button{transition:filter .12s ease,transform .06s ease}
+    button:active{transform:translateY(1px)}
+  }
+  .pill{display:inline-block;padding:.1rem .45rem;border-radius:999px;font-size:11px;
+        border:1px solid var(--line);color:var(--muted)}
+  /* Auf einem farbigen Grund erbt .pill sonst var(--muted) und ist in beiden
+     Themes unlesbar -- gedecktes Grau auf Rot. Festes Schwarz war die erste
+     Antwort und hielt nur im dunklen Thema: auf dem dunklen Rot des hellen
+     standen 2,79:1. --on-accent ist in beiden Themen gegen --bad geprueft. */
+  /* nowrap und kleiner: fett gesetzt brach "unter Grenze" die Zeile um, und
+     eine Statusmarke, die die Zeile hoeher macht, kostet mehr Lesbarkeit als
+     die Fettschrift bringt. */
+  /* Eine eigene Entscheidung ist etwas anderes als ein Regelergebnis: keine
+     Regelkorrektur fasst sie je wieder an. Das muss man auf einen Blick
+     unterscheiden koennen, sonst sucht man spaeter, warum eine Zeile einer
+     verbesserten Regel nicht folgt. */
+  /* Wer aus dem Monatsabschluss hierherspringt, soll sehen, WO er gelandet
+     ist. Ohne Markierung steht man mitten in einer Tabelle und sucht die
+     Zeile, wegen der man gekommen ist. */
+  tr:target{outline:2px solid var(--accent);outline-offset:-2px}
+  tr:target td:first-child{font-weight:600}
+  .pill.eigen{border-color:var(--accent);color:var(--accent)}
+  .pill.solid{color:var(--on-accent);border-color:transparent;font-size:10px;
+              white-space:nowrap;padding:.05rem .4rem}
+  .note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--warn);
+        border-radius:6px;padding:.6rem .8rem;margin:.5rem 0;color:var(--muted)}
+  .ok{border-left-color:var(--good)}
+  .bad{border-left-color:var(--bad)}
+  tr.done{opacity:.35}
+  .row-actions{display:flex;gap:.4rem;align-items:center}
+  /* Bearbeitungstabellen: die Zeile zeigt, der Bereich darunter bearbeitet
+     (docs/design_conventions.yaml, bearbeitungstabellen). Auf /planung und
+     /regeln gleich. */
+  td.aktionen{white-space:nowrap;text-align:right;width:1%}
+  tr.panel>td{background:var(--bg);padding:.6rem .8rem .9rem}
+  .zeilen-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;font-size:12px}
+  .zeilen-form label{color:var(--muted);margin:0}
+  .zeilen-form input,.zeilen-form select{width:100%}
+  .zeilen-knoepfe{display:flex;gap:.5rem;margin:.6rem 0 0;align-items:center;flex-wrap:wrap}
+  .buchungen{margin-top:.8rem;border-top:1px solid var(--line);padding-top:.5rem;font-size:13px}
+  .buchungen p{font-size:12px;margin:.2rem 0 .4rem}
+  .buchungen table.detail td{white-space:nowrap}
+  .buchungen table.detail td:nth-child(3){white-space:normal;width:100%}
+  .vorschlag-kopf{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+  .suchzeile{display:flex;gap:.5rem;margin:.5rem 0 .3rem;align-items:center;flex-wrap:wrap}
+  .suchzeile input{flex:1;max-width:18rem}
+  .suchzeile select{max-width:18rem}
+  /* Zusammenklappbare Tabellen. das details-Element statt JavaScript: der Zustand
+     gehoert ins Markup, der Browser merkt ihn sich beim Blaettern, und es
+     funktioniert auch dann, wenn kein Skript laeuft. */
+  details.klapp{margin:.6rem 0}
+  details.klapp>summary{cursor:pointer;list-style:none;
+       color:var(--muted);font-size:.95rem;font-weight:600;
+       text-transform:uppercase;letter-spacing:.06em;
+       padding:.25rem 0;border-bottom:1px solid var(--line)}
+  details.klapp>summary::-webkit-details-marker{display:none}
+  details.klapp>summary::before{content:"\25B8 ";display:inline-block;
+       width:1em;transition:transform .12s}
+  details.klapp[open]>summary::before{transform:rotate(90deg)}
+  details.klapp>summary:hover{color:var(--ink)}
+  details.klapp>summary .zahl{font-weight:400;text-transform:none;
+       letter-spacing:0;font-size:12px}
+  /* Reiter: mehrere Ansichten einer Seite, jede mit eigener Adresse
+     (docs/design_conventions.yaml, reiter). Dieselbe Unterstreichung wie der
+     aktive Link im Kopf, damit "hier bist du" ueberall gleich aussieht. */
+  nav.reiter{display:flex;flex-wrap:wrap;gap:.2rem 1.2rem;margin:0 0 1rem;
+             border-bottom:1px solid var(--line)}
+  nav.reiter a{color:var(--muted);text-decoration:none;padding:.3rem 0;
+               border-bottom:2px solid transparent;margin-bottom:-1px}
+  nav.reiter a:hover{color:var(--ink)}
+  nav.reiter a.on{color:var(--ink);border-bottom-color:var(--accent)}
+  nav.reiter .zahl{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  /* Auswahlzeile: Jahr, Konto, Horizont -- kurze Wahl ohne Formular
+     (docs/design_conventions.yaml, auswahlzeile). Pillen wie ueberall, die
+     gewaehlte gefuellt im Akzent, damit "hier bist du" nicht an einer
+     Unterstreichung haengt, die wie ein Link aussieht. */
+  .auswahl{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin:0 0 .6rem}
+  .auswahl .k{color:var(--muted);font-size:12px;margin-right:.25rem;min-width:3.2rem}
+  .auswahl a{color:var(--muted);text-decoration:none;padding:.1rem .6rem;font-size:13px;
+             border:1px solid var(--line);border-radius:999px;white-space:nowrap}
+  .auswahl a:hover{color:var(--ink);border-color:var(--feldrand)}
+  .auswahl a.on{color:var(--on-accent);background:var(--accent);border-color:transparent}
+  a.plain{color:var(--accent);text-decoration:none}
+  a.plain:hover{text-decoration:underline}
+</style>
+{# Die Anmeldeseite leert diesen Block: sie teilt Farben und Formen mit der
+   App, hat aber nichts, wohin man navigieren duerfte. #}
+{% block kopf %}
+<header>
+  {# Der Name fuehrt dorthin, wo man anfaengt -- wie auf jeder Website. #}
+  <a class="marke" href="/monatsabschluss"><strong>Finance OS</strong></a>
+  <button class="navtoggle" onclick="navUmschalten()"
+          title="Alle Gruppen offen halten"
+          aria-label="Navigation aufklappen">☰</button>
+
+  {# Gruppiert nach der FRAGE, die man stellt, nicht nach der Technik: eine
+     lange Reihe gleichrangiger Links zwingt dazu, den Namen einer Seite zu
+     kennen, bevor man sie sucht. Ansichten derselben Frage sind Reiter einer
+     Seite, keine eigenen Links. #}
+  {% set an = aktive_module() %}
+  {% if seite_an("/monatsabschluss", "/rueckblick", "/transactions", aktiv=an) %}
+  <span class="navgruppe">
+    <span class="navlabel">Überblick</span>
+    <span class="navlinks">
+    {# Zuerst, weil am Ersten des Monats die Frage "was muss ich tun" vor der
+       Frage "wie steht es" kommt. #}
+    {% if seite_an("/monatsabschluss", aktiv=an) %}<a class="{% block n_abschluss %}{% endblock %}" href="/monatsabschluss">Monatsabschluss</a>{% endif %}
+    {% if seite_an("/rueckblick", aktiv=an) %}<a class="{% block n_rueckblick %}{% endblock %}" href="/rueckblick">Rückblick</a>{% endif %}
+    {% if seite_an("/transactions", aktiv=an) %}<a class="{% block n_tx %}{% endblock %}" href="/transactions">Transaktionen</a>{% endif %}
+    </span>
+  </span>
+  {% endif %}
+
+  {% if seite_an("/konten", "/ziele", "/planung", "/hochrechnung", aktiv=an) %}
+  <span class="navgruppe">
+    <span class="navlabel">Vorausschau</span>
+    <span class="navlinks">
+    {% if seite_an("/konten", aktiv=an) %}<a class="{% block n_konten %}{% endblock %}" href="/konten">Konten</a>{% endif %}
+    {% if seite_an("/ziele", aktiv=an) %}<a class="{% block n_ziele %}{% endblock %}" href="/ziele">Ziele</a>{% endif %}
+    {% if seite_an("/planung", aktiv=an) %}<a class="{% block n_planung %}{% endblock %}" href="/planung">Planung</a>{% endif %}
+    {% if seite_an("/hochrechnung", aktiv=an) %}<a class="{% block n_hochrechnung %}{% endblock %}" href="/hochrechnung">Hochrechnung</a>{% endif %}
+    </span>
+  </span>
+  {% endif %}
+
+  {% if seite_an("/immobilien", "/kredite", "/steuer", aktiv=an) %}
+  <span class="navgruppe">
+    <span class="navlabel">Objekte</span>
+    <span class="navlinks">
+    {% if seite_an("/immobilien", aktiv=an) %}<a class="{% block n_immo %}{% endblock %}" href="/immobilien">Immobilien</a>{% endif %}
+    {% if seite_an("/kredite", aktiv=an) %}<a class="{% block n_kredite %}{% endblock %}" href="/kredite">Kredite</a>{% endif %}
+    {% if seite_an("/steuer", aktiv=an) %}<a class="{% block n_steuer %}{% endblock %}" href="/steuer">Steuer</a>{% endif %}
+    </span>
+  </span>
+  {% endif %}
+
+  {% if seite_an("/vertraege", "/energie", aktiv=an) %}
+  <span class="navgruppe">
+    <span class="navlabel">Verträge</span>
+    <span class="navlinks">
+    {% if seite_an("/vertraege", aktiv=an) %}<a class="{% block n_vertraege %}{% endblock %}" href="/vertraege">Abos und Versicherungen</a>{% endif %}
+    {% if seite_an("/energie", aktiv=an) %}<a class="{% block n_energie %}{% endblock %}" href="/energie">Energie</a>{% endif %}
+    </span>
+  </span>
+  {% endif %}
+
+  {% if seite_an("/projekte", "/salden", "/geteilt/buchungen", aktiv=an) %}
+  <span class="navgruppe">
+    <span class="navlabel">Geteilt</span>
+    <span class="navlinks">
+    {% if seite_an("/projekte", aktiv=an) %}<a class="{% block n_projekte %}{% endblock %}" href="/projekte">Projekte</a>{% endif %}
+    {% if seite_an("/salden", aktiv=an) %}<a class="{% block n_salden %}{% endblock %}" href="/salden">Salden</a>{% endif %}
+    {% if seite_an("/geteilt/buchungen", aktiv=an) %}<a class="{% block n_geteilt_buchungen %}{% endblock %}" href="/geteilt/buchungen">Buchungen</a>{% endif %}
+    </span>
+  </span>
+  {% endif %}
+
+  {% if seite_an("/annahmen", "/kategorien", "/regeln", "/einrichtung", aktiv=an) %}
+  <span class="navgruppe">
+    <span class="navlabel">Stammdaten</span>
+    <span class="navlinks">
+    {% if seite_an("/annahmen", aktiv=an) %}<a class="{% block n_annahmen %}{% endblock %}" href="/annahmen">Annahmen</a>{% endif %}
+    {% if seite_an("/kategorien", aktiv=an) %}<a class="{% block n_kat %}{% endblock %}" href="/kategorien">Kategorien</a>{% endif %}
+    {% if seite_an("/regeln", aktiv=an) %}<a class="{% block n_regeln %}{% endblock %}" href="/regeln">Regeln</a>{% endif %}
+    {% if seite_an("/einrichtung", aktiv=an) %}<a class="{% block n_einrichtung %}{% endblock %}" href="/einrichtung">Einrichtung</a>{% endif %}
+    </span>
+  </span>
+  {% endif %}
+
+  {# Sagt, ob der Server im Netz haengt. "localhost only" als feste
+     Beschriftung waere nach dem ersten `host:`-Wechsel gelogen, und
+     ausgerechnet hier ist eine falsche Beschriftung teuer. #}
+  <span class="muted klein" style="margin-left:auto">{{ bindung_text() }}</span>
+  {# Drei Stufen statt zwei: "wie das Geraet" muss man zurueckbekommen
+     koennen, sonst bleibt nach einem einzigen Klick das Thema fuer immer fest. #}
+  <button class="navtoggle themaknopf" id="themaknopf" onclick="themaWechseln()"
+          aria-label="Farbthema: wie das Gerät" title="Farbthema: wie das Gerät">◐</button>
+</header>
+<script>
+// Eine Rueckmeldung steht neben dem Knopf, der sie ausgeloest hat
+// (speichern-rueckmeldung), nie in einem Dialog. Fehlt dort ein Platz, entsteht er.
+function meldenNeben(knopf, text, fehler){
+  let m = knopf.parentElement.querySelector('.meldung');
+  if (!m){ m = document.createElement('span'); knopf.after(m); }
+  m.textContent = ' ' + text;
+  m.className = 'meldung fein ' + (fehler ? 'neg' : 'pos');
+}
+// Der gemerkte Zustand gilt nur am Rechner. Auf dem Telefon faengt der Kopf
+// immer zugeklappt an und schliesst sich nach jedem Sprung wieder: dort nimmt
+// er ein Fuenftel des Bildschirms ein, und wer eine Seite angewaehlt hat,
+// will sie sehen und nicht das Menue.
+//
+// Deshalb schreibt der Schalter auf schmalen Schirmen auch NICHTS in den
+// Speicher -- sonst klappte der Kopf am Rechner zu, nur weil man unterwegs
+// einmal getippt hat.
+function navSchmal(){ return window.innerWidth < 700; }
+
+// Vor dem ersten Bild angewandt, damit der Kopf nicht sichtbar umspringt.
+(function(){
+  try {
+    if (window.innerWidth >= 700 && localStorage.getItem('nav') === 'alle')
+      document.currentScript.previousElementSibling.classList.add('alleoffen');
+  } catch (e) { /* privates Fenster: dann eben kompakt */ }
+})();
+const THEMEN = [['', '◐', 'wie das Gerät'], ['light', '☀\uFE0E', 'hell'],
+                ['dark', '☾', 'dunkel']];
+function themaZeigen(){
+  const jetzt = document.documentElement.dataset.theme || '';
+  const [, zeichen, name] = THEMEN.find(t => t[0] === jetzt);
+  const knopf = document.getElementById('themaknopf');
+  if (!knopf) return;
+  knopf.textContent = zeichen;
+  knopf.title = knopf.ariaLabel = 'Farbthema: ' + name;
+}
+function themaWechseln(){
+  const jetzt = document.documentElement.dataset.theme || '';
+  const i = THEMEN.findIndex(t => t[0] === jetzt);
+  const [naechstes] = THEMEN[(i + 1) % THEMEN.length];
+  if (naechstes) document.documentElement.dataset.theme = naechstes;
+  else delete document.documentElement.dataset.theme;
+  try {
+    if (naechstes) localStorage.setItem('thema', naechstes);
+    else localStorage.removeItem('thema');
+  } catch (e) {}
+  themaZeigen();
+}
+themaZeigen();
+function navUmschalten(){
+  const kopf = document.querySelector('header');
+  const alle = kopf.classList.toggle('alleoffen');
+  kopf.querySelectorAll('.navgruppe').forEach(g => g.classList.remove('offen'));
+  if (navSchmal()) return;
+  try { localStorage.setItem('nav', alle ? 'alle' : 'kompakt'); } catch (e) {}
+}
+// Klick auf den Gruppennamen haelt die Gruppe offen -- fuer Touchgeraete, die
+// kein Hover kennen, und fuer alle, die nicht mit der Maus zielen wollen.
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('header .navlabel').forEach(label => {
+    label.addEventListener('click', ev => {
+      const gruppe = label.closest('.navgruppe');
+      const war = gruppe.classList.contains('offen');
+      document.querySelectorAll('header .navgruppe').forEach(
+        g => g.classList.remove('offen'));
+      if (!war) gruppe.classList.add('offen');
+      ev.stopPropagation();
+    });
+  });
+  // Ein angewaehlter Link klappt den Kopf auf dem Telefon wieder zu. Bei einem
+  // Seitenwechsel faellt das nicht auf -- die neue Seite faengt ohnehin
+  // zugeklappt an --, aber bei einem Sprung INNERHALB der Seite schon, etwa
+  // vom Monatsabschluss auf eine Bestandszeile: dort laedt nichts neu, und das
+  // Menue stuende offen ueber dem, was man sehen wollte.
+  document.querySelectorAll('header .navlinks a').forEach(link => {
+    link.addEventListener('click', () => {
+      if (navSchmal()) document.querySelector('header').classList.remove('alleoffen');
+    });
+  });
+  // Ein Klick daneben schliesst nur die einzeln geoeffnete Gruppe. Den ueber
+  // den Knopf festgehaltenen Zustand laesst er stehen -- sonst waere der Knopf
+  // beim ersten Klick auf die Seite wieder wirkungslos.
+  document.addEventListener('click', () => {
+    document.querySelectorAll('header .navgruppe.offen').forEach(
+      g => g.classList.remove('offen'));
+  });
+});
+</script>
+{% endblock %}
+{# VOR dem Inhalt, nicht danach. Die Seitenskripte stehen in `block body`,
+   also innerhalb von <main>, und `const eur = centsAus;` lief dort, bevor
+   centsAus ueberhaupt existierte -- ein ReferenceError, der das ganze
+   Skriptblock abbrach. Bei den Bestaenden hiess das: der Speichern-Knopf tat
+   nichts, ohne Fehlermeldung und ohne Spur. #}
+{% include "_betrag.html" %}
+<main>{% block body %}{% endblock %}</main>
+{% include "_resize.html" %}
+{% include "_klappzustand.html" %}

@@ -1,0 +1,18 @@
+Umsatzanzeige;Datei erstellt am: 01.09.2026 08:00
+;Letztes Update: aktuell
+
+IBAN;DE89 3704 0044 0532 0130 00
+Kontoname;Girokonto
+Bank;ING
+Kunde;Erika Beispiel
+Zeitraum;01.08.2026 - 31.08.2026
+Saldo;1.905,00;EUR
+
+Sortierung;Datum absteigend
+
+In der CSV-Datei finden Sie alle bereits gebuchten Umsätze.
+
+Buchung;Wertstellungsdatum;Auftraggeber/Empfänger;Buchungstext;Verwendungszweck;Saldo;Währung;Betrag;Währung
+28.08.2026;28.08.2026;Beispiel Arbeitgeber GmbH;Gehalt/Rente;Lohn August;1.905,00;EUR;2.500,00;EUR
+15.08.2026;15.08.2026;Stadtwerke Musterstadt;Lastschrift;Abschlag Strom;-595,00;EUR;-95,00;EUR
+03.08.2026;03.08.2026;Wohnbau Muster eG;Dauerauftrag;Miete August;-500,00;EUR;-800,00;EUR

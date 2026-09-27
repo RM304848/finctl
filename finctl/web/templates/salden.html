@@ -1,0 +1,57 @@
+{% extends "base.html" %}{% block n_salden %}on{% endblock %}
+{% block title %}Salden{% endblock %}
+{% macro tag(d) %}{{ d[:10] if d else '' }}{% endmacro %}
+{% block body %}
+<h1>Salden</h1>
+<p class="zweck">Wer schuldet dir in welchem Projekt wie viel?</p>
+
+<div class="cards">
+  <div class="card"><div class="k">Offen gesamt</div>
+    <div class="v {{ 'neg' if offen_gesamt > 0 }}">{{ offen_gesamt|euro }}</div>
+    <div class="muted klein">{{ zeilen|length }} Personen</div></div>
+</div>
+
+<p class="muted klein">{% if alle %}Alle Salden. <a class="plain" href="/salden">Nur offene</a>
+  {% else %}Nur offene. <a class="plain" href="/salden?alle=1">Alle zeigen</a>{% endif %}</p>
+
+{% if zeilen %}
+<div class="wrap"><table>
+  <tr><th>Person / Projekt</th><th class="num">Anteil</th><th>ausgeglichen</th>
+      <th class="num">seitdem dazu</th><th class="num">offen</th><th></th></tr>
+  {% for z in zeilen %}
+  <tr><td><strong>{{ z.name }}</strong></td><td></td><td></td><td></td>
+      <td class="num {{ 'neg' if z.offen > 0 }}"><strong>{{ z.offen|euro }}</strong></td><td></td></tr>
+  {% for s in z.salden %}
+  <tr>
+    <td style="padding-left:1.6rem"><a class="plain" href="/projekte?offen={{ s.projekt }}">{{ projekte[s.projekt].name }}</a></td>
+    <td class="num">{{ s.anteil_cents|euro }}</td>
+    <td class="muted">{% if s.ausgeglichen_am %}{{ tag(s.ausgeglichen_am) }}, {{ s.ausgeglichen_cents|euro }}{% else %}—{% endif %}</td>
+    <td class="num">{{ s.seit_ausgleich_cents|euro if s.seit_ausgleich_cents else '' }}</td>
+    <td class="num {{ 'neg' if s.offen_cents > 0 else ('pos' if s.offen_cents < 0) }}">{{ s.offen_cents|euro }}</td>
+    <td class="aktionen"><label><input type="checkbox" {{ 'checked' if s.ausgeglichen_am and not s.offen_cents }}
+        onchange="ausgleichen('{{ s.projekt }}', '{{ s.person }}', this.checked, this)"> ausgeglichen</label>
+      <span class="meldung muted klein"></span></td>
+  </tr>
+  {% endfor %}
+  {% endfor %}
+</table></div>
+{% endif %}
+
+<script>
+async function ausgleichen(projekt, person, an, feld){
+  const m = feld.closest('td').querySelector('.meldung');
+  const res = await fetch('/api/geteilt/ausgeglichen', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({projekt, person, an})});
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok){ m.textContent = out.error || 'Speichern fehlgeschlagen'; m.className = 'meldung klein neg'; return; }
+  m.textContent = 'gespeichert — neu rechnen …'; m.className = 'meldung klein pos';
+  location.reload();
+}
+</script>
+
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/geteilt_custom.yaml', 'Je Person und Projekt der Stand beim Abhaken.'),
+  ('finctl/web/templates/salden.html', 'Die Texte dieser Seite.'),
+], handbuch='salden') }}
+{% endblock %}

@@ -1,0 +1,5 @@
+overrides:
+  krypto:
+    as_of: '{M}-01'
+    cents: 160000
+verpflichtungen: {}

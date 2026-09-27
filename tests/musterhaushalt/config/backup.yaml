@@ -1,0 +1,4 @@
+# Musterhaushalt: wohin gesichert wird. Liegt unter dem Heimverzeichnis, das
+# die Tests auf einen Wegwerfordner umstellen.
+directory: ~/finctl-sicherung
+keep: 12

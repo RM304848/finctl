@@ -1,0 +1,463 @@
+{% extends "base.html" %}{% block n_energie %}on{% endblock %}
+{% block title %}Energie{% endblock %}
+{% import "_reiter.html" as rt %}
+{# Die Menge in der Abrechnungseinheit des Zaehlers: kWh, beim Wasser m³. #}
+{% macro kwh(x) %}{{ '{:,.0f}'.format(x).replace(',', '.') }} {{ m.abrechnung if m else 'kWh' }}{% endmacro %}
+{% macro menge(x, e) %}{{ '{:,.0f}'.format(x).replace(',', '.') }} {{ e }}{% endmacro %}
+{% macro tag(d) %}{{ d.isoformat() if d else '' }}{% endmacro %}
+{% macro zahl(x) %}{{ ('%.2f' % x).replace('.', ',') if x is not none else '' }}{% endmacro %}
+{% macro stand(x) %}{{ '{:,.1f}'.format(x).replace(',', ' ').replace('.', ',').replace(' ', '.') }}{% endmacro %}
+
+{# Ein Formular fuer jeden Zeitraum, der laufende wie die frueheren: die
+   Abrechnung kommt oft erst, wenn der naechste Zeitraum schon laeuft, und
+   der Haken muss dann am alten gesetzt werden koennen. #}
+{% macro vertrag(z, nr) %}
+<div class="vertrag" id="vertrag-{{ nr }}" data-nr="{{ nr }}">
+  <div class="zeilen-form">
+    <label>Beginn<input class="v-beginn" value="{{ z.beginn.isoformat() if z else '' }}" placeholder="2026-01-01"></label>
+    <label>Ende<input class="v-ende" value="{{ z.ende.isoformat() if z else '' }}" placeholder="2026-12-31"></label>
+    <label>Anfangsstand {{ m.einheit }}<input class="v-stand betrag" value="{{ zahl(z.zaehlerstand_beginn) if z else '' }}"></label>
+    <label>Anbieter<input class="v-anbieter" value="{{ z.anbieter if z else '' }}"></label>
+    <label>Preisgarantie bis<input class="v-garantie" value="{{ z.preisgarantie_bis.isoformat() if z and z.preisgarantie_bis else '' }}" placeholder="optional"></label>
+  </div>
+  <h3>Tarif</h3>
+  <div class="wrap"><table class="tarife">
+    <tr><th>ab</th><th class="num">Grundpreis €/Monat</th><th class="num">Arbeitspreis ct/{{ m.abrechnung }}</th><th></th></tr>
+    {% for t in (z.tarife if z else []) %}
+    <tr><td><input class="t-ab" value="{{ t.ab.isoformat() }}"></td>
+        <td class="num"><input class="t-grund betrag" value="{{ (t.grundpreis_jahr_cents / 12)|round|int|betrag }}"></td>
+        <td class="num"><input class="t-preis betrag" value="{{ zahl(t.arbeitspreis_ct_kwh) }}"></td>
+        <td class="aktionen"><button type="button" class="ghost" onclick="this.closest('tr').remove()" aria-label="Tarif entfernen">×</button></td></tr>
+    {% endfor %}
+  </table></div>
+  <button type="button" class="ghost" onclick="zeileNeu(this, 'tarif')">+ Tarif</button>
+  <h3>Abschlag</h3>
+  <div class="wrap"><table class="abschlaege">
+    <tr><th>ab</th><th class="num">€ im Monat</th><th></th></tr>
+    {% for a in (z.abschlaege if z else []) %}
+    <tr><td><input class="a-ab" value="{{ a.ab.isoformat() }}"></td>
+        <td class="num"><input class="a-betrag betrag" value="{{ a.monat_cents|betrag }}"></td>
+        <td class="aktionen"><button type="button" class="ghost" onclick="this.closest('tr').remove()" aria-label="Abschlag entfernen">×</button></td></tr>
+    {% endfor %}
+  </table></div>
+  <button type="button" class="ghost" onclick="zeileNeu(this, 'abschlag')">+ Abschlag</button>
+  {% if z %}
+  <h3>Abrechnung</h3>
+  <label><input type="checkbox" class="v-abgerechnet" {{ 'checked' if z.abgerechnet }}
+         onchange="this.closest('.vertrag').querySelector('.v-ergebnis').hidden = !this.checked">
+    Abrechnung erhalten</label>
+  <div class="zeilen-form v-ergebnis" {{ '' if z.abgerechnet else 'hidden' }}>
+    <label>Abgerechnete {{ m.abrechnung }}<input class="v-kwh betrag" value="{{ zahl(z.endabrechnung_kwh) }}"></label>
+    <label>Ergebnis
+      <select class="v-richtung" data-no-combo>
+        <option value="1" {{ 'selected' if (z.endabrechnung_cents or 0) >= 0 }}>Guthaben</option>
+        <option value="-1" {{ 'selected' if (z.endabrechnung_cents or 0) < 0 }}>Nachzahlung</option>
+      </select></label>
+    <label>Betrag €<input class="v-cents betrag" value="{{ (z.endabrechnung_cents|abs)|betrag if z.endabrechnung_cents is not none else '' }}"></label>
+  </div>
+  {% endif %}
+  <p class="zeilen-knoepfe"><button type="button" onclick="vertragSpeichern(this)">Speichern</button>
+    <span class="meldung muted klein"></span></p>
+</div>
+{% endmacro %}
+
+
+{# Einstellungen eines Zaehlers: Art nur beim Anlegen, danach steht sie fest --
+   aus Strom wird kein Gas, dafuer wird ein neuer Zaehler angelegt. #}
+{% macro zaehler_form(z) %}
+<div class="einstellung" data-id="{{ z.id if z else '' }}">
+  <div class="zeilen-form">
+    <label>Art<select class="e-art" data-no-combo {{ 'disabled' if z }} onchange="gasFelder(this)">
+      {% for k, a in zaehlerarten.items() if k != 'strom' %}
+      <option value="{{ k }}" {{ 'selected' if z and z.art == k }}>{{ a[0] }} ({{ a[1] }})</option>{% endfor %}
+    </select></label>
+    <label>Name<input class="e-name" value="{{ z.name if z else '' }}" placeholder="z. B. Gas Keller"></label>
+    <label>Verteilung<select class="e-profil" data-no-combo>
+      <option value="linear" {{ 'selected' if z and z.messung.profil == 'linear' }}>gleichmäßig</option>
+      <option value="heizung" {{ 'selected' if not z or z.messung.profil == 'heizung' }}>Heizung (Gradtage)</option>
+    </select></label>
+    <label title="Anteil ohne Jahresgang, etwa Warmwasser">Grundlast %<input class="e-grundlast betrag" value="{{ zahl(z.messung.grundlast * 100) if z else '' }}" placeholder="0"></label>
+    <label class="nur-gas" title="kWh je m³, steht auf der Gasrechnung">Brennwert<input class="e-brennwert betrag" value="{{ zahl(z.brennwert) if z and z.brennwert }}" placeholder="11,20"></label>
+    <label class="nur-gas" title="steht auf der Gasrechnung">Zustandszahl<input class="e-zustand betrag" value="{{ zahl(z.zustandszahl) if z and z.zustandszahl }}" placeholder="0,95"></label>
+  </div>
+  <p class="zeilen-knoepfe"><button type="button" onclick="zaehlerSpeichern(this)">{{ 'Speichern' if z else 'Anlegen' }}</button>
+    {% if z %}<button type="button" class="ghost" onclick="energieEntfernen('{{ z.id }}', '{{ z.name|e }}')">Zähler entfernen</button>{% endif %}
+    <span class="meldung muted klein"></span></p>
+</div>
+{% endmacro %}
+
+{% macro vorrat_form(v) %}
+<div class="einstellung" data-id="{{ v.id if v else '' }}">
+  <div class="zeilen-form">
+    <label>Art<select class="e-art" data-no-combo {{ 'disabled' if v }}>
+      {% for k, a in vorratsarten.items() %}
+      <option value="{{ k }}" {{ 'selected' if v and v.art == k }}>{{ a[0] }} ({{ a[1] }})</option>{% endfor %}
+    </select></label>
+    <label>Name<input class="e-name" value="{{ v.name if v else '' }}" placeholder="z. B. Öltank"></label>
+    <label>Kapazität<input class="e-kapazitaet betrag" value="{{ zahl(v.kapazitaet) if v and v.kapazitaet }}" placeholder="optional"></label>
+    <label title="Ab hier wird nachbestellt">Mindestbestand<input class="e-mindest betrag" value="{{ zahl(v.mindestbestand) if v and v.mindestbestand }}" placeholder="0"></label>
+    <label>Verteilung<select class="e-profil" data-no-combo>
+      <option value="heizung" {{ 'selected' if not v or v.profil == 'heizung' }}>Heizung (Gradtage)</option>
+      <option value="linear" {{ 'selected' if v and v.profil == 'linear' }}>gleichmäßig</option>
+    </select></label>
+    <label title="Anteil ohne Jahresgang, etwa Warmwasser">Grundlast %<input class="e-grundlast betrag" value="{{ zahl(v.grundlast * 100) if v else '' }}" placeholder="0"></label>
+  </div>
+  <p class="zeilen-knoepfe"><button type="button" onclick="vorratSpeichern(this)">{{ 'Speichern' if v else 'Anlegen' }}</button>
+    {% if v %}<button type="button" class="ghost" onclick="energieEntfernen('{{ v.id }}', '{{ v.name|e }}')">Vorrat entfernen</button>{% endif %}
+    <span class="meldung muted klein"></span></p>
+</div>
+{% endmacro %}
+
+{% block body %}
+<h1>Energie {% if zaehler %}<span class="muted zusatz">— {{ zaehler.name }}{% if aktuell %}: {{ aktuell.zeitraum.anbieter ~ ', ' if aktuell.zeitraum.anbieter }}{{ tag(aktuell.zeitraum.beginn) }} bis {{ tag(aktuell.zeitraum.ende) }}{% endif %}</span>
+  {%- elif vorrat %}<span class="muted zusatz">— {{ vorrat.name }}</span>{% endif %}</h1>
+<p class="zweck">Wohin führt der Verbrauch bis zum Abrechnungsende, reicht der Abschlag, und wie lange reicht der Vorrat?</p>
+{{ rt.reiter(reiter, ansicht) }}
+
+{% if fehler %}<div class="note bad">config/strom.yaml oder config/energie.yaml ist nicht lesbar: {{ fehler }}</div>{% endif %}
+
+{% if zaehler %}
+{% if not aktuell %}
+<h2>Erster Abrechnungszeitraum</h2>
+{{ vertrag(none, 'neu') }}
+{% else %}
+{% set r = aktuell %}{% set z = r.zeitraum %}
+
+{% if r.zustand == 'ausstehend' %}
+<div class="note">Der Zeitraum ist zu Ende, die Abrechnung steht aus. Alle Zahlen sind eigene Rechnung, bis unter Vertrag der Haken gesetzt ist.</div>
+{% endif %}
+{% if r.garantie_endet_vorher %}
+<div class="note">Die Preisgarantie endet am {{ tag(z.preisgarantie_bis) }}. Ab dort ist mit dem heutigen Preis gerechnet.</div>
+{% endif %}
+{% if z.anfangsstand_geschaetzt %}
+<div class="note">Der Anfangsstand ist hochgerechnet, weil am Stichtag nicht abgelesen wurde. Unter Vertrag lässt er sich berichtigen.</div>
+{% endif %}
+{% if vorschlag %}
+<div class="note ok">Der nächste Zeitraum beginnt am {{ tag(vorschlag.beginn) }}.
+  <button type="button" onclick="zeitraumNeu(this)">Neues Abrechnungsjahr anlegen</button>
+  <span class="meldung muted klein"></span></div>
+{% endif %}
+
+<div class="cards">
+  <div class="card"><div class="k">Verbrauch bisher</div>
+    <div class="v">{{ kwh(r.kwh_bisher) }}</div>
+    <div class="muted klein">{% if r.letzte %}bis {{ tag(r.letzte.datum) }}, {{ r.tage_bisher }} von {{ z.tage }} Tagen{% else %}noch keine Ablesung{% endif %}</div></div>
+  <div class="card"><div class="k">{{ 'Verbrauch im Zeitraum' if r.abgelesen_bis_ende else 'Erwartet bis Ende' }}</div>
+    <div class="v">{{ kwh(r.kwh_erwartet) if r.kwh_erwartet is not none else '—' }}</div>
+    <div class="muted klein">{% if r.kwh_tag is not none %}{{ zahl(r.kwh_tag) }} {{ m.abrechnung }} am Tag{% endif %}</div></div>
+  <div class="card"><div class="k">{{ 'Ergebnis laut Abrechnung' if r.zustand == 'abgerechnet' and z.endabrechnung_cents is not none else ('Guthaben' if (r.saldo_cents or 0) >= 0 else 'Nachzahlung') ~ ' erwartet' }}</div>
+    {% set ergebnis = z.endabrechnung_cents if r.zustand == 'abgerechnet' and z.endabrechnung_cents is not none else r.saldo_cents %}
+    <div class="v {{ (ergebnis or 0)|vz }}">{{ ergebnis|euro if ergebnis is not none else '—' }}</div>
+    <div class="muted klein">{% if r.abweichung_cents is not none %}eigene Rechnung <span class="{{ r.saldo_cents|vz }}">{{ r.saldo_cents|euro }}</span>{% else %}Abschläge minus Kosten{% endif %}</div></div>
+  <div class="card"><div class="k">Abschlag deckt</div>
+    <div class="v">{{ kwh(r.kwh_gedeckt) if r.kwh_gedeckt is not none else '—' }}</div>
+    <div class="klein {{ (r.kwh_luft or 0)|vz }}">{% if r.kwh_luft is not none %}{{ 'im Rahmen, ' ~ kwh(r.kwh_luft) ~ ' Luft' if r.kwh_luft >= 0 else kwh(-r.kwh_luft) ~ ' darüber' }}{% endif %}</div></div>
+  <div class="card"><div class="k">Empfohlener Abschlag</div>
+    <div class="v">{{ r.empfehlung_cents|euro if r.empfehlung_cents is not none else '—' }}</div>
+    <div class="muted klein">{% if r.empfehlung_grundlage %}im Monat, {{ 'nach der Abrechnung' if r.empfehlung_grundlage == 'abgerechnet' else 'nach eigener Rechnung' }}{% endif %}</div></div>
+</div>
+
+{% if r.posten %}
+<details class="klapp">
+  <summary>Rechenweg <span class="zahl">— {{ r.posten|length }} Posten</span></summary>
+  <div class="wrap"><table>
+    <tr><th>Posten</th><th>Herleitung</th><th class="num">Betrag</th></tr>
+    <tr><td>Verbrauch</td><td class="muted">{{ kwh(r.kwh_bisher) }} in {{ r.tage_bisher }} Tagen, auf {{ z.tage }} Tage fortgeschrieben
+      {%- if m.profil == 'heizung' %} nach Gradtagen{% endif %}{% if m.faktor != 1 %}, {{ zahl(m.faktor) }} {{ m.abrechnung }} je {{ m.einheit }}{% endif %}</td><td class="num">{{ kwh(r.kwh_erwartet) }}</td></tr>
+    {% for p in r.posten %}
+    <tr><td>{{ p.label }}</td><td class="muted">{{ p.herleitung }}</td>
+        <td class="num {{ p.cents|vz }}">{{ p.cents|euro }}</td></tr>
+    {% endfor %}
+    <tr><td><strong>Saldo</strong></td><td class="muted">positiv Guthaben, negativ Nachzahlung</td>
+        <td class="num {{ r.saldo_cents|vz }}"><strong>{{ r.saldo_cents|euro }}</strong></td></tr>
+  </table></div>
+</details>
+{% endif %}
+
+<h2>Ablesungen</h2>
+<div class="wrap"><table>
+  <tr><th>Datum</th><th class="num">Stand</th><th class="num">Tage</th><th class="num">{{ m.abrechnung }}</th>
+      <th class="num">{{ m.abrechnung }}/Tag</th><th class="num">Hochrechnung</th><th class="num">Saldo damals</th><th></th></tr>
+  <tr class="muted"><td>{{ tag(z.beginn) }}</td><td class="num">{{ stand(z.zaehlerstand_beginn) }}</td>
+      <td colspan="6">Anfangsstand</td></tr>
+  {% for s in r.verlauf %}
+  <tr><td>{{ tag(s.datum) }}</td><td class="num">{{ stand(s.stand) }}</td><td class="num">{{ s.tage }}</td>
+      <td class="num">{{ kwh(s.kwh) }}</td><td class="num">{{ zahl(s.kwh_tag) }}</td>
+      <td class="num">{{ kwh(s.kwh_erwartet) if s.kwh_erwartet is not none else '—' }}</td>
+      <td class="num {{ (s.saldo_cents or 0)|vz }}">{{ s.saldo_cents|euro if s.saldo_cents is not none else '—' }}</td>
+      <td class="aktionen"><button type="button" class="ghost" onclick="ablesungWeg('{{ s.datum.isoformat() }}')" aria-label="Ablesung entfernen">×</button></td></tr>
+  {% endfor %}
+  <tr><td><input id="neu-datum" value="{{ heute.isoformat() }}" placeholder="2026-01-01" size="10"></td>
+      <td class="num"><input id="neu-stand" class="betrag" placeholder="Zählerstand" size="9"></td>
+      <td colspan="6"><button type="button" onclick="ablesungSpeichern(this)">Speichern</button>
+        <span class="meldung muted klein"></span></td></tr>
+</table></div>
+
+<details class="klapp">
+  <summary>Vertrag</summary>
+  {{ vertrag(z, nr) }}
+</details>
+
+{% if frueher %}
+<h2>Frühere Zeiträume</h2>
+<div class="wrap"><table>
+  <tr><th>Zeitraum</th><th>Stand</th><th class="num">eigene kWh</th><th class="num">eigene Rechnung</th>
+      <th class="num">abgerechnet</th><th class="num">Abweichung</th><th></th></tr>
+  {% for f in frueher %}{% set fz = f.zeitraum %}
+  <tr><td>{{ tag(fz.beginn) }} bis {{ tag(fz.ende) }}</td>
+      <td><span class="pill {{ 'eigen' if f.zustand == 'abgerechnet' }}">{{ 'abgerechnet' if f.zustand == 'abgerechnet' else 'Abrechnung ausstehend' }}</span></td>
+      <td class="num">{{ kwh(f.kwh_erwartet) if f.kwh_erwartet is not none else '—' }}</td>
+      <td class="num {{ f.saldo_cents|vz }}">{{ f.saldo_cents|euro if f.saldo_cents is not none else '—' }}</td>
+      <td class="num {{ fz.endabrechnung_cents|vz }}">{{ fz.endabrechnung_cents|euro if fz.endabrechnung_cents is not none else '—' }}</td>
+      <td class="num {{ f.abweichung_cents|vz }}">{{ f.abweichung_cents|euro if f.abweichung_cents is not none else '—' }}</td>
+      <td class="aktionen"><button type="button" class="ghost" onclick="oeffne({{ nr - loop.index }})">Öffnen</button></td></tr>
+  <tr class="panel" id="panel-{{ nr - loop.index }}" hidden><td colspan="7">{{ vertrag(fz, nr - loop.index) }}</td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+{% endif %}
+
+{% if zaehler.id != 'strom' %}
+<details class="klapp">
+  <summary>Zähler <span class="zahl">— {{ zaehlerarten[zaehler.art][0] }}, {{ 'Heizprofil' if m.profil == 'heizung' else 'gleichmäßig' }}</span></summary>
+  {{ zaehler_form(zaehler) }}
+</details>
+{% endif %}
+
+{% elif vorrat %}
+{% set a = auswertung %}{% set e = vorrat.einheit %}
+{% if a.jahresverbrauch is none %}
+<div class="note">Für Verbrauch und Reichweite braucht es zwei Peilungen. Eine Lieferung allein sagt nicht, wie viel noch drin ist.</div>
+{% endif %}
+<div class="cards">
+  <div class="card"><div class="k">Stand heute</div>
+    <div class="v">{{ menge(a.stand_heute, e) if a.stand_heute is not none else '—' }}</div>
+    <div class="muted klein">{% if vorrat.staende %}gepeilt {{ tag(vorrat.staende[-1].datum) }}: {{ menge(vorrat.staende[-1].menge, e) }}{% else %}noch keine Peilung{% endif %}</div></div>
+  <div class="card"><div class="k">Verbrauch im Jahr</div>
+    <div class="v">{{ menge(a.jahresverbrauch, e) if a.jahresverbrauch is not none else '—' }}</div>
+    <div class="muted klein">{{ 'nach Gradtagen' if vorrat.profil == 'heizung' else 'gleichmäßig verteilt' }}</div></div>
+  <div class="card"><div class="k">Reicht bis</div>
+    <div class="v {{ 'neg' if a.reicht_bis and (a.reicht_bis - heute).days < 60 }}">{{ tag(a.reicht_bis) if a.reicht_bis else ('über zehn Jahre' if a.reicht_lange and a.jahresverbrauch else '—') }}</div>
+    <div class="muted klein">{% if vorrat.mindestbestand %}bis {{ menge(vorrat.mindestbestand, e) }} Rest{% else %}bis leer{% endif %}</div></div>
+  <div class="card"><div class="k">Zurücklegen im Monat</div>
+    <div class="v">{{ a.ruecklage_monat_cents|euro if a.ruecklage_monat_cents is not none else '—' }}</div>
+    <div class="muted klein">{% if a.preis_ct is not none %}{{ zahl(a.preis_ct) }} ct/{{ e }} laut letzter Lieferung{% endif %}</div></div>
+</div>
+
+{% if a.abschnitte %}
+<details class="klapp">
+  <summary>Rechenweg <span class="zahl">— {{ a.abschnitte|length }} Abschnitte</span></summary>
+  <div class="wrap"><table>
+    <tr><th>von</th><th>bis</th><th class="num">geliefert</th><th class="num">verbraucht</th><th class="num">Anteil am Jahr</th></tr>
+    {% for x in a.abschnitte %}
+    <tr><td>{{ tag(x.von) }}</td><td>{{ tag(x.bis) }}</td><td class="num">{{ menge(x.geliefert, e) }}</td>
+        <td class="num">{{ menge(x.verbrauch, e) }}</td><td class="num">{{ '%.0f'|format(x.gewicht * 100) }} %</td></tr>
+    {% endfor %}
+    <tr><td colspan="3"><strong>Verbrauch im Jahr</strong></td>
+        <td class="num" colspan="2"><strong>{{ menge(a.jahresverbrauch, e) if a.jahresverbrauch is not none else '—' }}</strong></td></tr>
+    {% if a.jahreskosten_cents is not none %}
+    <tr><td colspan="3">Kosten im Jahr, zum Preis der letzten Lieferung</td>
+        <td class="num neg" colspan="2">{{ (-a.jahreskosten_cents)|euro }}</td></tr>
+    {% endif %}
+  </table></div>
+</details>
+{% endif %}
+
+<h2>Peilungen</h2>
+<div class="wrap"><table>
+  <tr><th>Datum</th><th class="num">Füllstand</th><th></th></tr>
+  {% for x in vorrat.staende|reverse %}
+  <tr><td>{{ tag(x.datum) }}</td><td class="num">{{ menge(x.menge, e) }}</td>
+      <td class="aktionen"><button type="button" class="ghost" onclick="eintragWeg(this, 'stand', '{{ x.datum.isoformat() }}')" aria-label="Peilung entfernen">×</button></td></tr>
+  {% endfor %}
+  <tr><td><input id="st-datum" value="{{ heute.isoformat() }}" placeholder="2026-01-01" size="10"></td>
+      <td class="num"><input id="st-menge" class="betrag" placeholder="{{ e }}" size="8"></td>
+      <td><button type="button" onclick="eintragSpeichern(this, 'stand')">Speichern</button>
+        <span class="meldung muted klein"></span></td></tr>
+</table></div>
+
+<h2>Lieferungen</h2>
+<div class="wrap"><table>
+  <tr><th>Datum</th><th class="num">Menge</th><th class="num">Betrag</th><th class="num">Preis</th><th></th></tr>
+  {% for x in vorrat.lieferungen|reverse %}
+  <tr><td>{{ tag(x.datum) }}</td><td class="num">{{ menge(x.menge, e) }}</td>
+      <td class="num neg">{{ (-x.cents)|euro }}</td>
+      <td class="num muted">{{ zahl(x.preis_ct) }} ct/{{ e }}</td>
+      <td class="aktionen"><button type="button" class="ghost" onclick="eintragWeg(this, 'lieferung', '{{ x.datum.isoformat() }}')" aria-label="Lieferung entfernen">×</button></td></tr>
+  {% endfor %}
+  <tr><td><input id="lf-datum" value="{{ heute.isoformat() }}" placeholder="2026-01-01" size="10"></td>
+      <td class="num"><input id="lf-menge" class="betrag" placeholder="{{ e }}" size="8"></td>
+      <td class="num"><input id="lf-cents" class="betrag" placeholder="Ausgabe, ohne Vorzeichen" size="12"></td>
+      <td colspan="2"><button type="button" onclick="eintragSpeichern(this, 'lieferung')">Speichern</button>
+        <span class="meldung muted klein"></span></td></tr>
+</table></div>
+
+<details class="klapp">
+  <summary>Vorrat <span class="zahl">— {{ vorratsarten[vorrat.art][0] }}{% if vorrat.kapazitaet %}, {{ menge(vorrat.kapazitaet, e) }} Kapazität{% endif %}</span></summary>
+  {{ vorrat_form(vorrat) }}
+</details>
+
+{% elif ansicht == 'neu' %}
+<h2>Neuer Zähler</h2>
+{{ zaehler_form(none) }}
+<h2>Neuer Vorrat</h2>
+{{ vorrat_form(none) }}
+{% endif %}
+
+<script>
+const ZAEHLER = {{ (zaehler.id if zaehler else '')|tojson }};
+const VORRAT = {{ (vorrat.id if vorrat else '')|tojson }};
+const kwhAus = v => { const c = centsAus(v); return c === null ? null : c / 100; };
+
+function melden(knopf, text, fehler){
+  const m = knopf.parentElement.querySelector('.meldung');
+  m.textContent = text;
+  m.className = 'meldung klein ' + (fehler ? 'neg' : 'pos');
+}
+async function senden(pfad, body, knopf){
+  const res = await fetch(pfad, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                 body: JSON.stringify(body)});
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok){ melden(knopf, out.error || 'Speichern fehlgeschlagen', true); return false; }
+  melden(knopf, 'gespeichert — neu rechnen …', false);
+  location.reload();
+  return true;
+}
+
+function ablesungSpeichern(knopf){
+  const stand = kwhAus(document.getElementById('neu-stand').value);
+  if (stand === null){ document.getElementById('neu-stand').classList.add('feld-fehlt'); return; }
+  senden('/api/energie/ablesung', {zaehler: ZAEHLER,
+    datum: document.getElementById('neu-datum').value.trim(), stand}, knopf);
+}
+async function ablesungWeg(datum){
+  if (!confirm('Ablesung vom ' + datum + ' entfernen?')) return;
+  await fetch('/api/energie/ablesung/entfernen', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({zaehler: ZAEHLER, datum})});
+  location.reload();
+}
+function zeitraumNeu(knopf){ senden('/api/energie/zeitraum/neu', {zaehler: ZAEHLER}, knopf); }
+
+function oeffne(nr){
+  document.querySelectorAll('tr.panel').forEach(p => { p.hidden = p.id !== 'panel-' + nr || !p.hidden; });
+}
+
+function zeileNeu(knopf, art){
+  const tabelle = knopf.previousElementSibling.querySelector('table');
+  const tr = document.createElement('tr');
+  const weg = '<td class="aktionen"><button type="button" class="ghost" '
+    + 'onclick="this.closest(\'tr\').remove()" aria-label="Entfernen">×</button></td>';
+  tr.innerHTML = art === 'tarif'
+    ? '<td><input class="t-ab" placeholder="2026-01-01"></td>'
+      + '<td class="num"><input class="t-grund betrag"></td>'
+      + '<td class="num"><input class="t-preis betrag"></td>' + weg
+    : '<td><input class="a-ab" placeholder="2026-01-01"></td>'
+      + '<td class="num"><input class="a-betrag betrag"></td>' + weg;
+  tabelle.appendChild(tr);
+}
+
+function vertragSpeichern(knopf){
+  const v = knopf.closest('.vertrag');
+  const feld = k => v.querySelector(k);
+  const nr = v.dataset.nr === 'neu' ? null : Number(v.dataset.nr);
+  const zeitraum = {
+    beginn: feld('.v-beginn').value.trim(), ende: feld('.v-ende').value.trim(),
+    zaehlerstand_beginn: kwhAus(feld('.v-stand').value),
+    anbieter: feld('.v-anbieter').value.trim(),
+    preisgarantie_bis: feld('.v-garantie').value.trim() || null,
+    tarife: [...v.querySelectorAll('table.tarife tr')].filter(tr => tr.querySelector('.t-ab'))
+      .map(tr => ({ab: tr.querySelector('.t-ab').value.trim() || feld('.v-beginn').value.trim(),
+                   grundpreis_jahr_cents: centsAus(tr.querySelector('.t-grund').value) * 12,
+                   arbeitspreis_ct_kwh: kwhAus(tr.querySelector('.t-preis').value)})),
+    abschlaege: [...v.querySelectorAll('table.abschlaege tr')].filter(tr => tr.querySelector('.a-ab'))
+      .map(tr => ({ab: tr.querySelector('.a-ab').value.trim() || feld('.v-beginn').value.trim(),
+                   monat_cents: centsAus(tr.querySelector('.a-betrag').value)})),
+  };
+  const haken = feld('.v-abgerechnet');
+  if (haken){
+    zeitraum.abgerechnet = haken.checked;
+    const kwh = kwhAus(feld('.v-kwh').value), cents = centsAus(feld('.v-cents').value);
+    zeitraum.endabrechnung_kwh = haken.checked ? kwh : null;
+    zeitraum.endabrechnung_cents = haken.checked && cents !== null
+      ? Math.abs(cents) * Number(feld('.v-richtung').value) : null;
+  }
+  senden('/api/energie/zeitraum', {zaehler: ZAEHLER, nr, zeitraum}, knopf);
+}
+
+// ------------------------------------------------ Vorraete und Einstellungen
+
+async function eintragSpeichern(knopf, art){
+  const pre = art === 'stand' ? 'st' : 'lf';
+  const menge = kwhAus(document.getElementById(pre + '-menge').value);
+  if (menge === null){ document.getElementById(pre + '-menge').classList.add('feld-fehlt'); return; }
+  const body = {vorrat: VORRAT, art, menge,
+                datum: document.getElementById(pre + '-datum').value.trim()};
+  if (art === 'lieferung'){
+    const cents = centsAus(document.getElementById('lf-cents').value);
+    if (cents === null){ document.getElementById('lf-cents').classList.add('feld-fehlt'); return; }
+    body.cents = Math.abs(cents);
+  }
+  senden('/api/energie/vorrat/eintrag', body, knopf);
+}
+async function eintragWeg(knopf, art, datum){
+  if (!confirm((art === 'stand' ? 'Peilung' : 'Lieferung') + ' vom ' + datum + ' entfernen?')) return;
+  const res = await fetch('/api/energie/vorrat/eintrag/entfernen', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({vorrat: VORRAT, art, datum})});
+  if (!res.ok){ const out = await res.json().catch(() => ({})); meldenNeben(knopf, out.error || 'Entfernen fehlgeschlagen', true); return; }
+  location.reload();
+}
+
+function prozent(feld){
+  const c = centsAus(feld.value);
+  return c === null ? 0 : c / 10000;
+}
+function gasFelder(auswahl){
+  const gas = auswahl.value === 'gas';
+  auswahl.closest('.einstellung').querySelectorAll('.nur-gas').forEach(l => { l.hidden = !gas; });
+}
+document.querySelectorAll('.einstellung .e-art').forEach(gasFelder);
+
+async function anlegenOderSpeichern(knopf, pfad, body){
+  const res = await fetch(pfad, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                 body: JSON.stringify(body)});
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok){ melden(knopf, out.error || 'Speichern fehlgeschlagen', true); return; }
+  melden(knopf, 'gespeichert', false);
+  location.href = '/energie?ansicht=' + encodeURIComponent(out.id);
+}
+function zaehlerSpeichern(knopf){
+  const e = knopf.closest('.einstellung'), f = k => e.querySelector(k);
+  anlegenOderSpeichern(knopf, '/api/energie/zaehler', {
+    id: e.dataset.id || null, art: f('.e-art').value, name: f('.e-name').value.trim(),
+    profil: f('.e-profil').value, grundlast: prozent(f('.e-grundlast')),
+    brennwert: kwhAus(f('.e-brennwert').value), zustandszahl: kwhAus(f('.e-zustand').value)});
+}
+function vorratSpeichern(knopf){
+  const e = knopf.closest('.einstellung'), f = k => e.querySelector(k);
+  anlegenOderSpeichern(knopf, '/api/energie/vorrat', {
+    id: e.dataset.id || null, art: f('.e-art').value, name: f('.e-name').value.trim(),
+    kapazitaet: kwhAus(f('.e-kapazitaet').value), mindestbestand: kwhAus(f('.e-mindest').value) || 0,
+    profil: f('.e-profil').value, grundlast: prozent(f('.e-grundlast'))});
+}
+async function energieEntfernen(id, name){
+  if (!confirm(name + ' mit allen Einträgen entfernen?')) return;
+  const res = await fetch('/api/energie/entfernen', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
+  if (res.ok) location.href = '/energie';
+}
+
+// Ein neuer Zeitraum faengt mit je einer leeren Tarif- und Abschlagszeile an.
+document.querySelectorAll('#vertrag-neu button.ghost').forEach(k => {
+  if (k.textContent.startsWith('+ Tarif')) zeileNeu(k, 'tarif');
+  if (k.textContent.startsWith('+ Abschlag')) zeileNeu(k, 'abschlag');
+});
+
+</script>
+
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/strom.yaml', 'Der Stromzähler: Zeiträume, Tarife, Abschläge, Ablesungen.'),
+  ('config/energie.yaml', 'Alle anderen Zähler und die Vorräte; von dieser Seite geschrieben.'),
+  ('finctl/web/templates/energie.html', 'Die Texte dieser Seite.'),
+], handbuch='energie') }}
+{% endblock %}

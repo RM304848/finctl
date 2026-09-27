@@ -1,0 +1,29 @@
+# Musterhaushalt: auf /versicherungen angelegt. Erfunden.
+
+versicherungen:
+  vers-bu:
+    name: Berufsunfaehigkeit
+    kategorie: versicherung/bu
+    konto: giro
+    betrag_cents: -6200
+    takt: 1
+    faellig: '{M+1}-01'
+  vers-police-a:
+    name: Fondspolice A
+    kategorie: versicherung/rente
+    konto: giro
+    betrag_cents: -15000
+    takt: 1
+    faellig: '{M+1}-01'
+  vers-phv:
+    name: Haftpflicht
+    kategorie: versicherung/phv
+    konto: giro
+    betrag_cents: -7200
+    takt: 12
+    faellig: '{J+1}-02-01'
+    geteilt:
+      besetzung:
+      - name: Mitbewohner
+        anteil_cents: 3600
+      zeitraeume: []

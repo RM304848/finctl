@@ -1,0 +1,210 @@
+{% extends "base.html" %}{% block n_immo %}on{% endblock %}
+{% block title %}{{ p.name }}{% endblock %}
+{% block body %}
+{% include "_combo.html" %}
+<h1>{{ p.name }} <span class="muted" style="font-weight:400">— {{ p.address or '' }}</span></h1>
+<p class="zweck">Ein Objekt: Anschaffung, Abschreibung, geplanter Verkauf und die Buchungen dahinter.</p>
+
+<h2>Anschaffung &amp; AfA</h2>
+<div class="card">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.7rem">
+    <label>Kaufpreis (€)<br><input id="price" value="{{ (p.purchase_price_cents or 0)|betrag }}"></label>
+    <label>Kaufnebenkosten (€)<br><input id="incidental" value="{{ (p.incidental_costs_cents or 0)|betrag }}"></label>
+    <label>Eigenkapital (€)<br><input id="equity" value="{{ (p.equity_cents or 0)|betrag }}"></label>
+    <label>Grundstücksanteil (%)<br><input id="land" value="{{ p.land_share_pct or '' }}"></label>
+    <label>AfA-Satz (%)<br><input id="afa" value="{{ p.afa_rate_pct or '' }}"></label>
+    <label>AfA-Beginn<br><input id="afastart" value="{{ p.afa_start or '' }}" placeholder="2026-01-01"></label>
+    <label>Geplanter Verkauf<br><input id="saleon"
+           value="{{ p.planned_sale_on or '' }}" placeholder="2034-06-30"></label>
+    <label>Erwarteter Verkaufspreis (€)<br><input id="saleprice"
+           value="{{ p.sale_price_cents|betrag }}"
+           placeholder="{{ verkauf.vorschlag_cents|betrag if verkauf.vorschlag_cents else '—' }}"></label>
+  </div>
+  <p style="margin:.8rem 0 0;display:flex;gap:.6rem;align-items:center">
+    <button onclick="savep()">Speichern</button><span id="st" class="muted"></span></p>
+  {# Der Verkauf rechnet sich aus dem, was schon dasteht: Restschuld aus dem
+     Tilgungsplan, Frist aus dem Anschaffungsdatum. Die Frist ist eine Formel
+     und kein Feld -- sonst kann man falsch eintragen, wo nichts einzutragen
+     ist. #}
+  {% if verkauf.plan %}
+  <div class="note" style="margin:.9rem 0 0">Modelliert in der Planung: Klammer
+    <a class="plain" href="/planung#klammer-{{ verkauf.plan.klammer_id }}">{{ verkauf.plan.klammer }}</a>,
+    ab {{ verkauf.plan.ab.strftime('%Y-%m') }} für {{ verkauf.plan.erloes_cents|euro }}, netto
+    {{ verkauf.plan.netto_cents|euro }}. Termin und Preis hier sind dann nur ein Vorschlag und
+    wirken nicht.</div>
+  {% endif %}
+  {% if verkauf.termin and not verkauf.plan %}
+  <div style="margin:.9rem 0 0;padding:.7rem .9rem;border:1px solid var(--line);
+              border-radius:6px">
+    <div style="display:flex;gap:1.4rem;flex-wrap:wrap;align-items:baseline">
+      <span><span class="muted">Restschuld</span>
+        <strong>{{ verkauf.restschuld_cents|euro if verkauf.restschuld_cents is not none else '—' }}</strong>
+        {%- if verkauf.restschuld_stand %}
+        <span class="muted klein">Stand {{ verkauf.restschuld_stand }},
+          danach endet der Plan mit der Zinsbindung</span>{% endif %}</span>
+      <span><span class="muted">Nettozufluss</span>
+        <strong class="{{ 'pos' if (verkauf.netto_cents or 0) > 0 else 'neg' }}">{{
+          verkauf.netto_cents|euro if verkauf.netto_cents is not none else '—' }}</strong></span>
+      <span><span class="muted">§23 EStG</span>
+        {% if verkauf.steuerfrei %}<strong class="pos">steuerfrei</strong>
+        {%- else %}<strong class="neg">steuerpflichtig</strong>{% endif %}
+        <span class="muted klein">Frist endet {{ verkauf.frist_ende }}</span></span>
+    </div>
+    <p class="muted klein" style="margin:.6rem 0 0">
+      {% if verkauf.preis_cents %}
+        Wirkt in der <a class="plain" href="/ziele">Jahresrechnung</a>.
+      {% else %}
+        <strong>Ohne erwarteten Preis wird nichts gerechnet.</strong>
+        {% if verkauf.vorschlag_cents %}
+        Untergrenze: <strong>{{ verkauf.vorschlag_cents|euro }}</strong>.{% endif %}
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+  <p class="muted klein" style="margin:.6rem 0 0">
+    Der Grundstücksanteil ändert die AfA-Grundlage: er gehört gewusst, nicht geschätzt.</p>
+</div>
+
+{# Am Objekt und nicht auf /annahmen: jedes Objekt hat seine eigene
+   Prognose, und wer keines hat, sieht keine Felder dafuer. #}
+<h2 id="prognose">Prognose</h2>
+<div class="card">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.7rem">
+    <label>Miete je Monat (€)<br><input id="pg-miete"
+           value="{{ prognose.miete_monatlich_cents|betrag if prognose.miete_monatlich_cents is defined else '' }}"
+           placeholder="—"></label>
+    <label>Kosten je Monat (€)<br><input id="pg-kosten"
+           value="{{ prognose.kosten_monatlich_cents|betrag if prognose.kosten_monatlich_cents is defined else '' }}"
+           placeholder="—"></label>
+    <label>Vermietet ab<br><input id="pg-ab" value="{{ prognose.ab or '' }}" placeholder="2027-01"></label>
+    <label>Vermietet bis<br><input id="pg-bis" value="{{ prognose.bis or '' }}" placeholder="offen"></label>
+  </div>
+  <p class="zeilen-knoepfe" style="margin:.8rem 0 0">
+    <button type="button" onclick="speichernPrognose(this)">Speichern</button></p>
+  {% if prognose %}<p class="muted klein" style="margin:.6rem 0 0">
+    Wirkt in der <a class="plain" href="/hochrechnung">Hochrechnung</a> statt der Messung.</p>
+  {% else %}<p class="muted klein" style="margin:.6rem 0 0">
+    Leer: der Ertrag wird aus den Buchungen gemessen.</p>{% endif %}
+</div>
+<script>
+async function speichernPrognose(knopf){
+  const wert = id => document.getElementById(id).value.trim();
+  const body = {
+    miete_monatlich_cents: wert('pg-miete') === '' ? null : centsAus(wert('pg-miete')),
+    kosten_monatlich_cents: wert('pg-kosten') === '' ? null : centsAus(wert('pg-kosten')),
+    ab: wert('pg-ab') || null, bis: wert('pg-bis') || null,
+  };
+  const res = await fetch('/api/objekt-prognose/{{ p.id }}', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok){ meldenNeben(knopf, out.error || 'Speichern fehlgeschlagen', true); return; }
+  meldenNeben(knopf, 'gespeichert — neu rechnen …', false);
+  setTimeout(() => location.reload(), 700);
+}
+</script>
+
+<h2>Kennzahlen — {{ k.months_observed }} Monate beobachtet</h2>
+<div class="cards">
+  <div class="card"><div class="k">Cashflow p.a.</div>
+    <div class="v {{ k.cash_flow_annual_cents|vz }}">{{ k.cash_flow_annual_cents|euro }}</div>
+    <div class="muted klein">was das Konto verlässt</div></div>
+  <div class="card"><div class="k">Tilgung p.a.</div>
+    <div class="v pos">{{ k.equity_build_annual_cents|euro }}</div>
+    <div class="muted klein">Cashflow, der Eigenkapital wird</div></div>
+  <div class="card"><div class="k">AfA p.a.</div>
+    <div class="v {{ (-k.afa_annual_cents)|vz }}">{{ (-k.afa_annual_cents)|euro }}</div>
+    <div class="muted klein">Basis {{ k.afa_base_cents|euro }}</div></div>
+  <div class="card"><div class="k">Steuerl. Ergebnis p.a.</div>
+    <div class="v {{ k.net_profit_cents|vz }}">{{ k.net_profit_cents|euro }}</div>
+    <div class="muted klein">ohne Tilgung, mit AfA</div></div>
+  <div class="card"><div class="k">Gesamtrückfluss p.a.</div>
+    <div class="v {{ k.total_return_annual_cents|vz }}">{{ k.total_return_annual_cents|euro }}</div>
+    <div class="muted klein">Cashflow + Tilgung</div></div>
+  <div class="card"><div class="k">Amortisation</div>
+    <div class="v">{% if k.payback_years %}{{ '%.1f'|format(k.payback_years) }} Jahre{% else %}—{% endif %}</div>
+    <div class="muted klein">
+      {% if k.payback_years %}auf {{ k.equity_invested_cents|euro }} EK{% else %}Eigenkapital fehlt{% endif %}</div></div>
+</div>
+
+{% import "_summe.html" as sm %}
+<h2>Transaktionen {{ sm.kopf(summe) }}</h2>
+
+<div class="wrap">
+<table>
+  <tr><th>Datum</th><th>Konto</th><th class="num">Betrag</th><th>Text</th>
+      <th style="width:200px">Kategorie</th><th style="width:220px">Steuer</th><th></th></tr>
+  {% for r in rows %}
+  <tr id="row-{{ r.split_id }}">
+    <td class="muted nobr">{{ r.booking_date }}</td>
+    <td class="muted nobr">{{ r.account_id }}</td>
+    <td class="num {{ r.amount_cents|vz }}">{{ r.amount_cents|euro }}</td>
+    <td><a class="plain raw" href="/tx/{{ r.id }}" title="{{ r.raw_text }}">{{ r.raw_text }}</a>
+        {% if r.note %}<br><span class="pill">{{ r.note }}</span>{% endif %}</td>
+    <td><input id="m-{{ r.split_id }}" class="mgmtsel" style="width:100%" autocomplete="off"
+               data-cur="{{ r.mgmt_category_id or '' }}" placeholder="—"></td>
+    <td><input id="t-{{ r.split_id }}" class="taxsel" style="width:100%" autocomplete="off"
+               data-cur="{{ r.tax_category_id or '' }}" placeholder="—"></td>
+    <td><button class="ghost" onclick="saveSplit({{ r.split_id }})">Speichern</button></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+
+<script>
+const CATS = {{ categories|tojson }};
+const TAXES = {{ tax_categories|tojson }};
+function lbl(list, id){ const h = list.find(o=>o.id===id); return h ? h.label : ''; }
+document.querySelectorAll('.mgmtsel').forEach(i => {
+  if(i.dataset.cur){ i.value = lbl(CATS, i.dataset.cur); i.dataset.id = i.dataset.cur; }
+  makeCombo(i, CATS);
+});
+document.querySelectorAll('.taxsel').forEach(i => {
+  if(i.dataset.cur){ i.value = lbl(TAXES, i.dataset.cur); i.dataset.id = i.dataset.cur; }
+  makeCombo(i, TAXES);
+});
+async function saveSplit(sid){
+  const m = document.getElementById('m-'+sid), t = document.getElementById('t-'+sid);
+  const res = await fetch('/api/split-part/'+sid, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({mgmt: m.dataset.id || '', tax: t.dataset.id || ''})});
+  const row = document.getElementById('row-'+sid);
+  row.style.outline = res.ok ? '2px solid var(--good)' : '2px solid var(--bad)';
+  setTimeout(()=>row.style.outline='', 900);
+}
+</script>
+
+<script>
+async function savep(){
+  const num = id => {
+    return centsAus(document.getElementById(id).value);
+  };
+  const flt = id => {
+    const v = document.getElementById(id).value.replace(',','.').trim();
+    return v === '' ? null : parseFloat(v);
+  };
+  const body = {
+    purchase_price_cents: num('price'),
+    incidental_costs_cents: num('incidental'),
+    equity_cents: num('equity'),
+    land_share_pct: flt('land'),
+    afa_rate_pct: flt('afa'),
+    afa_start: document.getElementById('afastart').value.trim() || null,
+    planned_sale_on: document.getElementById('saleon').value.trim() || null,
+    sale_price_cents: num('saleprice'),
+  };
+  const res = await fetch('/api/property/{{ p.id }}', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const st = document.getElementById('st');
+  if(res.ok){ st.textContent='gespeichert, Seite lädt neu'; st.classList.remove('muted','neg'); st.classList.add('pos'); location.reload(); }
+  else { st.textContent='Speichern fehlgeschlagen'; st.classList.remove('muted','pos'); st.classList.add('neg'); }
+}
+</script>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/properties.yaml', 'Anschaffung, AfA-Basis, Prognose, Herleitung jeder Zahl.'),
+  ('config/properties_custom.yaml', 'Kaufpreis, Eigenkapital, Verkaufspreis und Prognose von dieser Seite.'),
+  ('config/loans.yaml', 'Tilgungsplan und Restschuld zum Verkaufstermin.'),
+  ('config/overrides.yaml', 'Die Zuordnung der Buchungen zu diesem Objekt.'),
+  ('finctl/web/templates/immobilie.html', 'Die Texte dieser Seite.'),
+], handbuch='immobilie') }}
+{% endblock %}

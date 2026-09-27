@@ -1,0 +1,140 @@
+{% extends "base.html" %}{% block n_kat %}on{% endblock %}
+{% block title %}Kategorien{% endblock %}
+{% block body %}
+{% include "_combo.html" %}
+<h1>Kategorien</h1>
+<p class="zweck">Der Kategorienbaum: anlegen, umbenennen, stilllegen — mit den Regeln je Zeile.</p>
+
+{# Wie /regeln: jede Zeile ist Text, bearbeitet wird in EINEM Bereich, der
+   unter die geoeffnete Zeile wandert (bearbeitungstabellen). Vorher trug jede
+   der sechzig Zeilen ein Namensfeld, eine Zielauswahl und bis zu drei Knoepfe. #}
+<div class="suchzeile" style="justify-content:flex-end">
+  <button type="button" onclick="oeffne('')">Neue Subkategorie</button></div>
+
+<div class="wrap"><table class="kategorien">
+  <tr id="kopfzeile"><th>Oberkategorie</th><th>Subkategorie</th><th class="num">Buchungen</th>
+      <th>Regeln</th><th></th></tr>
+  <tr id="panel" class="panel" hidden><td colspan="5">
+    <p class="regel-titel"><strong id="k-titel"></strong> <code class="muted" id="k-kennung"></code></p>
+    <div class="zeilen-form">
+      <label id="k-parent-feld">Oberkategorie<select id="k-parent" data-no-combo>
+        {% for p in parents %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+      </select></label>
+      <label>Name<input id="k-name" placeholder="z.B. Tierarzt"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();speichern(document.getElementById('k-speichern'))}"></label>
+    </div>
+    <p class="zeilen-knoepfe">
+      <button type="button" id="k-speichern" onclick="speichern(this)">Speichern</button>
+      <span class="meldung fein" id="k-meldung"></span></p>
+    {# Stilllegen braucht ein Ziel: die Buchungen muessen irgendwo hin. #}
+    <div id="k-still" class="zeilen-form zweiter-block">
+      <label>Buchungen verschieben nach<select id="k-ziel" data-no-combo>
+        <option value="">— wählen —</option>
+        {% for o in rows if o.active %}<option value="{{ o.id }}">{{ o.parent }} / {{ o.name }}</option>{% endfor %}
+      </select></label>
+    </div>
+    <p class="zeilen-knoepfe">
+      <button type="button" class="ghost" id="k-stilllegen" onclick="retire(this)">Stilllegen</button>
+      <button type="button" class="ghost" id="k-loeschen" onclick="loeschen(this)">Löschen</button>
+      <span class="muted klein" id="k-haengt"></span></p>
+  </td></tr>
+  {% for r in rows %}
+  <tr id="k-{{ r.id|replace('/', '--') }}" class="klappbar" onclick="oeffne('{{ r.id }}')">
+    <td class="muted">{{ r.parent }}</td>
+    <td>{{ r.name }}{% if not r.active %} <span class="pill">stillgelegt</span>{% endif %}</td>
+    <td class="num {{ '' if r.n else 'muted' }}">{{ r.n }}</td>
+    <td class="muted klein">
+      {% for x in r.rules %}<a class="plain" href="/regeln?q={{ x }}" onclick="event.stopPropagation()"><code>{{ x }}</code></a>{% if not loop.last %}, {% endif %}{% endfor %}
+      {% if not r.rules %}—{% endif %}</td>
+    <td class="aktionen"><button type="button" class="ghost"
+      onclick="event.stopPropagation();oeffne('{{ r.id }}')">Öffnen</button></td>
+  </tr>
+  {% endfor %}
+</table></div>
+<style>
+  table.kategorien td{vertical-align:middle}
+  .regel-titel{margin:0 0 .5rem;font-size:13px}
+  .zweiter-block{margin-top:.6rem}
+</style>
+
+<script>
+const KATS = Object.fromEntries({{ rows|tojson }}.map(r => [r.id, r]));
+let offen = null;
+const feld = n => document.getElementById('k-' + n);
+function sagen(text, fehler){
+  feld('meldung').textContent = text;
+  feld('meldung').className = 'meldung fein ' + (fehler ? 'neg' : 'pos');
+}
+function oeffne(id){
+  const panel = document.getElementById('panel');
+  if (offen === id && !panel.hidden){ panel.hidden = true; offen = null; return; }
+  const k = id ? KATS[id] : null;
+  if (id && !k) return;
+  const zeile = id ? document.getElementById('k-' + id.replaceAll('/', '--'))
+                   : document.getElementById('kopfzeile');
+  zeile.after(panel);
+  feld('titel').textContent = k ? k.parent + ' / ' + k.name : 'Neue Subkategorie';
+  feld('kennung').textContent = k ? k.id : '';
+  feld('parent-feld').hidden = !!k;
+  feld('name').value = k ? k.name : '';
+  feld('speichern').textContent = k ? 'Speichern' : 'Anlegen';
+  // Stilllegen nur fuer aktive, Loeschen nur, woran nichts mehr haengt.
+  feld('still').hidden = !k || !k.active;
+  feld('stilllegen').hidden = !k || !k.active;
+  const frei = k && !k.n && !(k.rules || []).length;
+  feld('loeschen').hidden = !frei;
+  const haengt = [];
+  if (k && k.n) haengt.push(k.n + (k.n === 1 ? ' Buchung' : ' Buchungen'));
+  if (k && (k.rules || []).length) haengt.push(k.rules.length + (k.rules.length === 1 ? ' Regel' : ' Regeln'));
+  feld('haengt').textContent = k && !frei ? 'Löschen geht erst, wenn nichts mehr daran hängt: ' + haengt.join(', ') : '';
+  [...feld('ziel').options].forEach(o => { o.hidden = !!k && o.value === k.id; });
+  feld('ziel').value = '';
+  sagen('');
+  panel.hidden = false; offen = id;
+  feld('name').focus({preventScroll: true});
+}
+async function call(body){
+  const res = await fetch('/api/category', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  return [res, await res.json().catch(() => ({}))];
+}
+async function speichern(knopf){
+  const name = feld('name').value.trim();
+  if (!name){ feld('name').classList.add('feld-fehlt'); return; }
+  const body = offen ? {action:'rename', id:offen, name}
+                     : {action:'add', parent:feld('parent').value, name};
+  const [res, out] = await call(body);
+  if (!res.ok){ sagen(out.error || 'fehlgeschlagen', true); return; }
+  sagen(offen ? 'umbenannt — wirkt sofort' : out.id + ' angelegt');
+  setTimeout(() => location.reload(), 700);
+}
+async function retire(knopf){
+  const target = feld('ziel').value;
+  if (!target){ feld('ziel').classList.add('feld-fehlt');
+                meldenNeben(knopf, 'Ziel wählen — die Buchungen müssen irgendwo hin.', true); return; }
+  let [res, out] = await call({action:'retire', id:offen, target});
+  if (res.status === 409){
+    if (!confirm(out.error + '\n\nTrotzdem stilllegen?')) return;
+    [res, out] = await call({action:'retire', id:offen, target, force:true});
+  }
+  if (!res.ok){ meldenNeben(knopf, out.error || 'fehlgeschlagen', true); return; }
+  meldenNeben(knopf, `→ ${out.migrated_to}, ${out.moved_splits} Buchungen verschoben`, false);
+  setTimeout(() => location.reload(), 900);
+}
+async function loeschen(knopf){
+  const k = KATS[offen];
+  if (!confirm('Kategorie "' + k.name + '" löschen?')) return;
+  const [res, out] = await call({action:'delete', id:offen});
+  if (!res.ok || out.error){ meldenNeben(knopf, out.error || 'fehlgeschlagen', true); return; }
+  location.reload();
+}
+</script>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/taxonomy.yaml', 'Der dokumentierte Kategorienbaum.'),
+  ('config/taxonomy_custom.yaml', 'Was von dieser Seite aus angelegt oder umbenannt wurde.'),
+  ('config/taxonomy_migrations.yaml', 'Umbenennungen, damit alte Buchungen mitwandern.'),
+  ('config/rules.yaml', 'Welche Regel auf welche Kategorie zeigt.'),
+  ('finctl/web/templates/kategorien.html', 'Die Texte dieser Seite.'),
+], handbuch='kategorien') }}
+{% endblock %}

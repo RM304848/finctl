@@ -1,0 +1,4 @@
+"Auftragskonto";"Buchungstag";"Valutadatum";"Buchungstext";"Verwendungszweck";"Glaeubiger ID";"Mandatsreferenz";"Kundenreferenz (End-to-End)";"Sammlerreferenz";"Lastschrift Ursprungsbetrag";"Auslagenersatz Ruecklastschrift";"Beguenstigter/Zahlungspflichtiger";"Kontonummer/IBAN";"BIC (SWIFT-Code)";"Betrag";"Waehrung";"Info"
+"DE89370400440532013000";"31.08.26";"31.08.26";"KARTENZAHLUNG";"Kiosk";"";"";"";"";"";"";"Kiosk Muster";"";"";"-2,00";"EUR";"Umsatz vorgemerkt"
+"DE89370400440532013000";"29.08.26";"29.08.26";"GUTSCHR. UEBERWEISUNG";"Rückzahlung Auslage";"";"";"";"";"";"";"Erika Beispiel";"DE02100100100006820101";"PBNKDEFFXXX";"50,00";"EUR";"Umsatz gebucht"
+"DE89370400440532013000";"14.08.26";"14.08.26";"FOLGELASTSCHRIFT";"Mobilfunk August";"DE00ZZZ00000000001";"M-1";"";"";"";"";"Telefon Muster GmbH";"DE02100100100006820101";"PBNKDEFFXXX";"-19,99";"EUR";"Umsatz gebucht"

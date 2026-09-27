@@ -1,0 +1,19 @@
+# Musterhaushalt: Stromvertrag, erfunden.
+
+zeitraeume:
+- beginn: '{J-1}-10-01'
+  ende: '{J}-12-31'
+  zaehlerstand_beginn: 10250.0
+  anbieter: Stadtwerke Beispielstadt
+  preisgarantie_bis: '{J+1}-06-30'
+  tarife:
+  - ab: '{J-1}-10-01'
+    grundpreis_jahr_cents: 14400
+    arbeitspreis_ct_kwh: 32.0
+  abschlaege:
+  - ab: '{J-1}-10-01'
+    monat_cents: 5500
+  abgerechnet: false
+ablesungen:
+- datum: '{M-1}-01'
+  stand: 11400.0

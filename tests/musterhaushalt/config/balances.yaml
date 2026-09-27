@@ -1,0 +1,50 @@
+# Musterhaushalt: Bestaende, erfunden.
+
+as_of: {M}-01
+balances:
+  - account_id: giro
+    kind: giro
+    note: Betriebskonto. Gehalt rein, Fixkosten raus.
+  - account_id: tagesgeld
+    kind: tagesgeld
+  - account_id: alltag
+    kind: giro
+  - account_id: ratenkonto
+    kind: giro
+    note: Fuehrt nur die Rate fuer Wohnung Nord aus.
+  - account_id: depot
+    name: Depot
+    cents: 1850000            # 18.500
+    as_of: {M}-01
+    kind: depot
+    liquidity: immediate
+  - account_id: depot-alt
+    name: Altes Depot
+    cents: 0
+    as_of: {M-1}-15
+    kind: depot
+    realised_cents: 250000    # 2.500, liegt jetzt auf dem Girokonto
+    note: Verkauft und als Null gefuehrt statt geloescht.
+  - account_id: krypto
+    name: Kryptoboerse
+    cents: null               # OFFEN: Wert zum Verkaufszeitpunkt
+    as_of: {M}-01
+    kind: krypto
+    liquidity: unstaking_delay
+  - account_id: police-a
+    name: Fondspolice A
+    cents: 1200000            # 12.000
+    as_of: {M-5}-01
+    kind: rentenversicherung
+    liquidity: effectively_illiquid
+    note: Beitrag 150 im Monat.
+  - account_id: police-b
+    name: Kapitalpolice B
+    cents: 800000             # 8.000
+    as_of: {M-3}-01
+    kind: rentenversicherung
+    liquidity: faellig_2040_06
+obligations:
+  - name: Treuhand
+    cents: 300000
+    note: Liegt im Tagesgeld und gehoert jemand anderem.

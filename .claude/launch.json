@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "finctl",
+      "runtimeExecutable": ".venv/bin/finctl",
+      "runtimeArgs": [
+        "serve"
+      ],
+      "port": 8765
+    },
+    {
+      "name": "finctl-pruefung",
+      "runtimeExecutable": ".venv/bin/finctl",
+      "runtimeArgs": [
+        "serve",
+        "--port",
+        "8766",
+        "--host",
+        "127.0.0.1",
+        "--ohne-passwort"
+      ],
+      "port": 8766
+    }
+  ]
+}

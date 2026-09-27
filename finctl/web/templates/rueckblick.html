@@ -1,0 +1,199 @@
+{% extends "base.html" %}{% block n_rueckblick %}on{% endblock %}
+{% block title %}Rückblick{% endblock %}
+{% block body %}
+{% import "_reiter.html" as rt %}
+<h1>Rückblick <span class="muted zusatz">
+  {%- if ansicht == 'vorjahr' %} — {{ year }} gegen {{ vs or '—' }}
+  {%- elif ansicht == 'fluss' %} — {{ year }}{% if bis %} bis {{ bis }}{% endif %}
+  {%- else %} — {{ 'Saldo' if alle else '' }} {{ monthly|euro }} / Monat{% endif %}</span></h1>
+<p class="zweck">Wohin das Geld gegangen ist — was sich gegenüber dem Vorjahr geändert hat und was jeden Monat ohne Entscheidung abgeht.</p>
+{{ rt.reiter(reiter, ansicht) }}
+
+{% if ansicht == 'vorjahr' %}
+{% if vs %}<div class="note">Verglichen werden <strong>dieselben Monate</strong> beider Jahre,
+  Januar bis {{ last_month }}.</div>{% endif %}
+
+<form method="get" style="display:flex;gap:.6rem;align-items:end;flex-wrap:wrap">
+  <input type="hidden" name="ansicht" value="vorjahr">
+  <label>Jahr<br><select name="year" data-no-combo>
+    {% for y in years %}<option value="{{ y }}" {{ 'selected' if y==year }}>{{ y }}</option>{% endfor %}
+  </select></label>
+  <label>gegen<br><select name="vs" data-no-combo>
+    <option value="">— kein Vergleich —</option>
+    {% for y in years %}<option value="{{ y }}" {{ 'selected' if y==vs }}>{{ y }}</option>{% endfor %}
+  </select></label>
+  <label>Basis<br><select name="basis" data-no-combo>
+    <option value="laufend" {{ 'selected' if basis != 'alles' }}>nur laufend</option>
+    <option value="alles" {{ 'selected' if basis == 'alles' }}>inkl. Kapital</option>
+  </select></label>
+  <button>Anzeigen</button>
+</form>
+
+{% if worse or better %}
+<h2>Was sich bewegt hat</h2>
+<div class="cards" style="grid-template-columns:1fr 1fr">
+  <div class="card">
+    <div class="k">Teurer als {{ vs }}</div>
+    <table style="background:transparent;border:none;margin-top:.4rem">
+      {% for r in worse %}
+      <tr><td style="padding:.15rem 0"><a class="plain" href="/transactions?category={{ r.cat_id }}&start={{ year }}-01-01&end={{ year }}-12-31">{{ r.parent }} / {{ r.name }}</a></td>
+          <td class="num neg" style="padding:.15rem 0">{{ r.delta|euro }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="card">
+    <div class="k">Günstiger als {{ vs }}</div>
+    <table style="background:transparent;border:none;margin-top:.4rem">
+      {% for r in better %}
+      <tr><td style="padding:.15rem 0"><a class="plain" href="/transactions?category={{ r.cat_id }}&start={{ year }}-01-01&end={{ year }}-12-31">{{ r.parent }} / {{ r.name }}</a></td>
+          <td class="num pos" style="padding:.15rem 0">+{{ r.delta|euro }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+<div class="note klein">Beträge sind <strong>netto je Kategorie</strong>:
+  Erstattungen mindern die Position, in der sie anfallen.</div>
+{% endif %}
+
+<h2>Kategorie und Subkategorie</h2>
+<div class="wrap">
+<table>
+  <tr><th>Position</th><th class="num" style="width:80px">Buchungen</th>
+      <th class="num" style="width:125px">{{ year }}</th>
+      {% if vs %}<th class="num" style="width:125px">{{ vs }}</th>
+      <th class="num" style="width:125px">Δ</th>
+      <th class="num" style="width:80px">Δ %</th>{% endif %}</tr>
+  {% for parent_id, g in groups.items() %}
+  <tr style="border-top:2px solid var(--line)">
+    <td><strong>{{ g.name }}</strong></td><td></td>
+    <td class="num {{ g.now|vz }}"><strong>{{ g.now|euro }}</strong></td>
+    {% if vs %}
+    <td class="num muted">{{ g.before|euro }}</td>
+    <td class="num {{ g.delta|vz }}"><strong>{{ g.delta|euro }}</strong></td>
+    <td class="num muted">{% if g.before %}{{ '%+.0f'|format(100.0 * g.delta / (g.before if g.before > 0 else -g.before)) }} %{% else %}—{% endif %}</td>
+    {% endif %}
+  </tr>
+    {% for r in g.rows %}
+    <tr>
+      <td style="padding-left:1.6rem"><a class="plain" href="/transactions?category={{ r.cat_id }}&start={{ year }}-01-01&end={{ year }}-12-31">{{ r.name }}</a></td>
+      <td class="num muted">{{ r.n or '—' }}</td>
+      <td class="num {{ 'neg' if r.now<0 else ('pos' if r.now else 'muted') }}">{{ r.now|euro }}</td>
+      {% if vs %}
+      <td class="num muted">{{ r.before|euro }}</td>
+      <td class="num {{ 'neg' if r.delta<0 else ('pos' if r.delta else 'muted') }}">{{ r.delta|euro }}</td>
+      <td class="num muted">{% if r.before %}{{ '%+.0f'|format(100.0 * r.delta / (r.before if r.before > 0 else -r.before)) }} %{% else %}neu{% endif %}</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  {% endfor %}
+</table>
+</div>
+
+{% elif ansicht == 'fluss' %}
+{# Woher und wohin in einem Bild; gezeichnet in _fluss.html. #}
+<nav class="auswahl" aria-label="Jahr"><span class="k">Jahr</span>
+  {% for y in years %}<a href="{{ adresse(request, year=y) }}" class="{{ 'on' if year==y }}">{{ y }}</a>{% endfor %}
+</nav>
+<nav class="auswahl" aria-label="Konto"><span class="k">Konto</span>
+  <a href="{{ adresse(request, konto='') }}" class="{{ 'on' if konto=='all' }}">alle</a>
+  {% for k in konten %}<a href="{{ adresse(request, konto=k) }}" class="{{ 'on' if konto==k }}">{{ k }}</a>{% endfor %}
+</nav>
+<nav class="auswahl" aria-label="Basis"><span class="k">Basis</span>
+  <a href="{{ adresse(request, basis='') }}" class="{{ 'on' if basis != 'alles' }}">nur laufend</a>
+  <a href="{{ adresse(request, basis='alles') }}" class="{{ 'on' if basis == 'alles' }}">inkl. Kapital</a>
+</nav>
+{% set f = fluss %}
+{% if not f %}
+<div class="note">Kein Geldfluss für diese Auswahl.</div>
+{% else %}
+{% import "_fluss.html" as fl %}
+{{ fl.zeichnen(f) }}
+<div class="note klein">Netto je Kategorie; Umbuchungen zählen nicht. Ein Klick zeigt die Buchungen.
+  {%- if basis != 'alles' %} Wohin der Überschuss ging, zeigt
+  <a class="plain" href="{{ adresse(request, basis='alles') }}">inkl. Kapital</a>.{% endif %}</div>
+{% endif %}
+
+{% else %}
+{% include "_combo.html" %}
+<nav class="auswahl" aria-label="Jahr"><span class="k">Jahr</span>
+  {% for y in years %}<a href="{{ adresse(request, year=y) }}" class="{{ 'on' if year==y }}">{{ y }}</a>{% endfor %}
+  <a href="{{ adresse(request, year='all') }}" class="{{ 'on' if year=='all' }}">gesamt</a>
+</nav>
+{# Konten als Kennung, wie überall sonst in der App. Der Filter engt Summe
+   UND Monatsteiler ein: ein Konto, das erst seit Juni bucht, wird durch
+   seine eigenen Monate geteilt, nicht durch die des Ledgers. #}
+<nav class="auswahl" aria-label="Konto"><span class="k">Konto</span>
+  <a href="{{ adresse(request, konto='') }}" class="{{ 'on' if konto=='all' }}">alle</a>
+  {% for k in konten %}<a href="{{ adresse(request, konto=k) }}" class="{{ 'on' if konto==k }}">{{ k }}</a>{% endfor %}
+</nav>
+
+{% if not groups %}
+<div class="note">Kein Treffer für diese Auswahl.
+  {% if not alle %}Unter <a class="plain" href="{{ adresse(request, ansicht='alle') }}">Alle
+  Kategorien</a> steht hier womöglich etwas.{% endif %}</div>
+{% endif %}
+
+{% for parent_id, g in groups.items() %}
+{# Der schwerste Block bleibt offen: er ist die Antwort auf die Frage, mit der
+   man die Seite aufschlägt. Alles darunter ist Beleg und kann zu bleiben. #}
+<details class="klapp"{% if loop.first %} open{% endif %}>
+  <summary>{{ g.name }}
+    <span class="zahl">— {{ g.cents|euro }} · {{ (g.voll // months)|euro }} / Monat
+      · {{ g.rows|length }} Position{{ '' if g.rows|length == 1 else 'en' }}</span>
+  </summary>
+<div class="wrap">
+<table>
+  <tr><th>Position</th><th class="num">Summe</th>
+      <th class="num">Ø / Monat<br><span class="muted fein" style="font-weight:400">über {{ months }}
+        {{ 'angefangene' if laufend else 'abgeschlossene' }}{{ 'n' if months == 1 }} Mon.</span></th>
+      <th class="num">Buchungen</th><th>Erste</th>
+      <th title="Hat eine Position aufgehört zu buchen, ist der Vertrag womöglich beendet">Letzte</th></tr>
+  {% for r in g.rows %}
+  <tr>
+    <td><a class="plain" href="/transactions?category={{ r.cat_id }}">{{ r.sub }}</a></td>
+    <td class="num {{ r.cents|vz }}">{{ r.cents|euro }}</td>
+    {# Over the whole observed window, not over the months this position
+       happened to appear in. KFZ-Steuer is paid once a year; dividing it by
+       its own single month printed it as 72,00 per month instead of 6,00.
+       Der laufende Monat gehört nicht dazu: Summe ist das ganze Jahr, der
+       Schnitt nur der Teil, der abgeschlossen ist. #}
+    <td class="num">{{ (r.voll // months)|euro }}</td>
+    <td class="num muted">{{ r.n }}</td>
+    <td class="muted">{{ r.first }}</td>
+    <td class="muted">{{ r.last }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+</details>
+{% endfor %}
+
+<details class="klapp">
+  <summary>Nach Vertragspartner
+    <span class="zahl">— {{ counterparties|length }} Partner</span></summary>
+<div class="wrap">
+<table>
+  <tr><th>Partner</th><th>Kategorie</th><th class="num">Summe</th>
+      <th class="num">Buchungen</th><th>Letzte</th></tr>
+  {% for r in counterparties %}
+  <tr>
+    <td>{{ r.cp or '—' }}</td>
+    <td class="muted">{{ r.cat }}</td>
+    <td class="num {{ r.cents|vz }}">{{ r.cents|euro }}</td>
+    <td class="num muted">{{ r.n }}</td>
+    <td class="muted">{{ r.last }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+</details>
+{% endif %}
+
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/rules.yaml', 'Die Regeln, die Buchungen zuordnen.'),
+  ('config/overrides.yaml', 'Jede Entscheidung von Hand — Kategorie, Objekt, Split.'),
+  ('config/taxonomy.yaml', 'Der Kategorienbaum und das fixkosten-Flag.'),
+  ('finctl/web/templates/rueckblick.html', 'Die Texte dieser Seite.'),
+], handbuch='rueckblick') }}
+{% endblock %}

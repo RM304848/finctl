@@ -1,0 +1,3 @@
+Buchungstag;Wertstellung;Umsatzart;Buchungstext;Betrag;Währung;Auftraggeberkonto;Bankleitzahl Auftraggeberkonto;IBAN Auftraggeberkonto;Kategorie
+27.08.2026;27.08.2026;Lastschrift;Stadtwerke Musterstadt Abschlag Gas;-60,00;EUR;;;DE02100100100006820101;Haushalt
+02.08.2026;02.08.2026;Gutschrift;Beispiel Arbeitgeber GmbH Lohn Juli;1.800,00;EUR;;;DE02100100100006820101;Einkommen

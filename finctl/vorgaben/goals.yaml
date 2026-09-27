@@ -1,0 +1,30 @@
+# STARTVORLAGE -- Ziele, leer zum Anfangen.
+#
+# Absolute Zahlen, damit ein Fortschrittsbalken sie direkt gegen den Bestand
+# rechnen kann. Jedes Ziel nennt seinen Betrag, sein Datum und woraus der
+# Betrag stammt -- eine Zahl ohne Herleitung ist in einem Jahr nicht mehr
+# ueberpruefbar.
+#
+# WAEHRUNGSKONVENTION: NOMINAL, ueberall, ohne Ausnahme. `cents` ist der
+# Betrag zum Stichtag, in dem Geld, das dann gilt -- so wie der Bestand,
+# gegen den gemessen wird. Wer heutige Kaufkraft braucht, teilt durch 1,02
+# hoch die Jahre; das ist eine Rechnung und keine zweite Wahrheit.
+#
+# KEINE RENDITEANNAHME. Die Luecke ist Ziel minus Bestand, die Monatsrate ist
+# die Luecke durch die verbleibenden Monate. Zinseszins wuerde beide kleiner
+# aussehen lassen, und zu wenig zu sparen ist die teure Richtung, falsch zu
+# liegen.
+#
+# `basis` verengt, worauf gemessen wird -- "alle Depots" statt "alles
+# Liquide". Ohne Angabe zaehlt das gesamte liquide Vermoegen abzueglich
+# dessen, was anderen gehoert.
+#
+#   ziele:
+#     - id: notgroschen
+#       name: Notgroschen
+#       cents: 1000000          # 10.000,00
+#       stichtag: null          # kein Datum = laufend
+#       basis: [tagesgeld, giro]
+#       herleitung: Drei Monatsausgaben, gerundet.
+
+ziele: []

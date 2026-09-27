@@ -1,0 +1,258 @@
+{% extends "base.html" %}{% block n_ziele %}on{% endblock %}
+{% block title %}Ziele{% endblock %}
+{% block body %}
+<h1>Ziele</h1>
+<p class="zweck">Wie weit du bist — heute gemessen und auf den Stichtag hochgerechnet.</p>
+
+<div class="card">
+  <div class="k klein" style="color:var(--muted);text-transform:uppercase;letter-spacing:.05em"
+       title="Ab wann du nicht mehr arbeiten musst: laufendes Einkommen ohne Gehalt gegen laufenden Bedarf">Wendepunkt</div>
+  {% if kreuzung.jahr %}
+  <p style="margin:.4rem 0 0"><strong>Ab {{ kreuzung.jahr }}</strong> deckt laufendes
+    Einkommen ohne Gehalt den laufenden Bedarf.</p>
+  {% else %}
+  <p style="margin:.4rem 0 0"><strong>Nicht erreicht bis {{ kreuzung.endjahr }}.</strong>
+    Deckung {{ '%.0f'|format(kreuzung.jetzt) }} % ({{ kreuzung.jetzt_jahr }}),
+    {{ '%.0f'|format(kreuzung.ende) }} % ({{ kreuzung.endjahr }}).</p>
+  {% endif %}
+  {# Eigene Zahl, keine Zielmarke: ein Zielbetrag sagt, ob man aufhoeren KANN,
+     der Wendepunkt, ab wann man nicht mehr MUSS. Gehalt und Einmalposten
+     zaehlen deshalb nicht mit. #}
+</div>
+
+
+
+<div id="ziel-liste">
+{% for t in targets %}
+<div class="card ziel-karte" data-ziel="{{ t.id }}">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem">
+    <strong><span class="griff" title="Ziehen, um die Reihenfolge zu ändern">⠿</span>{{ t.name }}{% if t.eigen %} <span class="pill eigen"
+      title="Auf dieser Seite angelegt">eigen</span>{% endif %}
+      {%- if t.fest %} <span class="pill" title="Gerechnet aus Hochrechnung, Renten und Annahmen">gerechnet</span>{% endif %}</strong>
+    <span class="muted klein">
+      {%- if t.basis %}<span class="pill" style="margin-right:.35rem"
+        title="Dieses Ziel misst nicht gegen das gesamte liquide Vermögen">{{ t.basis_text }}</span>{% endif %}
+      heute {{ t.have|euro }} von {{ t.target|euro }}
+      {%- if t.abzug %} · ohne Notgroschen {{ t.abzug|euro }}{% endif %}
+      {%- if t.covered %} · zugesagt {{ t.covered|euro }}{% endif %}
+      {%- if t.monthly is not none %} · {{ t.monthly|euro }}/Monat nötig{% endif %}</span>
+  </div>
+  {# Zwei Balken, zwei Fragen. Oben was heute da ist, darunter wo es am
+     Stichtag steht, wenn die Regeln halten. Nur den ersten zu zeigen
+     beantwortet nicht, ob man ankommt; nur den zweiten verleitet dazu, ein
+     kaum begonnenes Depot für halb fertig zu halten. #}
+  <div style="background:var(--line);height:10px;border-radius:999px;overflow:hidden;margin:.5rem 0 .2rem">
+    <div style="background:var({{ '--good' if t.pct >= 100 else '--accent' }});
+                height:10px;width:{{ t.pct }}%"></div>
+  </div>
+  {% if t.basis %}
+  {# Eine verengte Basis bekommt die Hochrechnung ihres Topfs -- Tagesgeld,
+     Depot oder Policen. Nur eine Basis quer zu den Toepfen bleibt ohne, sonst
+     stuende Tagesgeld als Depotfortschritt da. #}
+  <div class="muted fein" style="margin:.2rem 0 .5rem">
+    Gemessen an <strong>{{ t.basis_text }}</strong>
+    {%- if t.due and not t.projiziert_jahr %}, daher ohne Extrapolation{% endif %}.
+    {%- if t.ohne_wert %}
+    <span class="neg">Ohne Wert, nicht mitgezählt: {{ t.ohne_wert|join(', ') }}</span> —
+    <a class="plain" href="/monatsabschluss#vermoegen">eintragen</a>.{% endif %}</div>
+  {% endif %}
+  {% if t.projiziert_jahr %}
+  <div style="background:var(--line);height:6px;border-radius:999px;overflow:hidden;
+              margin:0 0 .3rem;opacity:.65">
+    <div style="background:var({{ '--good' if t.projiziert_pct >= 100 else '--warn' }});
+                height:6px;width:{{ [t.projiziert_pct, 100]|min }}%"></div>
+  </div>
+  <div class="muted fein" style="margin-bottom:.5rem">
+    extrapoliert zum <a class="plain" href="/hochrechnung#jahr-{{ t.due[:4] }}">{{ t.due }}</a>: <strong>{{ t.projiziert|euro }}</strong>
+    — {{ '%.0f'|format(t.projiziert_pct) }} %
+    {%- if t.projiziert_pct >= 100 %} <span class="pos">reicht</span>
+    {%- else %} <span class="neg">{{ (t.target - t.projiziert)|euro }} zu wenig</span>{% endif %}
+  </div>
+  {% endif %}
+  {# Gelesen wird die Karte, bearbeitet selten: Stichtag und Notiz als Text,
+     das Formular erst nach "Öffnen" (bearbeitungstabellen), offen ist immer
+     nur eins. Die Kennung bleibt beim Umbenennen, an ihr haengen Overlay und
+     Reihenfolge. #}
+  {% if t.fest %}
+  {# Gerechnet, nicht getippt: statt eines Formulars der Rechenweg. Gedreht
+     wird auf /annahmen und /einrichtung, die Renten im Monatsabschluss. #}
+  <details class="rechenweg-ziel">
+    <summary class="muted klein">Rentenbeginn {{ t.due }} · Rechenweg</summary>
+    <ul class="klein muted">{% for z in t.rechenweg %}<li>{{ z }}</li>{% endfor %}</ul>
+    <p class="muted klein">Gedreht wird auf <a class="plain" href="/annahmen">Annahmen</a>,
+      die Renten im <a class="plain" href="/monatsabschluss#renten">Monatsabschluss</a>.</p>
+  </details>
+  {% else %}
+  <div class="ziel-zeile">
+    <span class="muted klein">Stichtag {{ t.due or '—' }}{% if t.notiz %} · {{ t.notiz }}{% endif %}</span>
+    <span class="nobr"><span class="meldung fein" id="z-meldung-{{ t.id }}"></span>
+      <button class="ghost" onclick="zielOeffnen('{{ t.id }}')">Öffnen</button></span>
+  </div>
+  <div class="ziel-bearbeiten" id="z-form-{{ t.id }}" hidden>
+    <div class="zeilen-form">
+      <label>Name<input id="z-name-{{ t.id }}" value="{{ t.name|e }}" maxlength="80"></label>
+      <label>Betrag (€)<input id="z-cents-{{ t.id }}" class="betrag"
+        value="{{ t.target|betrag if t.target else '' }}"></label>
+      <label>Stichtag<input id="z-datum-{{ t.id }}" value="{{ t.due or '' }}"
+        placeholder="2046-10-01"></label>
+      <label>Notiz — woher kommt die Zahl?<input id="z-notiz-{{ t.id }}" value="{{ t.notiz|e }}"></label>
+    </div>
+    {# Angeboten werden die ARTEN, nicht jede Position; einzelne Konten bleiben
+       in goals.yaml moeglich und stehen dann nur als Beschriftung da. #}
+    <div class="klein muted" style="margin:.6rem 0 .2rem">Basis — nichts angehakt = gesamtes liquides Vermögen</div>
+    <div style="display:flex;flex-wrap:wrap;gap:.3rem 1rem">
+      {% for o in basis_arten %}
+      <label class="klein" style="font-weight:400">
+        <input type="checkbox" class="b-{{ t.id }}" value="{{ o.id }}"
+               {% if t.basis and o.id in t.basis %}checked{% endif %}> {{ o.label }}</label>
+      {% endfor %}
+    </div>
+    <p class="zeilen-knoepfe"><button onclick="speichern('{{ t.id }}')">Speichern</button>
+      <button class="ghost" onclick="loeschen('{{ t.id }}', '{{ t.name|e }}')">Löschen</button>
+      <span class="meldung fein" id="z-fmeldung-{{ t.id }}"></span></p>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+</div>
+<style>
+  .griff{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;
+         color:var(--muted);padding:0 .45rem 0 0;font-weight:400}
+  .ziel-karte.zieht{opacity:.55}
+  .ziel-zeile{display:flex;justify-content:space-between;align-items:center;gap:1rem}
+  .ziel-bearbeiten{border-top:1px solid var(--line);margin-top:.6rem;padding-top:.6rem}
+  .rechenweg-ziel ul{margin:.4rem 0;padding-left:1.1rem}
+</style>
+
+{# Eigene Ziele. Der Betrag wird eingetragen, nicht berechnet -- wie er
+   zustande kommt, gehoert in die Notiz, sonst ist er in einem Jahr nicht mehr
+   nachvollziehbar. #}
+<details class="klapp" id="neues-ziel">
+  <summary>Neues Ziel</summary>
+  <div class="card">
+    <div class="zeilen-form">
+      <label>Name<input id="n-name" placeholder="z.B. Depot gehebelt"></label>
+      <label>Betrag (€)<input id="n-cents" class="betrag"></label>
+      <label>Stichtag<input id="n-datum" placeholder="2035-12-31"></label>
+      <label>Notiz — woher kommt die Zahl?<input id="n-notiz"></label>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:.3rem 1rem;margin:.6rem 0 .2rem">
+      {% for o in basis_arten %}
+      <label class="klein" style="font-weight:400">
+        <input type="checkbox" class="b-neu" value="{{ o.id }}"> {{ o.label }}</label>
+      {% endfor %}
+    </div>
+    <p class="muted fein" style="margin:.2rem 0 .4rem">
+      Nichts angehakt = gesamtes liquides Vermögen.</p>
+    <p class="zeilen-knoepfe"><button onclick="anlegen()">Anlegen</button>
+      <span id="n-meldung" class="muted"></span></p>
+  </div>
+</details>
+
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/goals.yaml', 'Die Ziele selbst: Name, Betrag, Stichtag, basis, Herleitung.'),
+  ('config/ziele_custom.yaml', 'Was von dieser Seite aus geändert wurde. Überschreibt goals.yaml je Ziel.'),
+  ('config/balances.yaml', 'Die Bestände, gegen die gemessen wird — und die Verbindlichkeiten, die abgehen.'),
+  ('config/balances_custom.yaml', 'Von der Bestände-Seite geänderte Werte.'),
+  ('config/assumptions.yaml', 'Regeln der Extrapolation: Inflation, nominale Rendite, Gehaltsuntergrenze.'),
+  ('config/szenarien.yaml', 'Die Pläne, die den unteren Balken bewegen.'),
+  ('config/loans.yaml', 'Kreditraten in der Extrapolation.'),
+  ('finctl/web/templates/ziele.html', 'Die Texte dieser Seite.'),
+], handbuch='ziele') }}
+
+<script>
+const zeur = centsAus;   // gemeinsamer Parser, siehe _betrag.html
+// Die Meldung steht neben dem Knopf, der sie ausgeloest hat: im Formular,
+// wenn es offen ist, sonst neben "Öffnen" (Umsortieren hat keinen Knopf).
+function zielSagen(id, text){
+  const offen = !document.getElementById('z-form-'+id).hidden;
+  const m = document.getElementById((offen ? 'z-fmeldung-' : 'z-meldung-') + id);
+  if (m){ m.textContent = text; m.className = 'meldung fein neg'; }
+}
+function zielOeffnen(id){
+  document.querySelectorAll('.ziel-bearbeiten').forEach(f => {
+    if (f.id !== 'z-form-'+id) f.hidden = true; });
+  const f = document.getElementById('z-form-'+id);
+  f.hidden = !f.hidden;
+  if (!f.hidden) document.getElementById('z-name-'+id).focus({preventScroll: true});
+}
+async function speichern(id){
+  const r = await fetch('/api/ziel', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id:id,
+      name: document.getElementById('z-name-'+id).value.trim(),
+      cents: zeur(document.getElementById('z-cents-'+id).value),
+      stichtag: document.getElementById('z-datum-'+id).value.trim(),
+      basis: [...document.querySelectorAll('.b-'+id)]
+               .filter(x => x.checked).map(x => x.value),
+      notiz: document.getElementById('z-notiz-'+id).value})});
+  const j = await r.json();
+  if (j.error) { zielSagen(id, j.error); return; }
+  location.reload();
+}
+async function anlegen(){
+  const m = document.getElementById('n-meldung');
+  const r = await fetch('/api/ziel', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({neu: true,
+      name: document.getElementById('n-name').value.trim(),
+      cents: zeur(document.getElementById('n-cents').value),
+      stichtag: document.getElementById('n-datum').value.trim(),
+      basis: [...document.querySelectorAll('.b-neu')]
+               .filter(x => x.checked).map(x => x.value),
+      notiz: document.getElementById('n-notiz').value})});
+  const j = await r.json();
+  if (j.error) { m.textContent = j.error; m.className = 'neg'; return; }
+  m.textContent = 'angelegt'; m.className = 'muted';
+  setTimeout(() => location.reload(), 300);
+}
+// Reihenfolge per Ziehen am Griff. Pointer-Ereignisse statt HTML-Drag&Drop:
+// die funktionieren mit Maus und Finger, iOS Safari kennt `draggable` nicht.
+(function(){
+  const liste = document.getElementById('ziel-liste');
+  if (!liste) return;
+  let karte = null;
+  liste.addEventListener('pointerdown', e => {
+    const griff = e.target.closest('.griff');
+    if (!griff) return;
+    karte = griff.closest('.ziel-karte');
+    karte.classList.add('zieht');
+    griff.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  liste.addEventListener('pointermove', e => {
+    if (!karte) return;
+    const davor = [...liste.querySelectorAll('.ziel-karte:not(.zieht)')].find(k => {
+      const r = k.getBoundingClientRect();
+      return e.clientY < r.top + r.height / 2;
+    });
+    liste.insertBefore(karte, davor || null);
+  });
+  async function fertig(){
+    if (!karte) return;
+    const gezogen = karte;
+    karte = null;
+    gezogen.classList.remove('zieht');
+    const ids = [...liste.querySelectorAll('.ziel-karte')].map(k => k.dataset.ziel);
+    const r = await fetch('/api/ziele/reihenfolge', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})});
+    const j = await r.json();
+    if (j.error) { zielSagen(gezogen.dataset.ziel, j.error); return; }
+    gezogen.classList.add('gespeichert');
+    setTimeout(() => gezogen.classList.remove('gespeichert'), 800);
+  }
+  liste.addEventListener('pointerup', fertig);
+  liste.addEventListener('pointercancel', fertig);
+})();
+async function loeschen(id, name){
+  if (!confirm(`Ziel „${name}“ löschen?`)) return;
+  const r = await fetch('/api/ziel', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: id, loeschen: true})});
+  const j = await r.json();
+  if (j.error) { zielSagen(id, j.error); return; }
+  location.reload();
+}
+</script>
+{% endblock %}

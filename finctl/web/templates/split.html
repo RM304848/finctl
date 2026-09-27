@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Split #{{ tx.id }}{% endblock %}
+{% block body %}
+{% include "_combo.html" %}
+<h1>Buchung aufteilen <span class="muted zusatz">— #{{ tx.id }}</span></h1>
+<p class="zweck">Eine Buchung in ihre Teile zerlegen, bis die Summe wieder den Betrag ergibt.</p>
+
+<table>
+  <tr><th>Datum</th><th>Konto</th><th class="num">Betrag</th><th>Text</th></tr>
+  <tr>
+    <td class="muted">{{ tx.booking_date }}</td>
+    <td class="muted">{{ tx.account_id }}</td>
+    <td class="num {{ tx.amount_cents|vz }}"
+        id="total">{{ tx.amount_cents|euro }}</td>
+    <td class="muted klein">{{ tx.raw_text }}</td>
+  </tr>
+</table>
+
+<h2>Teile</h2>
+<table id="parts">
+  <tr><th style="width:130px">Betrag</th><th>Kategorie</th><th>Steuer</th>
+      <th style="width:120px">Objekt</th><th>Notiz</th><th></th></tr>
+</table>
+
+<p style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center">
+  <button class="ghost" onclick="addRow()">+ Teil</button>
+  <button class="ghost" onclick="splitEven()">gleichmäßig verteilen</button>
+  <button onclick="save()">Aufteilung speichern</button>
+  <span id="status" class="muted"></span>
+</p>
+
+<div class="note" id="balance"></div>
+
+<script>
+const TXID = {{ tx.id }};
+const TOTAL = {{ tx.amount_cents }};
+const CATS = {{ categories|tojson }};
+const TAXES = {{ tax_categories|tojson }};
+const PROPS = {{ properties|tojson }};
+const EXISTING = {{ parts|tojson }};
+
+function opts(list, sel, blank){
+  return `<option value="">${blank}</option>` + list.map(o =>
+    `<option value="${o.id}" ${o.id===sel?'selected':''}>${o.label||o.name}</option>`).join('');
+}
+
+function labelFor(list, id){
+  const hit = list.find(o => o.id === id);
+  return hit ? (hit.label || hit.name) : '';
+}
+
+function addRow(p){
+  p = p || {};
+  const tb = document.getElementById('parts');
+  const tr = document.createElement('tr');
+  // Kategorie and Steuer are filtering comboboxes, not selects: 97 management
+  // categories and 40 tax positions are unusable as dropdowns.
+  tr.innerHTML = `
+    <td><input class="amt" style="width:110px" value="${p.amount_cents!=null?(p.amount_cents/100).toFixed(2):''}"></td>
+    <td><input class="mgmt" style="width:100%" autocomplete="off" placeholder="tippen zum Filtern…"></td>
+    <td><input class="tax" style="width:100%" autocomplete="off" placeholder="tippen zum Filtern…"></td>
+    <td><select class="prop" style="width:100%">${opts(PROPS, p.property_id, '—')}</select></td>
+    <td><input class="note" style="width:100%" value="${p.note? String(p.note).replace(/"/g,'&quot;') : ''}"></td>
+    <td><button class="ghost" onclick="this.closest('tr').remove();recalc()" aria-label="Teil entfernen">×</button></td>`;
+  tb.appendChild(tr);
+
+  const mgmt = tr.querySelector('.mgmt'), tax = tr.querySelector('.tax');
+  // Preserve what is already stored, so editing one part does not silently
+  // clear the others.
+  if(p.mgmt_category_id){ mgmt.value = labelFor(CATS, p.mgmt_category_id); mgmt.dataset.id = p.mgmt_category_id; }
+  if(p.tax_category_id){ tax.value = labelFor(TAXES, p.tax_category_id); tax.dataset.id = p.tax_category_id; }
+  makeCombo(mgmt, CATS);
+  makeCombo(tax, TAXES, item => {
+    // Anlage V positions are scoped by object; prompt for one if missing.
+    const prop = tr.querySelector('.prop');
+    prop.classList.toggle('feld-fehlt', !!(item.needs_property && !prop.value));
+  });
+
+  tr.querySelector('.amt').addEventListener('input', recalc);
+  upgradeSelects(tr);          // rows are built after DOMContentLoaded
+  recalc();
+}
+
+function rows(){ return [...document.querySelectorAll('#parts tr')].slice(1); }
+
+function recalc(){
+  let sum = 0;
+  rows().forEach(r => {
+    const v = parseFloat((r.querySelector('.amt').value||'0').replace(',','.'));
+    if(!isNaN(v)) sum += Math.round(v*100);
+  });
+  const diff = sum - TOTAL;
+  const el = document.getElementById('balance');
+  const fmt = c => (c/100).toFixed(2).replace('.',',') + ' €';
+  if(diff === 0 && rows().length){
+    el.className = 'note ok';
+    el.textContent = `Teile zusammen ${fmt(sum)} — geht genau auf.`;
+  } else {
+    el.className = 'note bad';
+    el.textContent = `Teile zusammen ${fmt(sum)} gegen ${fmt(TOTAL)} — Differenz ${fmt(diff)}. `
+      + `Gespeichert wird erst, wenn die Teile die Buchung genau ergeben.`;
+  }
+  return diff;
+}
+
+function splitEven(){
+  const rs = rows(); if(!rs.length) return;
+  // Give the remainder to the last part so the total is exact to the cent.
+  const each = Math.trunc(TOTAL / rs.length);
+  rs.forEach((r,i) => {
+    const cents = (i === rs.length-1) ? TOTAL - each*(rs.length-1) : each;
+    r.querySelector('.amt').value = (cents/100).toFixed(2);
+  });
+  recalc();
+}
+
+async function save(){
+  if(recalc() !== 0){ return; }
+  const parts = rows().map(r => ({
+    amount_cents: Math.round(parseFloat(r.querySelector('.amt').value.replace(',','.'))*100),
+    mgmt: r.querySelector('.mgmt').dataset.id || '',
+    tax: r.querySelector('.tax').dataset.id || '',
+    property: r.querySelector('.prop').value,
+    note: r.querySelector('.note').value,
+  }));
+  const res = await fetch('/api/split/'+TXID, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({parts})});
+  const out = await res.json();
+  const st = document.getElementById('status');
+  if(res.ok){ st.textContent = `${out.parts} Teile gespeichert`; st.classList.remove('muted','neg'); st.classList.add('pos'); }
+  else { st.textContent = out.error || 'Speichern fehlgeschlagen'; st.classList.remove('muted','pos'); st.classList.add('neg'); }
+}
+
+if(EXISTING.length){ EXISTING.forEach(addRow); } else { addRow(); addRow(); }
+recalc();
+</script>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/overrides.yaml', 'Der Split wird hier gesichert und überlebt jeden Neuaufbau.'),
+  ('config/taxonomy.yaml', 'Die Kategorien zur Auswahl.'),
+  ('finctl/web/templates/split.html', 'Die Texte dieser Seite.'),
+], handbuch='split') }}
+{% endblock %}

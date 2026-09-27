@@ -1,0 +1,40 @@
+# Die ganze Testsuite auf Windows und macOS, bei jedem Push.
+#
+# Auf dem Musterhaushalt (tests/musterhaushalt/), weil hier keine eigenen
+# Daten liegen und nie liegen werden. Die Pruefungen gegen das echte
+# Hauptbuch -- test_leck, test_namen, die Referenz -- laufen lokal vor jedem
+# Commit, nicht hier.
+#
+# Bewusst OHNE PYTHONUTF8: Wer die App auf Windows installiert, hat die
+# Variable auch nicht. Ein Kodierungsfehler soll hier auffallen, nicht bei
+# jemandem, der gerade seinen ersten Auszug einliest.
+#
+# Kosten: In einem privaten Repository zaehlt eine macOS-Minute zehnfach,
+# eine Windows-Minute doppelt gegen das Freikontingent.
+
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      FINCTL_TESTDATEN: muster
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Installieren
+        run: python -m pip install -e ".[dev]" build
+      - name: Tests
+        run: python -m pytest -q

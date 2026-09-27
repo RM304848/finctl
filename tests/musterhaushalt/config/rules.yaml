@@ -1,0 +1,249 @@
+# Musterhaushalt: Regeln fuer die erfundenen Auszuege aus auszuege.py.
+#
+# Jede Regelart kommt vor: eigene IBAN, Umbuchung mit Zielkonto, Objekt,
+# Kreditrate mit Zins und Tilgung, Aufteilung, Vorzeichen, Betragsspanne.
+# Eine Buchung pro Monat ("Kiosk am Markt") trifft absichtlich keine Regel.
+
+rules:
+  - id: transfer-own-iban
+    priority: 5
+    name: Umbuchung zwischen eigenen Konten (IBAN bekannt)
+    match: {iban_is_own: true}
+    set: {mgmt: transfer/eigenkonto, tax: privat/nicht-abzugsfaehig,
+          transfer_account: auto}
+
+  - id: umbuchung-alltag
+    priority: 10
+    name: Umbuchung aufs Alltagskonto
+    match: {account: giro, text: ["Umbuchung Alltag"]}
+    set: {mgmt: transfer/eigenkonto, tax: privat/nicht-abzugsfaehig,
+          transfer_account: alltag}
+
+  - id: umbuchung-rate
+    priority: 10
+    name: Umbuchung aufs Ratenkonto (deckt die Rate von Wohnung Nord)
+    match: {account: giro, text: ["Umbuchung Ratenkonto"]}
+    set: {mgmt: transfer/eigenkonto, tax: privat/nicht-abzugsfaehig,
+          transfer_account: ratenkonto, property: nord}
+
+  # Das Depot hat keinen Auszug: der Sparplan ist eine Umbuchung auf ein
+  # Konto, das nur einen Stand traegt.
+  - id: sparplan
+    priority: 10
+    name: Sparplan aufs Depot
+    match: {account: giro, text: ["Sparplan"]}
+    set: {mgmt: transfer/eigenkonto, tax: privat/nicht-abzugsfaehig,
+          transfer_account: depot}
+
+  - id: umbuchung-tagesgeld-raus
+    priority: 10
+    name: Umbuchung aufs Tagesgeld
+    match: {account: giro, text: ["Umbuchung Tagesgeld"]}
+    set: {mgmt: transfer/eigenkonto, tax: privat/nicht-abzugsfaehig,
+          transfer_account: tagesgeld}
+
+  - id: umbuchung-tagesgeld-rein
+    priority: 10
+    name: Umbuchung vom Girokonto aufs Tagesgeld
+    match: {account: tagesgeld, text: ["Umbuchung Tagesgeld"]}
+    set: {mgmt: transfer/eigenkonto, tax: privat/nicht-abzugsfaehig,
+          transfer_account: giro}
+
+  - id: darlehen-nord
+    priority: 18
+    name: Wohnung Nord -- Darlehensrate
+    match: {account: ratenkonto, text: ["Darlehen 001"]}
+    set: {split_declared: true, property: nord, loan: "001",
+          tax_interest: anlage_v/zinsen,
+          tax_principal: privat/nicht-abzugsfaehig,
+          mgmt: kredit/tilgung, tax: anlage_v/zinsen}
+
+  - id: darlehen-sued
+    priority: 18
+    name: Wohnung Sued -- Darlehensrate
+    match: {text: ["4711000001"]}
+    set: {split_declared: true, property: sued, loan: "002",
+          tax_interest: anlage_v/zinsen,
+          tax_principal: privat/nicht-abzugsfaehig,
+          mgmt: kredit/tilgung, tax: anlage_v/zinsen}
+
+  - id: hausgeld-nord
+    priority: 20
+    name: Wohnung Nord -- Hausgeld
+    match: {text: ["WEG Lindenweg"]}
+    set: {mgmt: immobilie/nebenkosten, tax: anlage_v/nebenkosten, property: nord}
+
+  - id: miete-nord
+    priority: 20
+    name: Wohnung Nord -- Mieteingang
+    match: {text: ["Miete Lindenweg"], sign: "+"}
+    set: {mgmt: immobilie/mieteinnahme, tax: anlage_v/mieteinnahmen, property: nord}
+
+  - id: miete-sued
+    priority: 20
+    name: Wohnung Sued -- Mieteingang
+    match: {text: ["Miete Am Hang"], sign: "+"}
+    set: {mgmt: immobilie/mieteinnahme, tax: anlage_v/mieteinnahmen, property: sued}
+
+  - id: grundsteuer-sued
+    priority: 20
+    name: Wohnung Sued -- Grundsteuer
+    match: {text: ["Grundsteuer"]}
+    set: {mgmt: immobilie/grundsteuer, tax: anlage_v/grundsteuer, property: sued}
+
+  - id: ferienhaus
+    priority: 20
+    name: Ferienhaus -- Anzahlungen
+    match: {text: ["Bautraeger Kueste"]}
+    set: {mgmt: immobilie/kaufnebenkosten, tax: anlage_v/herstellungskosten,
+          property: ferienhaus}
+
+  # Beide Schreibweisen stehen einzeln da: der Bonus kommt vom Lohnbuero,
+  # und die kuerzere trifft die laengere nur, solange nichts dazwischen steht.
+  - id: ferienhaus-pacht
+    priority: 20
+    name: Ferienhaus -- Pacht
+    match: {text: ["Kuestenamt"]}
+    set: {mgmt: immobilie/nebenkosten, tax: anlage_v/nebenkosten, property: ferienhaus}
+
+  - id: gehalt
+    priority: 30
+    name: Gehalt
+    match: {text: ["Beispiel Werke", "Beispiel Werke AG Lohnbuero"], sign: "+"}
+    set: {mgmt: einkommen/gehalt, tax: privat/nicht-abzugsfaehig}
+
+  - id: miete
+    priority: 30
+    name: Miete der eigenen Wohnung
+    match: {text: ["Hausverwaltung Nord"]}
+    set: {mgmt: wohnen/miete, tax: privat/nicht-abzugsfaehig}
+
+  # Nebenkosten mit Mitbewohner: ein Eingang, drei Teile. Der letzte Teil
+  # nimmt den Rest auf, damit die Teile immer aufgehen.
+  - id: mitbewohner-anteil
+    priority: 29
+    name: Mitbewohner -- Anteil Internet, Strom, Rundfunk (aufgeteilt)
+    match:
+      text: ["Mitbewohner"]
+      text_all: ["Anteil Nebenkosten"]
+      sign: "+"
+      amount_between: [60.00, 60.00]
+    set: {tax: privat/nicht-abzugsfaehig}
+    split:
+      - {amount: 25.00, mgmt: wohnen/internet}
+      - {amount: 20.00, mgmt: wohnen/strom}
+      - {mgmt: wohnen/gez}
+
+  - id: bu
+    priority: 30
+    name: Berufsunfaehigkeit
+    match: {text: ["BU Beitrag"]}
+    set: {mgmt: versicherung/bu, tax: vorsorge/bu}
+
+  - id: police-a
+    priority: 30
+    name: Fondspolice A -- Beitrag
+    match: {text: ["Fondspolice Leben"]}
+    set: {mgmt: versicherung/rente, tax: vorsorge/altersvorsorge}
+
+  - id: pkv
+    priority: 30
+    name: Private Krankenversicherung
+    match: {text: ["Muster PKV"]}
+    set: {mgmt: versicherung/pkv, tax: vorsorge/kranken-pflege}
+
+  - id: strom
+    priority: 30
+    name: Strom -- Abschlag
+    match: {text: ["Stadtwerke Beispielstadt"]}
+    set: {mgmt: wohnen/strom, tax: privat/nicht-abzugsfaehig}
+
+  - id: gemeinschaft
+    priority: 30
+    name: Gemeinschaftskonto
+    match: {text: ["Gemeinschaftskonto"]}
+    set: {mgmt: familie/gemeinschaftskonto, tax: privat/nicht-abzugsfaehig}
+
+  - id: mobilfunk
+    priority: 40
+    name: Mobilfunk
+    match: {text: ["Mobilfunk GmbH"]}
+    set: {mgmt: abo/mobilfunk, tax: privat/nicht-abzugsfaehig}
+
+  - id: streaming
+    priority: 40
+    name: Streamingdienst
+    match: {text: ["Streamdienst"]}
+    set: {mgmt: abo/video-streaming, tax: privat/nicht-abzugsfaehig}
+
+  - id: supermarkt
+    priority: 40
+    name: Supermarkt
+    match: {text: ["REWE", "EDEKA"]}
+    set: {mgmt: lebensmittel/supermarkt, tax: privat/nicht-abzugsfaehig}
+
+  - id: drogerie
+    priority: 40
+    name: Drogerie
+    match: {text: ["Drogerie Muster"]}
+    set: {mgmt: konsum/drogerie, tax: privat/nicht-abzugsfaehig}
+
+  - id: tankstelle
+    priority: 40
+    name: Tankstelle
+    match: {text: ["Tankstelle"]}
+    set: {mgmt: mobilitaet/kraftstoff, tax: privat/nicht-abzugsfaehig}
+
+  - id: restaurant
+    priority: 40
+    name: Restaurant und Cafe
+    match: {text: ["Trattoria", "Cafe Muster"]}
+    set: {mgmt: gastronomie/restaurant, tax: privat/nicht-abzugsfaehig}
+
+  - id: kfz-versicherung
+    priority: 40
+    name: Kfz-Versicherung
+    match: {text: ["Kfz Versicherung"]}
+    set: {mgmt: mobilitaet/kfz-versicherung, tax: privat/nicht-abzugsfaehig}
+
+  - id: kfz-steuer
+    priority: 40
+    name: Kfz-Steuer
+    match: {text: ["Kfz-Steuer"]}
+    set: {mgmt: mobilitaet/kfz-steuer, tax: privat/nicht-abzugsfaehig}
+
+  - id: finanzamt
+    priority: 40
+    name: Einkommensteuer
+    match: {text: ["Finanzamt"]}
+    set: {mgmt: steuern/einkommensteuer, tax: privat/nicht-abzugsfaehig}
+
+  - id: zinsen
+    priority: 40
+    name: Zinsen aufs Tagesgeld
+    match: {account: tagesgeld, text: ["Zinsgutschrift"]}
+    set: {mgmt: einkommen/zinsen, tax: anlage_kap/kapitalertraege}
+
+  - id: haftpflicht
+    priority: 40
+    name: Haftpflicht
+    match: {text: ["Haftpflicht"]}
+    set: {mgmt: versicherung/phv, tax: vorsorge/haftpflicht}
+
+  - id: depotverkauf
+    priority: 40
+    name: Verkauf aus dem Depot
+    match: {text: ["Verkauf Wertpapiere"]}
+    set: {mgmt: investment/wertpapier, tax: privat/nicht-abzugsfaehig}
+
+  - id: office
+    priority: 45
+    name: Office-Paket ueber den Haendler
+    match: {text: ["Haendler Online"]}
+    set: {mgmt: abo/office, tax: privat/nicht-abzugsfaehig}
+
+  - id: buecher
+    priority: 50
+    name: Buchladen
+    match: {text: ["Buchladen"]}
+    set: {mgmt: konsum/medien, tax: privat/nicht-abzugsfaehig}

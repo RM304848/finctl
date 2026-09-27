@@ -1,0 +1,18 @@
+{# Woran man dreht, auf der Seite selbst: welche Dateien sie speisen und wo
+   ihr Handbuchabschnitt steht. Reihenfolge: Handbuch, Hauptdatei,
+   Nebendateien, eigene Vorlage. #}
+{% macro fuss(dateien, handbuch='') -%}
+<details class="klapp" style="margin-top:1.5rem">
+  <summary>Konfiguration <span class="zahl">— {{ dateien|length }} Dateien</span></summary>
+  <div class="wrap"><table>
+    <tr><th style="width:280px">Datei</th><th>Wofür</th></tr>
+    {% if handbuch %}
+    <tr><td><a class="plain" href="/handbuch#{{ handbuch }}">HANDBUCH.md#{{ handbuch }}</a></td>
+        <td class="muted">Was diese Seite zeigt und wie man sie liest.</td></tr>
+    {% endif %}
+    {% for d in dateien %}
+    <tr><td><code>{{ d[0] }}</code></td><td class="muted">{{ d[1] }}</td></tr>
+    {% endfor %}
+  </table></div>
+</details>
+{%- endmacro %}

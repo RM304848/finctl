@@ -1,0 +1,11 @@
+{# Reiter sind Links, keine Skriptschalter: jede Ansicht hat ihre eigene
+   Adresse und ist damit mit einem Klick, einem Lesezeichen und einer
+   Umleitung erreichbar (docs/design_conventions.yaml, reiter). #}
+{% macro reiter(eintraege, aktiv) -%}
+<nav class="reiter">
+  {%- for e in eintraege %}
+  <a href="{{ e.href }}" class="{{ 'on' if e.id == aktiv }}">{{ e.label }}
+    {%- if e.zahl is defined and e.zahl is not none %} <span class="zahl">{{ e.zahl }}</span>{% endif %}</a>
+  {%- endfor %}
+</nav>
+{%- endmacro %}

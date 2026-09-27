@@ -1,0 +1,165 @@
+{% extends "base.html" %}{% block n_geteilt_buchungen %}on{% endblock %}
+{% block title %}Buchungen zuordnen{% endblock %}
+{% macro tag(d) %}{{ d[:10] if d else '' }}{% endmacro %}
+{% block body %}
+{% include "_combo.html" %}
+<h1>Buchungen zuordnen <span class="muted zusatz">— {{ rows|length }}{% if gesamt > rows|length %} von {{ gesamt }}{% endif %}</span></h1>
+<p class="zweck">Welche Ausgaben gehören zu welchem Projekt, und wer trägt welchen Teil?</p>
+
+<form method="get" class="card">
+  <div class="zeilen-form">
+    <label>von<input name="von" value="{{ f.von }}" placeholder="2026-01-01"></label>
+    <label>bis<input name="bis" value="{{ f.bis }}" placeholder="2026-12-31"></label>
+    <label>Konto<select name="konto" data-no-combo><option value="">alle</option>
+      {% for k in konten %}<option value="{{ k }}" {{ 'selected' if f.konto == k }}>{{ k }}</option>{% endfor %}</select></label>
+    <label>Kategorie<select name="kategorie" data-no-combo><option value="">alle</option>
+      {% for kid, name in kategorienamen.items() %}<option value="{{ kid }}" {{ 'selected' if kid in f.kategorie }}>{{ name }}</option>{% endfor %}</select></label>
+    <label>Projekt<select name="projekt" data-no-combo><option value="">alle</option>
+      {% for p in projekte.values() %}<option value="{{ p.id }}" {{ 'selected' if f.projekt == p.id }}>{{ p.name }}</option>{% endfor %}</select></label>
+    <label>Suche<input name="q" value="{{ f.q }}" placeholder="Text…"></label>
+  </div>
+  <p class="zeilen-knoepfe">
+    <label><input type="checkbox" name="ohne" value="1" {{ 'checked' if f.ohne }}> nur ohne Projekt</label>
+    <label><input type="checkbox" name="alle_richtungen" value="1" {{ 'checked' if f.alle_richtungen }}> auch Eingänge</label>
+    <button>Filtern</button> <a class="plain" href="/geteilt/buchungen">zurücksetzen</a></p>
+</form>
+
+{% if not projekte %}
+<div class="note">Noch kein Projekt. Unter Projekte eines anlegen, dann hier zuordnen.</div>
+{% endif %}
+
+<p class="zeilen-knoepfe">
+  <select id="sammel-projekt" data-no-combo><option value="">Projekt wählen …</option>
+    {% for p in projekte.values() %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+  <button type="button" onclick="sammeln(this, document.getElementById('sammel-projekt').value)">Markierte zuordnen</button>
+  <button type="button" class="ghost" onclick="sammeln(this, null)">Zuordnung lösen</button>
+  <span class="meldung muted klein"></span></p>
+
+<div class="wrap"><table>
+  <tr><th><input type="checkbox" aria-label="alle markieren" onchange="document.querySelectorAll('.wahl').forEach(x => x.checked = this.checked)"></th>
+      <th>Datum</th><th>Konto</th><th class="num">Betrag</th><th>Text</th><th>Kategorie</th>
+      <th style="width:200px">Projekt</th><th></th></tr>
+  {% for r in rows %}{% set p = projekte.get(r.projekt) %}
+  <tr id="z-{{ loop.index }}" data-buchung="{{ r.dedup_hash }}" data-teil="{{ r.seq }}">
+    <td><input type="checkbox" class="wahl" aria-label="markieren"></td>
+    <td class="muted nobr">{{ tag(r.booking_date) }}</td>
+    <td class="muted nobr">{{ r.account_id }}</td>
+    <td class="num {{ r.amount_cents|vz }}">{{ r.amount_cents|euro }}</td>
+    <td><span class="raw" title="{{ r.raw_text }}">{{ r.raw_text }}</span>
+        {% if r.teile > 1 %}<span class="pill">Teil {{ r.seq + 1 }}/{{ r.teile }}</span>{% endif %}</td>
+    <td class="muted">{{ kategorienamen.get(r.mgmt_category_id, r.mgmt_category_id or '—') }}</td>
+    <td><input class="projektwahl" value="{{ p.name if p else '' }}" data-cur="{{ r.projekt }}"
+               placeholder="—" autocomplete="off" style="width:100%"></td>
+    <td class="aktionen">
+      {% if p and p.personen %}<button type="button" class="ghost" onclick="oeffne({{ loop.index }})">Teilung{{ ' ✓' if r.teilung }}</button>{% endif %}
+      <span class="meldung muted klein"></span></td>
+  </tr>
+  {% if p and p.personen %}
+  {% set t = r.teilung or {} %}
+  <tr class="panel" id="panel-{{ loop.index }}" hidden><td colspan="8">
+    <div class="teilung" data-zeile="{{ loop.index }}">
+      <div class="zeilen-form">
+        <label>Aufteilung<select class="t-art" data-no-combo onchange="vorschau(this)">
+          {% for art, name in [('gleich', 'gleich'), ('betrag', 'feste Beträge €'), ('prozent', 'Prozent'), ('gewicht', 'Gewichte'), ('nur-ich', 'nur ich')] %}
+          <option value="{{ art }}" {{ 'selected' if (t.art or 'gleich') == art }}>{{ name }}</option>{% endfor %}
+        </select></label>
+        <label>ich<input class="t-ich betrag" value="{{ (1 if t.ich is not defined or t.ich is sameas true else (0 if t.ich is sameas false else t.ich)) }}" oninput="vorschau(this)"></label>
+        {% for pid in p.personen %}
+        <label>{{ personen.get(pid, pid) }}<input class="t-person betrag" data-person="{{ pid }}"
+          value="{% set w = (t.personen or {}).get(pid) %}{% if t.art == 'betrag' %}{{ w|int|betrag if w is not none else '' }}{% elif t.art in ['prozent', 'gewicht'] %}{{ w if w is not none else '' }}{% elif t.art == 'gleich' and t.personen %}{{ 1 if w else 0 }}{% else %}1{% endif %}" oninput="vorschau(this)"></label>
+        {% endfor %}
+      </div>
+      <p class="zeilen-knoepfe">
+        <button type="button" onclick="teilungSpeichern(this, false)">Speichern</button>
+        <button type="button" class="ghost" onclick="teilungSpeichern(this, true)">zurück auf gleich</button>
+        <span class="t-ergebnis muted klein"></span> <span class="meldung muted klein"></span></p>
+    </div>
+  </td></tr>
+  {% endif %}
+  {% endfor %}
+</table></div>
+
+<script>
+const PROJEKTE = {{ projekte.values()|map(attribute='name')|list|tojson }};
+const PROJEKT_IDS = {{ projekte.keys()|list|tojson }};
+const PERSONEN = {{ personen|tojson }};
+const LISTE = PROJEKT_IDS.map((id, i) => ({id, label: PROJEKTE[i]}));
+
+function melden(el, text, fehler){
+  const m = el.closest('td, p').querySelector('.meldung');
+  m.textContent = text; m.className = 'meldung klein ' + (fehler ? 'neg' : 'pos');
+}
+async function senden(pfad, body){
+  const res = await fetch(pfad, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                 body: JSON.stringify(body)});
+  const out = await res.json().catch(() => ({}));
+  return res.ok ? out : Promise.reject(out.error || 'Speichern fehlgeschlagen');
+}
+function schluessel(tr){ return [tr.dataset.buchung, Number(tr.dataset.teil)]; }
+
+document.querySelectorAll('.projektwahl').forEach(feld => {
+  makeCombo(feld, LISTE, async item => {
+    try {
+      await senden('/api/geteilt/zuordnen', {teile: [schluessel(feld.closest('tr'))], projekt: item.id});
+      melden(feld, 'gespeichert — neu rechnen …', false);
+      location.reload();
+    } catch (e) { melden(feld, e, true); }
+  });
+});
+
+async function sammeln(knopf, projekt){
+  const teile = [...document.querySelectorAll('.wahl:checked')].map(x => schluessel(x.closest('tr')));
+  if (!teile.length){ melden(knopf, 'nichts markiert', true); return; }
+  if (projekt === '') { melden(knopf, 'Projekt wählen', true); return; }
+  try {
+    await senden('/api/geteilt/zuordnen', {teile, projekt});
+    melden(knopf, 'gespeichert — neu rechnen …', false);
+    location.reload();
+  } catch (e) { melden(knopf, e, true); }
+}
+
+function oeffne(i){
+  document.querySelectorAll('tr.panel').forEach(p => { p.hidden = p.id !== 'panel-' + i || !p.hidden; });
+  const box = document.querySelector(`#panel-${i} .teilung`);
+  if (box && !box.closest('tr').hidden) vorschau(box.querySelector('.t-art'));
+}
+function teilungAus(box){
+  const art = box.querySelector('.t-art').value;
+  const zahl = v => { const c = centsAus(v); return c === null ? 0 : c / 100; };
+  const personen = {};
+  box.querySelectorAll('.t-person').forEach(f => {
+    const w = art === 'betrag' ? centsAus(f.value) : zahl(f.value);
+    if (w) personen[f.dataset.person] = w;
+  });
+  return {art, ich: art === 'gleich' ? zahl(box.querySelector('.t-ich').value) > 0
+                                     : zahl(box.querySelector('.t-ich').value), personen};
+}
+async function vorschau(el){
+  const box = el.closest('.teilung');
+  const tr = document.getElementById('z-' + box.dataset.zeile);
+  const [buchung, teil] = schluessel(tr);
+  const aus = box.querySelector('.t-ergebnis');
+  try {
+    const out = await senden('/api/geteilt/teilung', {buchung, teil, teilung: teilungAus(box), vorschau: true});
+    aus.className = 't-ergebnis muted klein';
+    aus.textContent = Object.entries(out.anteile).map(([k, c]) =>
+      (k === 'ich' ? 'ich' : (PERSONEN[k] || k)) + ' ' + centsAlsText(c) + ' €').join(' · ');
+  } catch (e) { aus.className = 't-ergebnis neg klein'; aus.textContent = e; }
+}
+async function teilungSpeichern(knopf, gleich){
+  const box = knopf.closest('.teilung');
+  const [buchung, teil] = schluessel(document.getElementById('z-' + box.dataset.zeile));
+  try {
+    await senden('/api/geteilt/teilung', {buchung, teil, teilung: gleich ? null : teilungAus(box)});
+    melden(knopf, 'gespeichert — neu rechnen …', false);
+    location.reload();
+  } catch (e) { melden(knopf, e, true); }
+}
+</script>
+
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/geteilt_custom.yaml', 'Welcher Teil welcher Buchung zu welchem Projekt gehört, mit Teilung.'),
+  ('finctl/web/templates/geteilt_buchungen.html', 'Die Texte dieser Seite.'),
+], handbuch='geteilt-buchungen') }}
+{% endblock %}

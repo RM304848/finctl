@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Handbuch{% endblock %}
+{% block body %}
+<style>
+  /* Fliesstext liest sich in schmalen Spalten; die Tabellen duerfen breit sein. */
+  .handbuch{max-width:74ch}
+  .handbuch .wrap{max-width:none}
+  .handbuch h2{margin-top:2rem}
+  .handbuch h3{margin-top:1.4rem}
+  .handbuch hr{border:0;border-top:1px solid var(--line);margin:1.6rem 0}
+  .handbuch pre{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+                padding:.7rem .9rem;overflow-x:auto}
+  .handbuch li{margin:.2rem 0}
+</style>
+<h1>Handbuch</h1>
+<p class="zweck">Wie der Monat abläuft, was jede Seite zeigt und wo du was änderst.</p>
+<div class="handbuch">{{ inhalt|safe }}</div>
+{% endblock %}

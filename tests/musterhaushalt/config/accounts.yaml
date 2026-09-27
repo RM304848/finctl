@@ -1,0 +1,52 @@
+# Musterhaushalt: erfunden. Kein Konto, keine IBAN, kein Name gehoert jemandem.
+#
+# Vier Konten werden aus Auszuegen gelesen (die erzeugt tests/musterhaushalt/
+# auszuege.py), der Rest traegt nur einen Stand oder zeigt sich ueber
+# Umbuchungen.
+
+accounts:
+  - id: giro
+    display_name: Girokonto
+    institution: Beispielbank
+    account_type: giro
+    iban: DE10100000000000000101
+    ingest_mode: parsed
+    parser_profile: ing_csv
+    dispo_threshold_cents: 50000
+
+  - id: tagesgeld
+    display_name: Tagesgeld
+    institution: Beispielbank
+    account_type: tagesgeld
+    iban: DE10100000000000000102
+    ingest_mode: parsed
+    parser_profile: ing_csv
+    dispo_threshold_cents: 0
+
+  - id: alltag
+    display_name: Alltagskonto
+    institution: Musterbank eG
+    account_type: giro
+    iban: DE20200000000000000201
+    ingest_mode: parsed
+    parser_profile: volksbank_csv
+    dispo_threshold_cents: 0
+
+  # Fuehrt nur die Rate eines Kredits aus, gedeckt per Dauerauftrag vom
+  # Girokonto. Eigener Ordnername, damit auch `statement_folder` laeuft.
+  - id: ratenkonto
+    display_name: Ratenkonto
+    institution: Musterbank eG
+    account_type: giro
+    iban: DE20200000000000000202
+    ingest_mode: parsed
+    parser_profile: volksbank_csv
+    statement_folder: rate
+    dispo_threshold_cents: 0
+
+  - {id: gemeinschaft,  display_name: Gemeinschaftskonto, institution: Musterbank eG, account_type: giro,      ingest_mode: summary}
+  - {id: depot,         display_name: Depot,              institution: Beispielbank,  account_type: depot,     ingest_mode: summary}
+  - {id: krypto,        display_name: Kryptoboerse,       institution: Kryptohandel,  account_type: broker,    ingest_mode: summary}
+  - {id: darlehen-nord, display_name: Darlehen Nord,      institution: Bausparkasse,  account_type: loan,      ingest_mode: summary}
+  - {id: darlehen-sued, display_name: Darlehen Sued,      institution: Kreditbank,    account_type: loan,      ingest_mode: summary}
+  - {id: altkonto,      display_name: Altes Girokonto,    institution: Altbank,       account_type: giro,      ingest_mode: summary, active: false}

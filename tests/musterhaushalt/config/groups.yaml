@@ -1,0 +1,15 @@
+# Musterhaushalt: Vorgaenge -- was zu einer Sache gehoert.
+
+gruppen:
+  - id: ferienhaus
+    name: Ferienhaus -- Bau und Betrieb
+    von: 2025-01-01
+    match:
+      property: ferienhaus
+  - id: auto
+    name: Auto
+    von: 2024-01-01
+    match:
+      kategorie_prefix:
+        - mobilitaet/kfz
+        - mobilitaet/kraftstoff

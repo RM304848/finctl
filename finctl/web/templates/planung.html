@@ -1,0 +1,360 @@
+{% extends "base.html" %}{% block n_planung %}on{% endblock %}
+{% block title %}Planung{% endblock %}
+{% block body %}
+{# Rüstet jede Auswahlliste mit mehr als sechs Einträgen zu einem Filterfeld
+   auf -- hier vor allem die Kategorie, die 97 Einträge hat und als
+   Auswahlliste unbenutzbar ist. Der Klammer-Wähler bleibt bewusst ein
+   Textfeld mit Vorschlagsliste: dort MUSS ein neuer Name eingetippt werden
+   können, und das Filterfeld leert den Wert, wenn nichts passt. #}
+{% include "_combo.html" %}
+<h1>Planung
+  <span class="muted zusatz">—
+    {% set an = alle_klammern|selectattr('active')|list %}
+    {% if an %}{{ an|length }} eingeschaltet{% else %}keine eingeschaltet{% endif %}</span></h1>
+<p class="zweck">Alles, was noch nicht im Ledger steht — als Klammern, die du ein- und ausschalten kannst.</p>
+
+{# Was gerade rechnet, ganz oben. Sonst muss man es aus vier zugeklappten
+   Abschnitten zusammensuchen -- und die Frage "was ist eigentlich an" stellt
+   man jedes Mal, bevor man eine Zahl glaubt. #}
+{% set plaene = alle_klammern|rejectattr('obligation')|selectattr('active')|selectattr('summiert')|list %}
+<div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.8rem 0">
+  {% for k in alle_klammern if k.active %}
+  <a class="plain klein" href="#klammer-{{ k.id }}"
+     style="border:1px solid var({{ '--muted' if k.obligation else '--accent' }});border-radius:999px;padding:.15rem .6rem;color:var({{ '--muted' if k.obligation else '--accent' }})">
+    {{ k.name }}{% if k.obligation %} · Pflicht{% endif %}</a>
+  {% else %}
+  <span class="muted klein">Nichts eingeschaltet — die Prognose
+    rechnet nur mit dem, was im Ledger steht.</span>
+  {% endfor %}
+</div>
+{% if plaene|length > 1 %}
+<div class="note">
+  <strong class="neg">{{ plaene|length }} Pläne gleichzeitig an.</strong> Die Prognose summiert
+  {{ plaene|map(attribute='name')|join(' und ') }}. Varianten derselben Entscheidung gehören
+  einzeln eingeschaltet.</div>
+{% endif %}
+{# Ein Wegfall ohne zugeordnete Buchungen spart nichts -- er wird gemessen,
+   nicht getippt. Das stand bisher nur in der Antwort des Servers und war
+   deshalb unsichtbar: die Zeile sah aus wie jede andere und wirkte nicht. #}
+{% if offen %}
+<div class="note">
+  <strong class="neg">{{ offen|length }} Wegfall-Zeile{{ '' if offen|length == 1 else 'n' }}
+  ohne Messung.</strong> {{ offen|join(', ') }} — solange keine Buchung zugeordnet ist,
+  zieht die Zeile nichts ab, in keiner Rechnung. Zeile aufklappen und Buchungen zuordnen.</div>
+{% endif %}
+
+
+<h2>Verpflichtungen</h2>
+{# Eine Schuld wegzurechnen darf kein Klick sein -- deshalb kein Schalter. #}
+<p class="muted klein" style="margin:-.3rem 0 .6rem">Eingegangen, gelten in jeder Projektion.</p>
+
+
+{% for k in klammern %}
+{% include "_klammer.html" with context %}
+{% endfor %}
+{% if not klammern %}
+<p class="muted">Noch keine Verpflichtung. Unten unter „Neue Klammer" anlegen.</p>
+{% endif %}
+
+<h2>Pläne</h2>
+{% for k in scenarios %}
+{% include "_klammer.html" with context %}
+{% endfor %}
+{% if not scenarios %}
+<p class="muted">Noch kein Plan. Unten unter „Neue Klammer" anlegen.</p>
+{% endif %}
+
+{# Eine Klammer anlegen, egal welcher Art -- am Ende der Listen, dort, wo sie
+   danach steht. Positionen kommen anschliessend in der Klammer selbst dazu. #}
+<details class="klapp" id="neue-klammer">
+  <summary>Neue Klammer <span class="zahl">— Plan oder Verpflichtung</span></summary>
+  <div class="card">
+    <div class="zeilen-form">
+      <label>Name<input id="nk-name" placeholder="z.B. Zweitwagen"
+        onkeydown="if(event.key==='Enter')neueKlammer()"></label>
+      <label>Art<select id="nk-art" data-no-combo>
+        <option value="plan">Plan (abschaltbar)</option>
+        <option value="pflicht">Verpflichtung (gilt immer)</option>
+      </select></label>
+    </div>
+    <p class="zeilen-knoepfe"><button onclick="neueKlammer()">Anlegen</button>
+      <span id="meldung-neue-klammer" class="muted"></span></p>
+  </div>
+</details>
+
+{# Grundlagen zuletzt: sie werden selten angefasst, und oben verdraengten sie,
+   worum es auf dieser Seite geht. #}
+<h2>Grundlagen</h2>
+<div class="card">
+  <div style="display:grid;grid-template-columns:180px 1fr auto;gap:.6rem;align-items:end">
+    <label id="gehalt-untergrenze" title="Die niedrigste Monatszahlung, mit der eine Prognose rechnen darf">Gehalts-Untergrenze (€)<br>
+      <input id="floor" value="{{ floor|betrag }}" style="width:100%"></label>
+    <span class="muted klein">
+      {% if gehalt_min and gehalt_max %}Beobachtet
+      {{ gehalt_min|euro }}–{{ gehalt_max|euro }}.{% endif %}
+      {% if floor_source != 'default' %}Überschrieben, Basis
+      {{ floor_default|euro }}.{% endif %}</span>
+    <span class="row-actions"><button onclick="floorSpeichern()">Speichern</button>
+      <span id="st" class="muted"></span></span>
+  </div>
+  {# Steht hier und nicht bei den Zielen, weil es eine ANNAHME ist und kein
+     Ziel -- zwischen den Zielen gelesen sah es aus wie etwas, das erreicht
+     werden soll. #}
+</div>
+
+<details class="klapp" id="abgleich">
+  <summary>Abgleich
+    <span class="zahl">— letzte {{ abgleich.months }} vollständige Monate,
+      {{ abgleich.von[:7] }} bis {{ abgleich.bis[:7] }}: beschreibt der Plan dieselbe Welt wie das Ledger?</span></summary>
+{# Die Bloecke sind GEORDNET, der erste Treffer gewinnt, und das ist kein
+   Detail: kredit/tilgung und kredit/zinsen tragen beide das fixkosten-Flag,
+   eine Fixkostensumme ueber das Flag zaehlt die Kreditraten also ein zweites
+   Mal. Der letzte Block faengt alles ab, was keiner davor beansprucht hat --
+   deshalb muss die Summe der Bloecke die Gesamtsumme ergeben. #}
+<p class="muted klein" style="margin:-.3rem 0 .6rem">Abweichung: eine Regel fehlt
+  oder eine Annahme stimmt nicht.</p>
+<div class="wrap">
+<table>
+  <tr><th>Block</th><th class="num">geplant</th><th class="num">gemessen</th>
+      <th class="num">Δ</th><th></th></tr>
+  {% for r in abgleich.rows %}{% if r.measured_cents or r.planned_cents %}
+  <tr>
+    <td>{{ r.block.label }}</td>
+    <td class="num">{{ r.planned_cents|euro }}</td>
+    <td class="num"><a class="plain" href="/transactions?block={{ r.block.id }}&amp;start={{ abgleich.von }}&amp;end={{ abgleich.bis }}&amp;limit=500"
+      title="Die Buchungen hinter dieser Zahl, mit derselben Blockdefinition. Eine Transaktion, deren Teile in zwei Blöcke fallen, erscheint in beiden -- die Summe dort kann deshalb um ein paar Euro abweichen."
+      >{{ r.measured_cents|euro }}</a></td>
+    <td class="num {{ 'neg' if r.delta_cents|abs > 5000 else 'muted' }}">{{ r.delta_cents|euro }}</td>
+    <td class="muted klein">{{ r.note }}</td>
+  </tr>
+  {% endif %}{% endfor %}
+</table>
+</div>
+{% if abgleich.unassigned_cents %}
+<div class="note bad">{{ abgleich.unassigned_cents|euro }} keinem Block zugeordnet.
+  Das ist immer ein Fehler in der Aufteilung, nie eine Eigenschaft der Daten.</div>
+{% endif %}
+</details>
+
+<style>
+  /* Klammern: Zeile zeigt, Aufklappbereich bearbeitet. */
+  .klammer-kopf{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.4rem 0 .6rem;font-size:13px}
+  .klammer-kopf input{width:14rem}
+  table.planzeilen td{vertical-align:middle}
+  /* Bereich zum Bearbeiten, Buchungsliste und Suchzeile: base.html. */
+</style>
+<script>
+const st = document.getElementById('st');
+// Welche Buchungen zu welcher Zeile gehoeren. Eine Zuordnung sagt der Rechnung,
+// welche Reihe gemeint ist -- beim Wegfall die, die endet, bei neuen Kosten die,
+// die schon gebucht ist. Gespeichert wird sofort, weil die Wirkung davon abhaengt.
+const ZUORDNUNG = {{ zuordnung|tojson }};
+const KATNAMEN = {{ kategorie_namen|tojson }};
+const escH = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Immer nur eine Zeile offen; nach dem Speichern oeffnet sie sich wieder.
+function oeffneZeile(zid){
+  document.querySelectorAll('tr.panel').forEach(p => { if (p.id !== 'panel-' + zid) p.hidden = true; });
+  const p = document.getElementById('panel-' + zid);
+  if (!p) return;
+  p.hidden = !p.hidden;
+  try { sessionStorage.setItem('planung-offen', p.hidden ? '' : zid); } catch(e) {}
+}
+document.addEventListener('DOMContentLoaded', () => {
+  let zid = '';
+  try { zid = sessionStorage.getItem('planung-offen') || ''; } catch(e) {}
+  const p = zid && document.getElementById('panel-' + zid);
+  if (p){ p.hidden = false; const d = p.closest('details'); if (d) d.open = true; }
+});
+function buchungenSetzen(zid, hashes){
+  const z = ZUORDNUNG[zid];
+  post('/api/szenario-zeile-buchungen', {szenario: z.szenario, index: z.index, buchungen: hashes},
+       true, 'meldung-' + zid);
+}
+function buchungZu(zid, h){ buchungenSetzen(zid, [...new Set([...ZUORDNUNG[zid].hashes, h])]); }
+function buchungWeg(zid, h){ buchungenSetzen(zid, ZUORDNUNG[zid].hashes.filter(x => x !== h)); }
+function buchungenAlle(zid){
+  const z = ZUORDNUNG[zid];
+  buchungenSetzen(zid, [...new Set([...z.hashes, ...z.kandidaten])]);
+}
+// Ein- UND Ausgaenge: das Vorzeichen einer Zeile sagt nichts darueber, was
+// man sucht -- ein als Plus eingetragener Wegfall sucht eine Abbuchung.
+// Text und Kategorie sind beide optional; die Liste ersetzt die Vorschlaege,
+// und "alle zuordnen" nimmt, was gerade angezeigt ist.
+async function buchungSuchen(zid){
+  const q = document.getElementById('bq-' + zid).value.trim();
+  // Die Vorschlagsliste behaelt die gewaehlte Kennung unsichtbar. Ist das
+  // sichtbare Feld leer, heisst das "alle Kategorien" -- nicht die alte.
+  const verborgen = document.getElementById('bk-' + zid);
+  const sichtbar = verborgen && verborgen.previousElementSibling;
+  const kat = (sichtbar && sichtbar.tagName === 'INPUT' && !sichtbar.value.trim())
+    ? '' : ((verborgen && verborgen.value) || '');
+  const ziel = document.getElementById('bt-' + zid);
+  const kopf = document.getElementById('bkopf-' + zid);
+  const alle = document.getElementById('balle-' + zid);
+  if (q.length < 2 && !kat){
+    ziel.innerHTML = '<tr><td class="muted">Text oder Kategorie angeben.</td></tr>'; return;
+  }
+  const r = await fetch('/api/buchungen/suche?q=' + encodeURIComponent(q) + '&kategorie=' + encodeURIComponent(kat));
+  const schon = new Set(ZUORDNUNG[zid].hashes);
+  const alleTreffer = (await r.json()).rows;
+  const rows = alleTreffer.filter(b => !schon.has(b.dedup_hash));
+  const bereits = alleTreffer.length - rows.length;
+  ZUORDNUNG[zid].kandidaten = rows.map(b => b.dedup_hash);
+  // Bereits Zugeordnetes steht oben und wird hier ausgeblendet -- das muss die
+  // Meldung sagen, sonst liest sich "nichts gefunden" wie ein Fehler der Suche.
+  const zusatz = bereits ? ` (${bereits} bereits zugeordnet, siehe oben)` : '';
+  if (kopf && kopf.firstChild) kopf.firstChild.nodeValue = rows.length
+    ? `${rows.length} Buchungen${kat ? '' : ' aus allen Kategorien'} — zählen erst nach dem Zuordnen${zusatz} `
+    : `Keine weitere Buchung gefunden${zusatz} `;
+  if (alle) alle.hidden = !rows.length;
+  ziel.innerHTML = rows.map(b => `<tr><td class="muted">${escH(b.booking_date)}</td>
+      <td class="muted">${escH(b.account_id)}</td><td>${escH(b.text)}</td>
+      <td class="num">${centsAlsText(b.amount_cents)} €</td><td class="muted">${escH(KATNAMEN[b.kategorie] || b.kategorie || '')}</td>
+      <td class="aktionen"><button class="ghost" onclick="buchungZu('${zid}', '${escH(b.dedup_hash)}')">zuordnen</button></td></tr>`).join('');
+}
+const eur = centsAus;   // gemeinsamer Parser, siehe _betrag.html
+// Die Rueckmeldung steht neben dem Knopf, der sie ausgeloest hat (`ort`),
+// nicht an einer Sammelstelle weit weg davon.
+async function post(url, body, reload=true, ort=null){
+  const el = (ort && document.getElementById(ort)) || st;
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                             body: JSON.stringify(body)});
+  const j = await r.json();
+  if (j.error){ if (el){ el.textContent = 'Fehler: ' + j.error; el.className = 'neg'; } return false; }
+  if (el){ el.textContent = 'gespeichert'; el.className = 'muted'; }
+  if (reload) setTimeout(()=>location.reload(), 300);
+  return true;
+}
+function neueKlammer(){
+  post('/api/szenario', {neu: true, name: document.getElementById('nk-name').value.trim(),
+                         pflicht: document.getElementById('nk-art').value === 'pflicht'},
+       true, 'meldung-neue-klammer');
+}
+async function floorSpeichern(){
+  const r = await fetch('/api/setting', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({key:'salary_floor_cents', value: eur(document.getElementById('floor').value)})});
+  const j = await r.json();
+  st.textContent = j.error ? ('Fehler: '+j.error) : 'gespeichert';
+  if (!j.error) setTimeout(()=>location.reload(), 300);
+}
+function toggle(id, on){ post('/api/szenario', {id:id, aktiv:on}, true, 'meldung-' + id); }
+function umbenennen(id){
+  const name = document.getElementById('n-'+id).value.trim();
+  if (!name){ const m = document.getElementById('meldung-' + id); m.textContent = 'Fehler: Titel fehlt'; m.className = 'neg'; return; }
+  post('/api/szenario', {id:id, name:name}, true, 'meldung-' + id);
+}
+function entfernen(id, name){
+  if (confirm('Szenario "'+name+'" endgültig löschen? Zum Parken reicht der Haken.'))
+    post('/api/szenario', {id:id, loeschen:true}, true, 'meldung-' + id);
+}
+// Ein Wegfall hat keinen Betrag, keine Frequenz und keine Richtung -- alles
+// ergibt sich aus der Messung. Die Felder zu sperren statt sie zu ignorieren
+// sagt das, bevor jemand etwas eintippt, das dann verworfen wird.
+function artWechsel(zid){
+  const art = document.getElementById('e-art-' + zid).value;
+  const wegfall = art === 'wegfall', verkauf = art === 'verkauf', teilzeit = art === 'teilzeit';
+  for (const f of ['e-amt-', 'e-freq-', 'e-richtung-']) {
+    const el = document.getElementById(f + zid);
+    el.disabled = wegfall || teilzeit || (verkauf && f !== 'e-amt-');
+    el.style.opacity = el.disabled ? .45 : 1;
+  }
+  // Ein Verkauf braucht Objekt und Kosten statt Kategorie, Konto und Ende;
+  // Teilzeit nur einen Anteil -- das Gehalt dazu wird gemessen.
+  for (const f of ['l-objekt-', 'l-kosten-']) document.getElementById(f + zid).hidden = !verkauf;
+  document.getElementById('l-anteil-' + zid).hidden = !teilzeit;
+  for (const f of ['e-kat-', 'e-konto-']) {
+    const el = document.getElementById(f + zid);
+    el.disabled = verkauf || teilzeit; el.style.opacity = el.disabled ? .45 : 1;
+  }
+  const bis = document.getElementById('e-bis-' + zid);
+  bis.disabled = verkauf; bis.style.opacity = verkauf ? .45 : 1;
+  document.getElementById('e-amt-' + zid).placeholder =
+    wegfall ? 'wird gemessen' : (verkauf ? 'Preis' : '350,00');
+}
+// "70" oder "70 %" heisst 0,7: der Anteil wird so getippt, wie er gesagt wird.
+function anteilAus(text){
+  const v = parseFloat(String(text).replace('%', '').replace(',', '.').trim());
+  return isNaN(v) ? null : v / 100;
+}
+function saveTeilzeit(id, i, zid){
+  const g = s => document.getElementById(s + '-' + zid);
+  post('/api/szenario-zeile', {szenario:id, index:i, ersetzen:true, art:'teilzeit',
+    label: g('e-label').value, anteil: anteilAus(g('e-anteil').value),
+    start: g('e-von').value, ende: g('e-bis').value}, true, 'meldung-' + zid);
+}
+function saveVerkauf(id, i, zid){
+  const g = s => document.getElementById(s + '-' + zid);
+  post('/api/szenario-zeile', {szenario:id, index:i, ersetzen:true, art:'verkauf',
+    label: g('e-label').value, objekt: g('e-objekt').value, start: g('e-von').value,
+    amount_cents: eur(g('e-amt').value), verkaufskosten_cents: eur(g('e-kosten').value || '0')},
+    true, 'meldung-' + zid);
+}
+// Die Richtung ist eine Auswahl, kein Vorzeichen. Das Vorzeichen war die
+// haeufigste Fehlerquelle, und eine stille: im Bearbeitungsbereich machte ein
+// vergessenes Minus eine Rate von 362,50 zur Einnahme, und die Klammer zeigte
+// ein Plus, wo ein Minus stehen musste. Der Betrag wird ohne Vorzeichen
+// gelesen, die Auswahl setzt es.
+function betragMitRichtung(betragId, richtungId){
+  const c = eur(document.getElementById(betragId).value);
+  if (c === null || isNaN(c)) return c;
+  return document.getElementById(richtungId).value === '+' ? Math.abs(c) : -Math.abs(c);
+}
+
+// Eine neue Position in IHRER Klammer -- die Kennung kommt aus der Zeile, in
+// der das Formular steht, statt aus einem Namensfeld.
+function neueZeile(kid){
+  const zid = kid + '-neu';
+  const g = s => document.getElementById(s + '-' + zid);
+  const art = g('e-art').value;
+  if (art === 'verkauf') {
+    post('/api/szenario-zeile', {szenario: kid, art: art, label: g('e-label').value,
+      objekt: g('e-objekt').value, start: g('e-von').value,
+      amount_cents: eur(g('e-amt').value), verkaufskosten_cents: eur(g('e-kosten').value || '0')},
+      true, 'meldung-' + zid);
+    return;
+  }
+  if (art === 'teilzeit') {
+    post('/api/szenario-zeile', {szenario: kid, art: art, label: g('e-label').value,
+      anteil: anteilAus(g('e-anteil').value), start: g('e-von').value, ende: g('e-bis').value},
+      true, 'meldung-' + zid);
+    return;
+  }
+  const body = {szenario: kid, art: art, label: g('e-label').value,
+    kategorie: g('e-kat').value, konto: g('e-konto').value,
+    frequenz: g('e-freq').value, start: g('e-von').value, ende: g('e-bis').value,
+    amount_cents: art === 'wegfall' ? null : betragMitRichtung('e-amt-' + zid, 'e-richtung-' + zid)};
+  try { sessionStorage.setItem('planung-offen', ''); } catch(e) {}
+  post('/api/szenario-zeile', body, true, 'meldung-' + zid);
+}
+function delZeile(id, i){
+  post('/api/szenario-zeile', {szenario:id, index:i, loeschen:true}, true, 'meldung-' + id + '-' + i);
+}
+// Bearbeiten statt löschen und neu anlegen: eine Annahme zu korrigieren darf
+// nicht heissen, die Zeile samt ihrer Stellung in der Klammer zu verlieren.
+function saveZeile(id, i, zid, art){
+  const g = s => document.getElementById(s + '-' + zid);
+  const body = {szenario:id, index:i, ersetzen:true, art:art,
+    label: g('e-label').value,
+    kategorie: g('e-kat').value,
+    konto: g('e-konto').value,
+    start: g('e-von').value,
+    ende: g('e-bis').value};
+  if (art !== 'wegfall') {
+    body.frequenz = g('e-freq').value;
+    body.amount_cents = betragMitRichtung('e-amt-' + zid, 'e-richtung-' + zid);
+  }
+  post('/api/szenario-zeile', body, true, 'meldung-' + zid);
+}
+
+</script>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/szenarien.yaml', 'Die Klammern und ihre Zeilen.'),
+  ('config/assumptions.yaml', 'Inflation, Rendite, Gehaltsuntergrenze.'),
+  ('config/settings_custom.yaml', 'Die von hier aus gesetzte Gehaltsuntergrenze.'),
+  ('config/loans.yaml', 'Kredite, auch die an eine Klammer gebundenen Vorlagen.'),
+  ('config/taxonomy.yaml', 'Die Kategorien zur Auswahl.'),
+  ('finctl/web/templates/planung.html', 'Die Texte dieser Seite.'),
+], handbuch='planung') }}
+{% endblock %}

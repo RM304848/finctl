@@ -1,0 +1,223 @@
+{% extends "base.html" %}{% block n_regeln %}on{% endblock %}
+{% block title %}Regeln{% endblock %}
+{% block body %}
+{% include "_combo.html" %}
+<h1>Regeln</h1>
+<p class="zweck">Welche Regel welche Buchung zuordnet — mit Vorschau, bevor du speicherst.</p>
+
+<form class="suchzeile" method="get" action="/regeln">
+  <input name="q" value="{{ q }}" placeholder="Kennung, Name oder Text">
+  <select name="kategorie" data-placeholder="alle Kategorien">
+    <option value="">alle Kategorien</option>
+    {% for c in categories %}<option value="{{ c.id }}"{% if c.id == kategorie %} selected{% endif %}>{{ c.label }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="ghost">Filtern</button>
+  {% if q or kategorie %}<a class="plain" href="/regeln">alle zeigen</a>{% endif %}
+  <span class="luecke"></span>
+  <button type="button" onclick="oeffne('')">Neue Regel</button>
+</form>
+
+<div class="wrap"><table class="regeln">
+  <tr id="kopfzeile"><th class="num">Prio</th><th>Regel</th><th>Bedingung</th><th>setzt</th>
+      <th class="num">Buchungen</th><th></th></tr>
+  {# EIN Bearbeitungsbereich, der unter die geoeffnete Zeile wandert. Einer je
+     Regel hiesse hunderte versteckte Formulare samt Vorschlagslisten. #}
+  <tr id="panel" class="panel" hidden><td colspan="6">
+    <p class="regel-titel"><strong id="f-titel"></strong> <span class="muted" id="f-herkunft"></span></p>
+    <div class="zeilen-form">
+      <label>Name<input id="f-name"></label>
+      <label>Priorität<input id="f-priority" placeholder="kleiner gewinnt"></label>
+      <label>Text enthält eins von<input id="f-text" placeholder="Bundeskasse, Zoll"></label>
+      <label>Text enthält alle<input id="f-text_all" placeholder="mit Komma trennen"></label>
+      <label>Gegenpartei<input id="f-counterparty" placeholder="mit Komma trennen"></label>
+      <label>Konten<input id="f-account" placeholder="c24, dkb-giro"></label>
+      <label>Richtung<select id="f-sign" data-no-combo>
+        <option value="">beide</option><option value="-">nur Ausgänge</option>
+        <option value="+">nur Eingänge</option></select></label>
+      <label>Betrag ab<input id="f-betrag_von" class="betrag" placeholder="ohne Vorzeichen"></label>
+      <label>Betrag bis<input id="f-betrag_bis" class="betrag" placeholder="offen"></label>
+      <label>Datum ab<input id="f-datum_von" placeholder="2026-01-01"></label>
+      <label>Datum bis<input id="f-datum_bis" placeholder="offen"></label>
+    </div>
+    <div class="zeilen-form zweiter-block">
+      <label>Kategorie<input id="f-mgmt" autocomplete="off" placeholder="tippen …"></label>
+      <label>Steuer<input id="f-tax" autocomplete="off" placeholder="aus der Kategorie"></label>
+      <label>Objekt<select id="f-property" data-no-combo>
+        <option value="">—</option>
+        {% for p in properties %}<option value="{{ p.id }}">{{ p.id }}</option>{% endfor %}
+      </select></label>
+      <label>Notiz an der Buchung<input id="f-note"></label>
+    </div>
+    <p class="muted" id="f-weitere" hidden></p>
+    <p class="zeilen-knoepfe">
+      <button type="button" class="ghost" onclick="vorschau()">Vorschau</button>
+      <button type="button" onclick="speichern()">Speichern</button>
+      <button type="button" class="ghost" id="f-loeschen" onclick="loeschen()">Regel löschen</button>
+      <span id="f-meldung" class="muted"></span></p>
+    <div class="buchungen" id="f-vorschau" hidden>
+      <p class="muted" id="f-vorschau-kopf"></p>
+      <table class="detail" id="f-vorschau-zeilen"></table>
+    </div>
+  </td></tr>
+  {% for r in rows %}
+  <tr id="r-{{ r.id }}" class="klappbar" onclick="oeffne('{{ r.id }}')">
+    <td class="num muted">{{ r.priority }}</td>
+    <td><code>{{ r.id }}</code>{% if r.herkunft != 'basis' %} <span class="pill eigen">{{ r.herkunft }}</span>{% endif %}
+      <br><span class="muted">{{ r.name }}</span></td>
+    <td class="muted">{{ r.bedingung }}</td>
+    <td>{{ r.setzt }}</td>
+    <td class="num{{ ' muted' if not r.treffer }}">{{ r.treffer }}</td>
+    <td class="aktionen"><button type="button" class="ghost"
+      onclick="event.stopPropagation();oeffne('{{ r.id }}')">Öffnen</button></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">Keine Regel passt zum Filter.</td></tr>
+  {% endfor %}
+</table></div>
+
+<style>
+  table.regeln td{vertical-align:middle}
+  .regel-titel{margin:0 0 .5rem;font-size:13px}
+  .zweiter-block{margin-top:.5rem}
+  .suchzeile .luecke{flex:1}
+</style>
+<script>
+const REGELN = {{ formwerte|tojson }};
+const VORLAGE = {{ vorlage|tojson }};
+const CATS = {{ categories|tojson }};
+const TAXES = {{ tax_categories|tojson }};
+const HERKUNFT = {basis: 'aus config/rules.yaml', geaendert: 'aus config/rules.yaml, hier geändert',
+                  eigen: 'hier angelegt'};
+const TEXTFELDER = ['name', 'priority', 'text', 'text_all', 'counterparty', 'account',
+                    'datum_von', 'datum_bis', 'note'];
+const escH = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const feld = n => document.getElementById('f-' + n);
+let offen = null;   // Kennung der offenen Regel, '' fuer eine neue
+
+// Das Feld zeigt den Anzeigenamen, gespeichert wird die Kennung aus data-id.
+function comboSetzen(inp, items, id){
+  const hit = items.find(i => i.id === id);
+  inp.value = id ? (hit ? hit.label : id) : '';
+  inp.dataset.id = id || '';
+}
+// Ein geleertes Feld heisst "keine"; ein ausgeschriebener Name oder eine
+// getippte Kennung zaehlt wie ein angeklickter Treffer.
+function comboWert(inp, items){
+  const t = inp.value.trim();
+  if (!t) return '';
+  if (inp.dataset.id) return inp.dataset.id;
+  const hit = items.find(i => i.id === t || i.label.toLowerCase() === t.toLowerCase());
+  return hit ? hit.id : t;
+}
+// Die Steuerposition folgt der Kategorie, solange niemand eine eigene gewaehlt hat.
+makeCombo(feld('mgmt'), CATS, item => {
+  if (!feld('tax').value.trim() && item.tax) comboSetzen(feld('tax'), TAXES, item.tax);
+});
+makeCombo(feld('tax'), TAXES);
+
+function meldung(text, fehler){
+  const m = feld('meldung'); m.textContent = text; m.className = fehler ? 'neg' : 'muted';
+}
+function fuellen(w, id){
+  TEXTFELDER.forEach(k => { feld(k).value = w[k] ?? ''; });
+  feld('sign').value = w.sign || '';
+  feld('property').value = w.property || '';
+  feld('betrag_von').value = w.betrag_von_cents == null ? '' : centsAlsText(w.betrag_von_cents);
+  feld('betrag_bis').value = w.betrag_bis_cents == null ? '' : centsAlsText(w.betrag_bis_cents);
+  comboSetzen(feld('mgmt'), CATS, w.mgmt);
+  comboSetzen(feld('tax'), TAXES, w.tax);
+  feld('titel').textContent = id || 'Neue Regel';
+  feld('herkunft').textContent = id ? (HERKUNFT[w.herkunft] || '')
+                                    : (w.buchung ? 'aus der Buchung ' + w.buchung : '');
+  const weitere = w.weitere || [];
+  feld('weitere').hidden = !weitere.length;
+  feld('weitere').textContent = 'Bleibt beim Speichern unverändert: ' + weitere.join(' · ');
+  feld('loeschen').hidden = !id;
+  feld('vorschau').hidden = true;
+  meldung('');
+}
+// Immer nur eine Regel offen; nach dem Speichern oeffnet sie sich wieder.
+function oeffne(id){
+  const panel = document.getElementById('panel');
+  if (offen === id && !panel.hidden){ panel.hidden = true; offen = null; merken(); return; }
+  const werte = id ? REGELN[id] : (VORLAGE || {priority: 100});
+  if (!werte) return;
+  const zeile = (id && document.getElementById('r-' + id)) || document.getElementById('kopfzeile');
+  zeile.after(panel);
+  fuellen(werte, id);
+  panel.hidden = false; offen = id; merken();
+  if (!id) feld('name').focus({preventScroll: true});
+}
+function merken(){ try { sessionStorage.setItem('regeln-offen', offen || ''); } catch (e) {} }
+
+function formular(){
+  const f = {id: offen || '', neu: !offen};
+  TEXTFELDER.forEach(k => { f[k] = feld(k).value.trim(); });
+  f.sign = feld('sign').value;
+  f.property = feld('property').value;
+  const betrag = n => { const c = centsAus(feld(n).value); return c == null ? null : Math.abs(c); };
+  f.betrag_von_cents = betrag('betrag_von');
+  f.betrag_bis_cents = betrag('betrag_bis');
+  f.mgmt = comboWert(feld('mgmt'), CATS);
+  f.tax = comboWert(feld('tax'), TAXES);
+  return f;
+}
+async function senden(url, body){
+  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                              body: JSON.stringify(body)});
+  try { return await r.json(); } catch (e) { return {error: 'Antwort ' + r.status}; }
+}
+async function vorschau(){
+  meldung('rechne …');
+  const j = await senden('/api/regeln/vorschau', formular());
+  if (j.error){ meldung(j.error, true); return; }
+  meldung('');
+  const teile = [`${j.treffer} Buchungen`, `davon wechseln ${j.aendert} die Kategorie`];
+  if (j.verdeckt) teile.push(`${j.verdeckt} fängt eine Regel mit kleinerer Priorität`);
+  if (j.verliert) teile.push(`${j.verliert} fängt diese Regel nicht mehr`);
+  if (j.eigen) teile.push(`${j.eigen} bleiben eigene Entscheidung`);
+  feld('vorschau-kopf').textContent = teile.join(' · ');
+  const mehr = j.treffer - j.zeilen.length;
+  feld('vorschau-zeilen').innerHTML = j.zeilen.map(b => `<tr><td class="muted">${escH(b.datum)}</td>
+      <td class="muted">${escH(b.konto)}</td><td>${escH(b.text)}</td>
+      <td class="num">${centsAlsText(b.amount_cents)} €</td>
+      <td class="muted">${escH(b.kategorie_jetzt || '—')}</td>
+      <td>${b.aendert ? '<span class="pill">wechselt</span>' : ''}</td></tr>`).join('')
+    + (mehr > 0 ? `<tr><td colspan="6" class="muted">… und ${mehr} weitere</td></tr>` : '');
+  feld('vorschau').hidden = false;
+}
+async function speichern(){
+  meldung('speichere und ordne neu zu …');
+  const j = await senden('/api/regeln', formular());
+  if (j.error){ meldung(j.error, true); return; }
+  meldung(`gespeichert — ${j.queue} Buchungen noch im Review`);
+  offen = j.id; merken();
+  const p = new URLSearchParams(location.search); p.delete('aus');
+  setTimeout(() => { location.href = '/regeln' + (p.toString() ? '?' + p : ''); }, 600);
+}
+async function loeschen(){
+  if (!offen || !confirm(`Regel ${offen} löschen?\n\nIhre Buchungen fallen an die nächste `
+                         + `passende Regel oder zurück ins Review.`)) return;
+  meldung('lösche und ordne neu zu …');
+  const j = await senden('/api/regeln/' + encodeURIComponent(offen) + '/entfernen', {});
+  if (j.error){ meldung(j.error, true); return; }
+  offen = null; merken(); location.reload();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  if (VORLAGE){ oeffne(''); return; }
+  // /regeln#r-<kennung> oeffnet diese Regel -- ein Link, den man weitergeben kann.
+  const anker = decodeURIComponent(location.hash.replace(/^#r-/, ''));
+  if (anker && REGELN[anker]){ oeffne(anker); return; }
+  let id = '';
+  try { id = sessionStorage.getItem('regeln-offen') || ''; } catch (e) {}
+  if (id && REGELN[id]) oeffne(id);
+});
+</script>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/rules_custom.yaml', 'Was auf dieser Seite angelegt, geändert oder gelöscht wurde.'),
+  ('config/rules.yaml', 'Die von Hand geschriebenen Regeln samt Begründung.'),
+  ('config/overrides.yaml', 'Eigene Entscheidungen — sie stehen über jeder Regel.'),
+  ('finctl/web/templates/regeln.html', 'Die Texte dieser Seite.'),
+], handbuch='regeln') }}
+{% endblock %}

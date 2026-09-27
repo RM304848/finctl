@@ -1,0 +1,649 @@
+{% extends "base.html" %}{% block n_konten %}on{% endblock %}
+{% block title %}Konten{% endblock %}
+{% block body %}
+<style>
+  /* Die Legende zeigt dieselben Farben wie die Linien im Diagramm. */
+  .legende{font-size:12px}
+  .legende .strich{display:inline-block;width:22px;vertical-align:middle}
+  .strich.kosten{height:3px;background:var(--accent)}
+  .strich.gehalt{height:3px;background:var(--muted)}
+  .strich.gehalt-linie{height:0;border-top:2px dashed var(--muted)}
+  .strich.grenze{height:0;border-top:2px dashed var(--bad)}
+  .strich.deckel{height:0;border-top:2px dotted var(--warn)}
+  .unterschritten{fill:var(--bad)}
+  /* Konto, Zahlen und Knopf stehen auf einer Linie; der Zweck darunter
+     haengt ohne Trennstrich an seiner Zeile. */
+  table.konten td{vertical-align:middle}
+  table.konten tr.hauptzeile td{border-bottom:0}
+  table.konten tr.unterzeile td{padding-top:0;border-top:0;vertical-align:top}
+  /* Die Kontenregeln: ein Raster, das auf dem Telefon umbricht. */
+  .regeln{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem}
+  .regeln label{margin:0}
+  .regeln label.schalter{align-self:end;font-weight:400;font-size:12px}
+  .regeln input,.regeln select{width:100%}
+  .regeln input.betrag{text-align:right}
+  /* Ein Haken bleibt ein Haken: mit width:100% stand er als Balken ueber
+     seiner Beschriftung. */
+  .regeln input[type=checkbox]{width:auto;margin-right:.35rem}
+  /* Auf dem Telefon ist die Tabelle breiter als der Bildschirm und scrollt
+     waagerecht -- der Bearbeitungsbereich darin waere 940 Pixel breit und
+     muesste zum Ausfuellen seitlich geschoben werden. Angeheftet bleibt er
+     stehen, waehrend die Zeilen darueber scrollen. */
+  @media (max-width: 700px){
+    /* `table{overflow:hidden}` aus base.html rundet die Ecken -- und macht
+       die Tabelle zum naechsten Scrollport, an dem `sticky` haengenbleibt,
+       ohne je zu haften. Auf dem Telefon zaehlt das Formular mehr als die
+       Ecken. */
+    table.konten{overflow:visible}
+    table.konten tr.panel > td{padding:0}
+    .panel-inhalt{position:sticky;left:0;width:calc(100vw - 2.6rem);
+                  padding:.6rem .8rem}
+    .regeln{grid-template-columns:1fr}
+    /* In den Monatstabellen bleibt, worum es geht: der Tiefpunkt und wo der
+       Monat endet. Die Posten dazwischen stehen im aufgeklappten Monat. */
+    table.monate .nebensache{display:none}
+    table.monate td.monat{white-space:nowrap}
+    table.monate th,table.monate td{padding-left:.45rem;padding-right:.45rem}
+  }
+</style>
+<h1>Konten</h1>
+<p class="zweck">Der Tiefpunkt jedes Kontos im Monat, Monat für Monat — und ob er unter die Untergrenze fällt.</p>
+<nav class="auswahl" aria-label="Horizont"><span class="k">Horizont</span>
+  <a href="/konten?months={{ horizon_default }}" class="{{ 'on' if months <= horizon_default }}">{{ horizon_default }} Monate</a>
+  <a href="/konten?months={{ horizon_long }}" class="{{ 'on' if months > horizon_default }}">{{ horizon_long }} Monate</a>
+</nav>
+{% for vk in verkauf_hinweis %}
+<div class="note">Verkauf <strong>{{ vk.name }}</strong> ab {{ vk.ab.strftime('%Y-%m') }} aus der
+  Klammer <a class="plain" href="/planung#klammer-{{ vk.klammer_id }}">{{ vk.klammer }}</a> ist
+  hier <strong>nicht</strong> eingerechnet: Rate, Miete und Erlös laufen auf den Konten weiter wie
+  bisher. Der Verkauf wirkt nur in der
+  <a class="plain" href="/hochrechnung#jahr-{{ vk.ab.year }}">Hochrechnung</a>.</div>
+{% endfor %}
+{% if months > horizon_default %}
+<div class="note" id="gemessen-bis">Gemessen ist bis <strong>{{ gemessen_bis or '—' }}</strong>;
+  alles danach ist fortgeschrieben. Über Jahre gelesen: ein Vertrag, dessen Ende niemand
+  eingetragen hat, bucht hier weiter.</div>
+{% endif %}
+
+{# Vor den Konten, weil es die Frage ist, die entscheidet, ob der Ertrag des
+   Objekts in den Puffer fliessen kann. Gemessen und vorausgerechnet in einem
+   Bild, damit der Bruch zwischen beiden sichtbar bleibt. #}
+{% set ob = ohne_objekt %}
+{% set ziel = ob.ziel_cents %}
+<h2 id="ohne-objekt">Cashflow ohne {{ ob.label }}</h2>
+<div class="cards">
+  <div class="card"><div class="k">Letzter Monat{% if ob.letzter %} · {{ ob.letzter.monat.strftime('%Y-%m') }}{% endif %}</div>
+    {% if ob.letzter %}
+    <div class="v {{ 'pos' if ob.letzter.cents >= ziel else 'neg' }}">{{ ob.letzter.cents|euro }}</div>
+    {% else %}<div class="v muted">—</div>{% endif %}
+    <div class="muted klein">Ziel ≥ {{ ziel|euro }}</div></div>
+  <div class="card"><div class="k">Gemessen · Ø {{ ob.gemessen_anzahl }} Monate</div>
+    {% if ob.schnitt_gemessen_cents is not none %}
+    <div class="v {{ 'pos' if ob.schnitt_gemessen_cents >= ziel else 'neg' }}">{{ ob.schnitt_gemessen_cents|euro }}</div>
+    {% else %}<div class="v muted">—</div>{% endif %}
+    <div class="muted klein">{{ ob.gemessen_erreicht }} von {{ ob.gemessen_anzahl }} Monaten erreicht</div></div>
+  <div class="card"><div class="k">Prognose · Ø {{ ob.prognose_anzahl }} Monate</div>
+    {% if ob.schnitt_prognose_cents is not none %}
+    <div class="v {{ 'pos' if ob.schnitt_prognose_cents >= ziel else 'neg' }}">{{ ob.schnitt_prognose_cents|euro }}</div>
+    {% else %}<div class="v muted">—</div>{% endif %}
+    <div class="muted klein">{{ ob.prognose_erreicht }} von {{ ob.prognose_anzahl }} Monaten erreicht · Gehalt als Untergrenze</div></div>
+  <div class="card"><div class="k">Gemeinschaftskonto{% if ob.letzter %} · {{ ob.letzter.monat.strftime('%Y-%m') }}{% endif %}</div>
+    {% set soll = ob.gemeinschaftskonto_soll_cents %}
+    {% if ob.letzter %}
+    <div class="v {{ 'neg' if soll and -ob.letzter.gemeinschaftskonto_cents > soll else '' }}">{{ ob.letzter.gemeinschaftskonto_cents|euro }}</div>
+    {% else %}<div class="v muted">—</div>{% endif %}
+    <div class="muted klein">{% if soll %}Soll {{ (-soll)|euro }} · {% endif %}Ø <span class="{{ (ob.gemeinschaft_schnitt_cents or 0)|vz }}">{{ (ob.gemeinschaft_schnitt_cents or 0)|euro }}</span></div></div>
+</div>
+{% set werte = ob.monate|map(attribute='cents')|list %}
+{% if werte %}
+{% set oben = [werte|max, ziel, 0]|max %}
+{% set unten = [werte|min, ziel, 0]|min %}
+{% set spanne = (oben - unten) or 1 %}
+{% set breite = 30 %}
+{% set hoehe = 150 %}
+{% macro y(cents) %}{{ '%.1f'|format(8 + (oben - cents) / spanne * hoehe) }}{% endmacro %}
+<style>
+  .ob-balken.ist{fill:var(--accent)}
+  .ob-balken.prog{fill:var(--muted);opacity:.55}
+  .ob-balken.unter{fill:var(--bad)}
+  .ob-null{stroke:var(--line)}
+  .ob-ziel{stroke:var(--bad);stroke-dasharray:4 3}
+  .ob-achse{fill:var(--muted);font-size:10px}
+</style>
+<div class="card">
+  <div class="legende" style="margin-bottom:.3rem">
+    <span class="strich kosten"></span> gemessen &nbsp;
+    <span class="strich gehalt"></span> vorausgerechnet &nbsp;
+    <span class="strich grenze"></span> Ziel</div>
+  <div style="overflow-x:auto">
+  <svg width="{{ werte|length * breite + 10 }}" height="{{ hoehe + 30 }}" role="img"
+       aria-label="Cashflow ohne das Objekt, je Monat">
+    {% for m in ob.monate %}
+    {% set x = loop.index0 * breite + 5 %}
+    {% set y0 = [m.cents, 0]|max %}
+    <rect class="ob-balken {{ 'ist' if m.gemessen else 'prog' }}{{ ' unter' if m.cents < ziel and m.gemessen }}"
+          x="{{ x + 4 }}" y="{{ y(y0) }}" width="{{ breite - 8 }}"
+          height="{{ '%.1f'|format([(m.cents|abs) / spanne * hoehe, 1]|max) }}">
+      <title>{{ m.monat.strftime('%Y-%m') }} · {{ 'gemessen' if m.gemessen else 'vorausgerechnet' }}: {{ m.cents|euro }}</title></rect>
+    {% if m.monat.month == 1 or loop.first %}
+    <text class="ob-achse" x="{{ x + 2 }}" y="{{ hoehe + 24 }}">{{ m.monat.strftime('%y-%m') }}</text>
+    {% endif %}
+    {% endfor %}
+    <line class="ob-null" x1="0" x2="{{ werte|length * breite + 10 }}" y1="{{ y(0) }}" y2="{{ y(0) }}"/>
+    {% if ziel %}<line class="ob-ziel" x1="0" x2="{{ werte|length * breite + 10 }}" y1="{{ y(ziel) }}" y2="{{ y(ziel) }}"/>{% endif %}
+  </svg>
+  </div>
+</div>
+{# Dieselben Zahlen wie im Bild darueber, nur ablesbar -- deshalb zu. #}
+<details class="klapp">
+  <summary>Monate <span class="zahl">— {{ ob.monate|length }} Monate</span></summary>
+<div class="wrap">
+<table class="klein">
+  <tr><th style="width:150px"></th>
+    {% for m in ob.monate %}<th class="num{{ ' muted' if not m.gemessen }}">{{ m.monat.strftime('%Y-%m') }}</th>{% endfor %}</tr>
+  <tr><td>Cashflow ohne {{ ob.label }}</td>
+    {% for m in ob.monate %}<td class="num {{ 'pos' if m.cents >= ziel else 'neg' }}{{ ' muted' if not m.gemessen }}">{{ m.cents|euro }}</td>{% endfor %}</tr>
+  <tr><td>Gemeinschaftskonto</td>
+    {% for m in ob.monate %}<td class="num {{ 'neg' if ob.gemeinschaftskonto_soll_cents and -m.gemeinschaftskonto_cents > ob.gemeinschaftskonto_soll_cents else '' }}{{ ' muted' if not m.gemessen }}">{{ m.gemeinschaftskonto_cents|euro }}</td>{% endfor %}</tr>
+</table>
+</div>
+</details>
+{% endif %}
+
+{# Ein Diagramm, kein Diagramm pro Konto. Handgezeichnetes SVG statt einer
+   Bibliothek -- das Dashboard muss ohne Netz funktionieren. #}
+<h2 id="verlauf">Verlauf</h2>
+<div class="card">
+  <div style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;margin-bottom:.4rem">
+    <label style="margin:0">Konto
+      <select id="chart-acct" data-no-combo onchange="drawChart()"></select></label>
+    <span style="flex:1"></span>
+    <span id="legende-eins">
+      <span class="legende"><span class="strich kosten"></span> nach Kosten</span>
+      <span class="legende"><span class="strich gehalt-linie"></span> nach Gehalt</span>
+      <span class="legende"><span class="strich grenze"></span> Untergrenze</span>
+      <span class="legende" id="legende-deckel"><span class="strich deckel"></span> Deckel</span>
+    </span>
+    <span id="legende-alle" hidden>
+      <span class="legende"><span class="strich kosten"></span> Giro + Tagesgeld</span>
+      <span class="legende"><span class="strich grenze"></span> alle Untergrenzen</span>
+    </span>
+  </div>
+  <div id="chart" style="overflow-x:auto"></div>
+</div>
+
+{# Die Strategie zuerst: Tiefpunkte beantworten "geht eines ins Minus", nicht
+   "wofuer ist welches Konto da". Sortiert nach ROLLE, weil Gehalt, Verteilung
+   und Tagesgeld eine Reihenfolge sind, die eine alphabetische Liste verbirgt. #}
+{% set unter = views|selectattr('breach_months')|list %}
+<h2>Wozu welches Konto da ist</h2>
+{# Zu, weil die Tabelle die Konfiguration der Seite ist und nicht ihr Befund
+   -- der steht im Diagramm darueber. Offen, sobald ein Konto unter seiner
+   Grenze liegt: dann ist sie kein Nachschlagewerk mehr, sondern die Stelle,
+   an der man etwas aendert. #}
+<details class="klapp"{{ ' open' if unter }}>
+  <summary>{{ views|length }} Konten
+    <span class="zahl">— Rolle, Grenzen und Zweck
+      {%- if unter %}, {{ unter|length }} unter der eigenen Grenze{% endif %}</span>
+  </summary>
+<div class="wrap">
+<table class="konten">
+  <tr id="kopfzeile"><th style="width:150px">Konto</th><th style="width:110px">Rolle</th>
+      <th class="num" style="width:100px"
+          title="Deklarierter Dauerauftrag, keine gemessene Zahl">Zufluss</th>
+      <th class="num" style="width:95px">Untergrenze</th>
+      <th class="num" style="width:95px"
+          title="Guthaben darüber gehört aufs Tagesgeld">Deckel</th>
+      <th class="num" style="width:120px">Tiefpunkt</th>
+      <th class="num" style="width:110px">Auffüllung</th>
+      <th class="num" style="width:115px"
+          title="Auftrag, kein Befund: der Betrag über dem Deckel gehört monatlich aufs Tagesgeld">Abräumen</th>
+      <th></th></tr>
+  {# EIN Bearbeitungsbereich, der unter die geoeffnete Zeile wandert. Die
+     Regeln standen vorher je Konto als offene Karte unter der Tabelle: jeder
+     Wert zweimal auf derselben Seite, einmal als Text und einmal als Feld. #}
+  <tr id="panel" class="panel" hidden><td colspan="9">
+    <div class="panel-inhalt">
+    <p class="muted" style="margin:0 0 .5rem"><strong id="f-titel"></strong>
+      <span class="pill eigen" id="f-eigen" hidden>eigen</span>
+      <span id="f-status"></span></p>
+    <div class="regeln">
+      <label id="f-floor-label">Untergrenze €
+        <input id="f-floor" class="betrag"></label>
+      <label title="Deckel: Guthaben darüber gehört aufs Tagesgeld">Deckel €
+        <input id="f-ceil" class="betrag" placeholder="keiner"></label>
+      <label title="Deklarierter Dauerauftrag, keine gemessene Zahl">Dauerauftrag €
+        <input id="f-bud" class="betrag" placeholder="keiner"></label>
+      <label>Rolle
+        <select id="f-role" data-no-combo onchange="sperren()">
+          {% for name in rollen_namen %}<option value="{{ name }}">{{ rollen_text.get(name, name) }}</option>{% endfor %}
+        </select></label>
+      <label title="Was über dem Deckel liegt, geht am Monatsende dorthin. Nur das Betriebskonto räumt ab — nur für dessen Übertrag gibt es die Gegenbuchung">Abräumen nach
+        <select id="f-sweep" data-no-combo></select></label>
+      <label class="schalter" title="Aus: eine Unterschreitung bleibt sichtbar, statt still gedeckt zu werden">
+        <input type="checkbox" id="f-fill"> vom Betriebskonto auffüllen</label>
+      <label class="schalter" title="Die Untergrenze ist dann eine Monatsrate des Kredits">
+        <input type="checkbox" id="f-loanfloor" onchange="sperren()"> Untergrenze aus Kreditrate</label>
+    </div>
+    <label style="display:block;margin:.5rem 0 0">Zweck
+      <input id="f-note" maxlength="200" style="width:100%"
+             placeholder="wofür dieses Konto da ist"></label>
+    <p class="zeilen-knoepfe">
+      <button type="button" onclick="regelSpeichern()">Speichern</button>
+      <button type="button" class="ghost" onclick="oeffne(offen)">Schließen</button>
+      <span id="f-meldung" class="muted klein"></span></p>
+    </div>
+  </td></tr>
+  {% for v in views %}
+  <tr id="r-{{ v.id }}" class="klappbar hauptzeile" onclick="oeffne('{{ v.id }}')"
+      style="cursor:pointer">
+    <td><a class="plain" href="#k-{{ v.id }}"
+           onclick="event.stopPropagation()">{{ v.id }}</a></td>
+    <td><span class="pill">{{ rollen_text.get(v.role, v.role) if v.role else '—' }}</span></td>
+    <td class="num">{{ v.budget_cents|euro if v.budget_cents else '—' }}</td>
+    <td class="num muted">{{ v.dispo_threshold_cents|euro }}</td>
+    <td class="num muted">{{ v.ceiling_cents|euro if v.ceiling_cents else '—' }}</td>
+    <td class="num {{ 'neg' if v.breach_months else 'pos' }}">
+      {{ v.worst_trough_cents|euro if v.worst_trough_cents is not none else '—' }}</td>
+    <td class="num {{ 'warn' if v.topped_up_cents else 'muted' }}">
+      {{ v.topped_up_cents|euro if v.topped_up_cents else '—' }}</td>
+    <td class="num">{% if v.sweeps_to %}{{ v.sweep_total_cents|euro }}
+      <br><span class="muted fein">→ {{ v.sweeps_to }}</span>{% else %}—{% endif %}</td>
+    <td class="aktionen"><button type="button" class="ghost"
+      onclick="event.stopPropagation();oeffne('{{ v.id }}')">Öffnen</button></td>
+  </tr>
+  {# Der Zweck gehoert zur Zeile, braucht aber die ganze Breite: als Spalte
+     blieben davon neunzig Pixel, und die Zeile wurde fuenf Zeilen hoch. #}
+  <tr class="unterzeile klappbar" id="u-{{ v.id }}"
+      onclick="oeffne('{{ v.id }}')" style="cursor:pointer">
+    <td colspan="9" class="muted klein">{{ v.role_note or '—' }}
+      {%- if v.regel_eigen %} <span class="pill eigen"
+        title="Abweichend von config/forecast.yaml: {{ v.regel_eigen|join(', ') }}">eigen</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+
+</details>
+
+{% for v in views %}
+<h2 id="k-{{ v.id }}">{{ v.display_name }}
+  <span class="pill" style="vertical-align:middle">{{ rollen_text.get(v.role, v.role) if v.role else '—' }}</span>
+  {% if v.get('error') %}<span class="muted zusatz">— {{ v.error }}</span>
+  {% elif v.worst_trough_cents is not none %}
+  <span class="{{ 'neg' if v.breach_months else 'pos' }} zusatz">
+    — Tiefpunkt {{ v.worst_trough_cents|euro }}{% if v.worst_month %} im {{ v.worst_month[:7] }}{% endif %}</span>
+  {% endif %}</h2>
+
+{% if not v.get('error') %}
+<details class="klapp"{% if v.breach_months %} open{% endif %}>
+  <summary>Monate
+    <span class="zahl">— {{ months }} Monate
+      {%- if v.breach_months %}, {{ v.breach_months|length }} davon unter der Grenze{% endif %}</span>
+  </summary>
+<div class="wrap">
+<table class="monate">
+  <tr><th style="width:80px">Monat</th>
+      <th class="num nebensache" style="width:120px">vor Gehalt</th>
+      <th class="num nebensache" style="width:120px">Kosten</th>
+      <th class="num" style="width:130px">nach Kosten</th>
+      <th class="num nebensache" style="width:120px">Einnahmen</th>
+      <th class="num" style="width:130px">nach Gehalt</th>
+      <th class="num nebensache" style="width:110px">abräumen</th>
+      <th class="nebensache" style="width:90px"></th></tr>
+  {% for r in v.rows %}
+  {# Der Monat ist der Schalter. Ein teurer Monat soll sagen koennen, WAS ihn
+     teuer macht -- ohne das war die Tabelle eine Summe ohne Beleg. #}
+  <tr class="klappbar" onclick="zeigDetail('{{ v.id }}-{{ loop.index0 }}')"
+      style="cursor:pointer">
+    <td class="muted monat"><span class="pfeil" id="p-{{ v.id }}-{{ loop.index0 }}">▸</span>
+      {{ r.month[:7] }}</td>
+    <td class="num nebensache {{ r.opening_cents|vz }}">{{ r.opening_cents|euro }}</td>
+    <td class="num neg nebensache">{{ r.costs_cents|euro }}</td>
+    {# Die Spalte, auf die es ankommt. Alles andere ist Kontext. #}
+    <td class="num {{ 'neg' if r.breaches_dispo else 'pos' }}"
+        style="font-weight:600">{{ r.trough_cents|euro }}</td>
+    <td class="num nebensache {{ r.income_cents|vz }}">{{ r.income_cents|euro }}</td>
+    <td class="num {{ r.closing_cents|vz }}">{{ r.closing_cents|euro }}</td>
+    <td class="num nebensache {{ 'pos' if r.swept_cents else 'muted' }}">
+      {{ r.swept_cents|euro if r.swept_cents else '—' }}</td>
+    <td class="nebensache">{% if r.breaches_dispo %}<span class="pill solid" style="background:var(--bad)">unter Grenze</span>{% endif %}</td>
+  </tr>
+  <tr id="d-{{ v.id }}-{{ loop.index0 }}" hidden>
+    <td class="nebensache"></td>
+    <td colspan="7" style="padding:0 0 .5rem">
+      <table class="detail">
+        {% for etikett, cents in r.detail.items() %}
+        {% set h = (v.herkunft or {}).get(etikett) %}
+        <tr>
+          <td class="muted" style="width:60%">{{ v.labels.get(etikett, etikett) }}
+            {%- if h %} <span class="pill{{ ' eigen' if h.quelle == 'plan' }}">{{ h.quelle }}</span>
+            <div class="fein" style="opacity:.85;white-space:normal">{{ h.herleitung }}</div>{% endif %}</td>
+          <td class="num {{ cents|vz }}">{{ cents|euro }}</td>
+        </tr>
+        {% else %}
+        <tr><td class="muted">Keine Einzelposten — in diesem Monat rechnet die
+          Prognose mit nichts, was sie benennen könnte.</td></tr>
+        {% endfor %}
+      </table>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+</details>
+{% endif %}
+{% endfor %}
+
+
+<script>
+const VIEWS = {{ kurven|tojson }};
+const KONTEN = Object.fromEntries(VIEWS.map(v => [v.id, v]));
+
+const CH = {w: 900, h: 300, l: 78, r: 18, t: 16, b: 34};
+const IW = CH.w - CH.l - CH.r, IH = CH.h - CH.t - CH.b;
+// Math.round(-0.4) ist -0, und toLocaleString macht daraus "-0 €". Auf einer
+// Achse liest sich das wie ein Fehler.
+const fmt = c => ((Math.abs(c) < 50 ? 0 : c) / 100).toLocaleString('de-DE',
+  {maximumFractionDigits:0}) + ' €';
+
+// Runde Gitterwerte statt gleichmässiger Teilung. "43.725 €" auf einer Achse
+// zwingt zum Lesen; "40.000 €" erkennt man im Vorbeigehen.
+function niceStep(span, target){
+  const raw = span / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  for(const m of [1, 2, 2.5, 5, 10]) if(raw <= m * mag) return m * mag;
+  return 10 * mag;
+}
+
+// Eine Skala fuer beide Ansichten: das grosse Bild eines Kontos und die
+// kleinen aller Konten. `g` ist die Geometrie des Zeichenbereichs.
+function skala(vals, n, g){
+  g = g || {t: CH.t, l: CH.l, iw: IW, ih: IH};
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.08 || 1000;
+  lo -= pad; hi += pad;
+  return {lo, hi,
+          x: i => g.l + (n === 1 ? g.iw/2 : i * g.iw / (n - 1)),
+          y: c => g.t + g.ih - (c - lo) / (hi - lo) * g.ih};
+}
+
+function gitter(parts, s){
+  const step = niceStep(s.hi - s.lo, 5);
+  const ticks = [];
+  for(let t = Math.ceil(s.lo / step) * step; t <= s.hi; t += step) ticks.push(t);
+  if(s.lo < 0 && s.hi > 0 && !ticks.some(t => Math.abs(t) < 1)) ticks.push(0);
+  for(const t of ticks){
+    const yy = s.y(t).toFixed(1);
+    parts.push(`<line x1="${CH.l}" y1="${yy}" x2="${CH.w - CH.r}" y2="${yy}"
+      stroke="var(--line)" stroke-width="${t === 0 ? 1.5 : 1}"/>`);
+    parts.push(`<text x="${CH.l - 8}" y="${+yy + 4}" text-anchor="end"
+      font-size="11" fill="var(--muted)">${fmt(t)}</text>`);
+  }
+}
+
+function monatsachse(parts, rows, s){
+  // Nicht jeden Monat beschriften, sonst überlappen die Labels.
+  const every = Math.ceil(rows.length / 12);
+  rows.forEach((r, i) => {
+    if(i % every === 0 || i === rows.length - 1){
+      parts.push(`<text x="${s.x(i).toFixed(1)}" y="${CH.h - 12}" text-anchor="middle"
+        font-size="11" fill="var(--muted)">${r.month.slice(2,7)}</text>`);
+    }
+  });
+}
+
+function pfad(rows, key, s){
+  return rows.map((r, i) =>
+    (i ? 'L' : 'M') + s.x(i).toFixed(1) + ' ' + s.y(r[key]).toFixed(1)).join(' ');
+}
+
+function rahmen(beschriftung){
+  return `<svg viewBox="0 0 ${CH.w} ${CH.h}" width="100%"
+    style="min-width:620px;display:block" role="img"
+    aria-label="${beschriftung}">`;
+}
+
+function drawChart(){
+  const sel = document.getElementById('chart-acct');
+  const box = document.getElementById('chart');
+  document.getElementById('legende-eins').hidden = sel.value === 'ALLE';
+  document.getElementById('legende-alle').hidden = sel.value !== 'ALLE';
+  if(sel.value === 'ALLE'){ zeichneKumuliert(box); return; }
+  const v = KONTEN[sel.value];
+  if(!v || v.error || !v.rows || !v.rows.length){
+    box.innerHTML = '<p class="muted">Keine Daten für dieses Konto.</p>'; return;
+  }
+  const rows = v.rows;
+  const floor = v.dispo_threshold_cents || 0;
+
+  // Die Grenze gehört IN die Skala, sonst liegt die Linie, um die es geht,
+  // ausserhalb des Bildes und man sieht nicht, wie knapp es war.
+  const s = skala(rows.flatMap(r => [r.trough_cents, r.closing_cents])
+    .concat([floor, 0]).concat(v.ceiling_cents ? [v.ceiling_cents] : []), rows.length);
+
+  const parts = [rahmen('Verlauf ' + v.display_name)];
+  gitter(parts, s);
+  // Der Bereich unter der Grenze, damit eine Unterschreitung ins Auge springt
+  // statt nur aus einer Zahl hervorzugehen.
+  if(floor > s.lo){
+    parts.push(`<rect x="${CH.l}" y="${s.y(floor).toFixed(1)}" width="${IW}"
+      height="${(CH.t + IH - s.y(floor)).toFixed(1)}" fill="var(--bad)" opacity="0.07"/>`);
+    parts.push(`<line x1="${CH.l}" y1="${s.y(floor).toFixed(1)}" x2="${CH.w - CH.r}"
+      y2="${s.y(floor).toFixed(1)}" stroke="var(--bad)" stroke-width="2"
+      stroke-dasharray="6 4"/>`);
+  }
+  // Ein Legendeneintrag ohne Linie liest sich als die naechstbeste Linie.
+  const mitDeckel = !!(v.ceiling_cents && v.ceiling_cents < s.hi);
+  document.getElementById('legende-deckel').hidden = !mitDeckel;
+  if(mitDeckel){
+    parts.push(`<line x1="${CH.l}" y1="${s.y(v.ceiling_cents).toFixed(1)}"
+      x2="${CH.w - CH.r}" y2="${s.y(v.ceiling_cents).toFixed(1)}"
+      stroke="var(--warn)" stroke-width="2" stroke-dasharray="2 5"/>`);
+  }
+  parts.push(`<path d="${pfad(rows, 'closing_cents', s)}" fill="none"
+    stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 3"/>`);
+  parts.push(`<path d="${pfad(rows, 'trough_cents', s)}" fill="none"
+    stroke="var(--accent)" stroke-width="2.5"/>`);
+
+  rows.forEach((r, i) => {
+    const breach = r.breaches_dispo;
+    parts.push(`<circle cx="${s.x(i).toFixed(1)}" cy="${s.y(r.trough_cents).toFixed(1)}"
+      r="${breach ? 4.5 : 3}"${breach ? ' class="unterschritten"' : ' fill="var(--accent)"'}>
+      <title>${r.month.slice(0,7)}\nnach Kosten ${fmt(r.trough_cents)}\nnach Gehalt ${fmt(r.closing_cents)}</title>
+      </circle>`);
+  });
+  monatsachse(parts, rows, s);
+  parts.push('</svg>');
+  box.innerHTML = parts.join('');
+}
+
+// Alle Konten zusammen: reicht das liquide Geld fuer alle Untergrenzen?
+//
+// Linie: die Summe der Tiefpunkte aller Giro- und Tagesgeldkonten -- Geld, das
+// am selben Tag verfuegbar ist. Ein Depot steht nicht darin: was dort liegt,
+// muss erst verkauft werden. Gestrichelt: die Summe der Untergrenzen ALLER
+// Konten, auch der uebrigen -- gedeckt sein muessen sie trotzdem.
+const LIQUIDE = ['giro', 'tagesgeld'];
+
+function kumuliert(){
+  const mit = VIEWS.filter(v => !v.error && v.rows && v.rows.length);
+  const grenze = mit.reduce((s, v) => s + (v.dispo_threshold_cents || 0), 0);
+  const summen = new Map();
+  for(const v of mit){
+    if(!LIQUIDE.includes(v.account_type)) continue;
+    for(const r of v.rows){
+      summen.set(r.month, (summen.get(r.month) || 0) + r.trough_cents);
+    }
+  }
+  const rows = [...summen.entries()].sort()
+    .map(([month, trough_cents]) => ({month, trough_cents}));
+  return {rows, grenze};
+}
+
+function zeichneKumuliert(box){
+  const {rows, grenze} = kumuliert();
+  if(!rows.length){ box.innerHTML = '<p class="muted">Keine Daten.</p>'; return; }
+  // Ein einzelner Ausreisser -- ein Tagesgeld, das noch voll ist und im
+  // naechsten Monat fuer einen bekannten Kauf ausgegeben wird -- presst sonst
+  // alle uebrigen Monate in ein paar Pixel, genau dort, wo die Grenzlinie
+  // liegt. Ist der hoechste Wert mehr als dreimal der zweithoechste, endet
+  // die Achse beim zweithoechsten: die Linie laeuft sichtbar aus dem Bild,
+  // und ihr Wert steht am oberen Rand.
+  const sortiert = rows.map(r => r.trough_cents).sort((a, b) => b - a);
+  const gekappt = sortiert.length > 1 && sortiert[0] > sortiert[1] * 3;
+  const deckel = gekappt ? sortiert[1] : sortiert[0];
+  const s = skala(rows.map(r => Math.min(r.trough_cents, deckel)).concat([grenze]),
+                  rows.length);
+  const parts = [rahmen('Giro und Tagesgeld zusammen, gegen die Summe der Untergrenzen')];
+  gitter(parts, s);
+  // Der Bereich unter der Summe der Grenzen -- dort faengt das Problem an.
+  if(grenze > s.lo){
+    parts.push(`<rect x="${CH.l}" y="${s.y(grenze).toFixed(1)}" width="${IW}"
+      height="${(CH.t + IH - s.y(grenze)).toFixed(1)}" fill="var(--bad)" opacity="0.07"/>`);
+    parts.push(`<line x1="${CH.l}" y1="${s.y(grenze).toFixed(1)}" x2="${CH.w - CH.r}"
+      y2="${s.y(grenze).toFixed(1)}" stroke="var(--bad)" stroke-width="2"
+      stroke-dasharray="6 4"/>`);
+  }
+  parts.push(`<path d="${pfad(rows, 'trough_cents', s)}" fill="none"
+    stroke="var(--accent)" stroke-width="2.5"/>`);
+  rows.forEach((r, i) => {
+    const knapp = r.trough_cents < grenze;
+    parts.push(`<circle cx="${s.x(i).toFixed(1)}" cy="${s.y(r.trough_cents).toFixed(1)}"
+      r="${knapp ? 4.5 : 3}"${knapp ? ' class="unterschritten"' : ' fill="var(--accent)"'}>
+      <title>${r.month.slice(0,7)}\nGiro + Tagesgeld ${fmt(r.trough_cents)}\nalle Untergrenzen ${fmt(grenze)}</title>
+      </circle>`);
+  });
+  if(gekappt){
+    const i = rows.findIndex(r => r.trough_cents === sortiert[0]);
+    parts.push(`<text x="${(s.x(i) + 6).toFixed(1)}" y="${CH.t + 10}"
+      font-size="11" fill="var(--muted)">↑ ${fmt(sortiert[0])}</text>`);
+  }
+  monatsachse(parts, rows, s);
+  parts.push('</svg>');
+  box.innerHTML = parts.join('');
+}
+
+(function initChart(){
+  const sel = document.getElementById('chart-acct');
+  if(!sel) return;
+  sel.innerHTML = '<option value="ALLE">Giro + Tagesgeld zusammen</option>' +
+    VIEWS.map(v => `<option value="${v.id}">${v.id}</option>`).join('');
+  // Das Konto mit dem tiefsten Punkt zuerst: die Seite soll mit dem Problem
+  // aufmachen, nicht mit dem alphabetisch ersten Konto.
+  const worst = VIEWS.filter(v => !v.error && v.worst_trough_cents !== null)
+    .sort((a, b) => a.worst_trough_cents - b.worst_trough_cents)[0];
+  sel.value = (worst || VIEWS[0]).id;
+  drawChart();
+})();
+
+function zeigDetail(key){
+  const zeile = document.getElementById('d-' + key);
+  const pfeil = document.getElementById('p-' + key);
+  if(!zeile) return;
+  zeile.hidden = !zeile.hidden;
+  if(pfeil) pfeil.textContent = zeile.hidden ? '▸' : '▾';
+}
+
+// ---------------------------------------------------------- Kontenregeln
+let offen = null;
+const feld = n => document.getElementById('f-' + n);
+
+// Zwei Felder sind abgeleitet, nicht getippt: eine Untergrenze aus der
+// Kreditrate waechst mit ihr, und abraeumen kann nur das Betriebskonto -- fuer
+// jeden anderen Uebertrag gibt es keine Gegenbuchung.
+function sperren(){
+  feld('floor').disabled = feld('loanfloor').checked;
+  feld('sweep').disabled = feld('role').value !== 'operating';
+}
+
+function oeffne(id){
+  const panel = document.getElementById('panel');
+  if(offen === id && !panel.hidden){ panel.hidden = true; offen = null; merken(); return; }
+  const v = KONTEN[id];
+  if(!v) return;
+  const r = v.regel || {};
+  feld('titel').textContent = id;
+  feld('eigen').hidden = !(v.regel_eigen || []).length;
+  if(!feld('eigen').hidden){
+    feld('eigen').title = 'Abweichend von config/forecast.yaml: ' + v.regel_eigen.join(', ');
+  }
+  feld('status').innerHTML = status(v);
+  feld('floor').value = centsAlsText(v.dispo_threshold_cents || 0);
+  feld('ceil').value = r.ceiling_cents ? centsAlsText(r.ceiling_cents) : '';
+  feld('bud').value = r.budget_cents ? centsAlsText(r.budget_cents) : '';
+  feld('role').value = r.role || '';
+  feld('sweep').innerHTML = '<option value="">—</option>' + VIEWS
+    .filter(o => o.id !== id)
+    .map(o => `<option value="${o.id}"${r.sweep_to === o.id ? ' selected' : ''}>${o.id}</option>`)
+    .join('');
+  feld('fill').checked = r.auffuellen !== false;
+  feld('loanfloor').checked = !!r.floor_from_loan;
+  feld('note').value = r.note || '';
+  sperren();
+  meldung('');
+  document.getElementById('u-' + id).after(panel);
+  // Eine gemerkte Zeile kann in einer zugeklappten Tabelle liegen; das
+  // Formular waere dann offen und unsichtbar.
+  const klapp = panel.closest('details');
+  if(klapp) klapp.open = true;
+  panel.hidden = false; offen = id; merken();
+}
+
+function status(v){
+  const teile = [];
+  if((v.breach_months || []).length){
+    teile.push('<strong class="neg">unterschritten ' +
+      v.breach_months.map(m => m.slice(0,7)).join(', ') + '</strong>');
+  } else { teile.push('hält'); }
+  if(v.ceiling_cents && (v.over_ceiling_months || []).length){
+    teile.push('<strong class="warn">' + fmt(v.idle_cents) + '</strong> über Deckel');
+  }
+  return '— ' + teile.join(' · ');
+}
+
+function meldung(t){ feld('meldung').textContent = t; }
+function merken(){ try { sessionStorage.setItem('konten-offen', offen || ''); } catch (e) {} }
+(function zurueck(){
+  try {
+    const id = sessionStorage.getItem('konten-offen');
+    if(id && KONTEN[id]) oeffne(id);
+  } catch (e) {}
+})();
+
+async function regelSpeichern(){
+  const id = offen;
+  const zahl = n => { const t = (feld(n).value || '').trim();
+                      return t === '' ? null : centsAus(t); };
+  const floor = feld('floor').disabled ? undefined : zahl('floor');
+  if(floor === null){ meldung('Untergrenze ist keine Zahl.'); return; }
+  const deckel = zahl('ceil'), budget = zahl('bud');
+  if(deckel === undefined || budget === undefined){ meldung('Keine Zahl.'); return; }
+  const res = await fetch('/api/konto/' + id, {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      floor_cents: floor, ceiling_cents: deckel, budget_cents: budget,
+      role: feld('role').value,
+      sweep_to: feld('sweep').disabled ? undefined : feld('sweep').value,
+      auffuellen: feld('fill').checked,
+      floor_from_loan: feld('loanfloor').checked,
+      note: feld('note').value})});
+  if(res.ok){ meldung('gespeichert — neu rechnen…');
+              setTimeout(() => location.reload(), 600); }
+  else { const o = await res.json(); meldung(o.error || 'fehlgeschlagen'); }
+}
+
+</script>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/forecast.yaml', 'Rolle, Budget und Mindestniveau je Konto — mit der Begründung.'),
+  ('config/forecast_custom.yaml', 'Die Kontenregeln, die auf dieser Seite gesetzt wurden.'),
+  ('config/abos.yaml', 'Abos mit Termin, die der Auszug nicht zeigt — Vorräte, Amazon, neuer Zahlweg.'),
+  ('config/settings_custom.yaml', 'Mindestniveaus, die von dieser Seite aus gesetzt wurden.'),
+  ('config/assumptions.yaml', 'Gehaltsuntergrenze, Inflation, Objektertrag.'),
+  ('config/loans.yaml', 'Kreditraten, die abgebucht werden.'),
+  ('config/szenarien.yaml', 'Eingeschaltete Pläne, die in der Vorschau mitlaufen.'),
+  ('config/accounts.yaml', 'Welche Konten es gibt.'),
+  ('finctl/web/templates/konten.html', 'Die Texte dieser Seite.'),
+], handbuch='konten') }}
+{% endblock %}

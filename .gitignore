@@ -1,0 +1,47 @@
+# Financial data never enters version control.
+data/
+# Seit dem 27.09.2026 liegen config/ und data/ im Datenordner des Systems
+# (`finctl ort`), nicht mehr hier. Ein config/ in diesem Ordner gewaenne
+# gegen den Datenordner (finctl/pfade.py, Regel 3) -- und landete im
+# Repository, das weitergegeben werden soll.
+/config/
+# Der Stand vor dem Umzug, bis er geloescht wird.
+/vor-umzug/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# Backups
+backups/
+*.tar.gz
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+# Bauartefakte. `tests/test_paket.py` baut ein Rad und raeumt hinterher auf;
+# steht `build/` trotzdem herum, zaehlt ruff die Kopie des Codes ein zweites
+# Mal mit -- und die Verzweigungsratsche meldete jede Funktion als "neu".
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS / editor
+# Lokale Freigaben fuer Claude Code: enthalten Pfade und Befehle dieses Rechners.
+.claude/settings.local.json
+.DS_Store
+.idea/
+.vscode/
+
+# Account register holds IBANs / account numbers.
+config/accounts.yaml
+# Passwort-Hash und Sitzungsgeheimnis, dazu host: 0.0.0.0. Eingecheckt fiel die
+# lokale Einstellung auf den Stand im Repository zurueck, und der Server war
+# ploetzlich nur noch lokal erreichbar. Das Backup enthaelt die Datei weiter.
+config/server.yaml
+overrides.yaml.lock

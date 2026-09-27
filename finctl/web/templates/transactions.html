@@ -1,0 +1,333 @@
+{% extends "base.html" %}{% block n_tx %}on{% endblock %}
+{% block title %}Transaktionen{% endblock %}
+{% block body %}
+{% include "_combo.html" %}
+{% import "_summe.html" as sm %}
+{% import "_reiter.html" as rt %}
+<h1>Transaktionen {{ sm.kopf(summe, gezeigt) }}</h1>
+<p class="zweck">Jede Buchung, filterbar — was noch offen ist, was aufzuteilen ist, und wo eine falsche Zuordnung korrigiert wird.</p>
+{{ rt.reiter(reiter, f.ansicht) }}
+{% if f.ansicht == 'aufteilen' and rows %}
+<div class="note">Eine Regel hat diese Buchungen bewusst offen gelassen, weil eine Zahlung
+  mehreres abdeckt. „aufteilen“ zerlegt sie in ihre Teile.</div>
+{% endif %}
+
+{% if conflicts %}
+{# Zugeklappt per Default. Der Kasten ist eine Diagnose, keine Aufgabe -- er
+   gehört verfügbar, aber nicht vor die Tabelle, für die man die Seite öffnet.
+   <details> statt JavaScript: der Zustand gehört ins Markup, und es funktioniert
+   auch dann, wenn irgendwann kein Skript mehr läuft. #}
+<details class="note bad">
+  <summary style="cursor:pointer">
+    <strong>{{ conflicts|length }} Regeln, denen du wiederholt widersprichst</strong>
+    <span class="muted klein"> — aufklappen</span>
+  </summary>
+  <p style="margin:.6rem 0 0">Eine Korrektur ist eine Ausnahme, viele sind eine falsche Regel.</p>
+  <table style="margin-top:.6rem;background:transparent;border:none">
+    <tr><th>Regel</th><th class="num">Korrekturen</th><th>von</th><th>nach</th><th></th></tr>
+    {% for k in conflicts %}
+    <tr>
+      <td><code>{{ k.rule }}</code></td>
+      <td class="num">{{ k.count }}</td>
+      <td class="muted">{{ k['from'] or '—' }}</td>
+      <td><strong>{{ k.most_common }}</strong>
+          {% if not k.unanimous %}<span class="muted"> ({{ k.most_common_count }}/{{ k.count }})</span>{% endif %}</td>
+      <td>
+        {% if k.unanimous and k.count >= 2 %}
+          <button class="ghost" onclick="repoint(this, {{ k.rule|tojson }}, {{ k.most_common|tojson }})">
+            Regel ändern</button>
+        {% else %}<span class="muted klein">uneinheitlich — beobachten</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</details>
+{% endif %}
+
+<form method="get" class="card">
+  {% if f.ansicht %}<input type="hidden" name="ansicht" value="{{ f.ansicht }}">{% endif %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem">
+    <label>Konto<br>
+      <select name="account" style="width:100%"><option value="">alle</option>
+      {% for a in accounts %}<option value="{{ a }}" {{ 'selected' if f.account==a }}>{{ a }}</option>{% endfor %}
+      </select></label>
+    <label>von<br><input name="start" value="{{ f.start }}" placeholder="2026-01-01" style="width:100%"></label>
+    <label>bis<br><input name="end" value="{{ f.end }}" placeholder="2026-12-31" style="width:100%"></label>
+    {# Ein Feld fuer beide Ebenen: die Suche findet Ast wie Blatt. Mehrfachwahl,
+       weil "was haben diese drei zusammen gekostet" eine Frage ist; die
+       Auswahl wird zu Chips mit verstecktem Feld und serverseitig verodert. #}
+    <label>Kategorie<br>
+      <div id="catchips" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.25rem"></div>
+      <input id="catadd" style="width:100%" placeholder="alle — tippen zum Hinzufügen"
+             autocomplete="off" data-no-combo></label>
+    <label>Steuer<br>
+      <div id="taxchips" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.25rem"></div>
+      <input id="taxadd" style="width:100%" placeholder="alle — tippen zum Hinzufügen"
+             autocomplete="off" data-no-combo></label>
+    <label>Quelle<br>
+      <select name="source" style="width:100%"><option value="">alle</option>
+      {% for s in ['rule','manual','default','token'] %}
+        <option value="{{ s }}" {{ 'selected' if f.source==s }}>{{ s }}</option>{% endfor %}
+      </select></label>
+    <label>Suche<br><input name="q" value="{{ f.q }}" placeholder="Text…" style="width:100%"></label>
+  </div>
+  <p style="margin:.7rem 0 0"><button>Filtern</button>
+     <a class="plain" href="/transactions{{ '?ansicht=' ~ f.ansicht if f.ansicht }}" style="margin-left:.6rem">zurücksetzen</a></p>
+</form>
+
+{# Auf dem Telefon ist jede Buchung ein Block: Datum, Konto, Betrag oben,
+   darunter Text, Kategorie und Objekt -- statt einer Tabelle, deren Text
+   und Kategorie hinter dem Scrollen liegen. #}
+<style>
+  @media (max-width:700px){
+    table.tx,table.tx tbody{display:block}
+    table.tx tr.kopf{display:none}
+    table.tx tr{display:grid;grid-template-columns:auto 1fr auto;column-gap:.6rem;
+      row-gap:.3rem;padding:.6rem 0;border-bottom:1px solid var(--line)}
+    table.tx td{border:0;padding:0}
+    table.tx td.text,table.tx td.kat{grid-column:1 / -1}
+    table.tx td.obj{grid-column:1 / 3}
+    table.tx td.tun{grid-column:3;text-align:right}
+  }
+</style>
+<div class="wrap">
+<table class="tx">
+  {# Column widths are defaults only -- drag any header edge to change them,
+     double-click a grip to reset. Text gets the largest share because it is
+     the column you actually read. #}
+  <tr class="kopf"><th style="width:92px">Datum</th><th style="width:110px">Konto</th>
+      <th class="num" style="width:92px">Betrag</th>
+      <th style="width:30%">Text</th>
+      <th style="width:210px">Kategorie</th>
+      <th style="width:95px">Objekt</th>
+      <th style="width:80px"></th></tr>
+  {% for r in rows %}
+  <tr id="row-{{ r.id }}">
+    <td class="muted nobr">{{ r.booking_date }}</td>
+    <td class="muted nobr">{{ r.account_id }}</td>
+    <td class="num betrag {{ r.amount_cents|vz }}">{{ r.amount_cents|euro }}</td>
+    <td class="text"><span class="raw" title="{{ r.raw_text }}">{{ r.raw_text }}</span>
+        {% if r.note %}<span class="pill">{{ r.note }}</span>{% endif %}</td>
+    {# EINE Spalte, kein "Aktuell" neben einem leeren "Neu": zwei kosten die
+       Breite, die der Verwendungszweck braucht. `data-cur` merkt den aktuellen
+       Wert, damit Speichern nur schreibt, was sich WIRKLICH geaendert hat --
+       sonst wird aus einer Regelzuordnung eine Handentscheidung. #}
+    <td class="kat">
+      {% if r.n_parts > 1 %}
+        <span class="pill">{{ r.n_parts }} Teile</span>
+        <a class="plain" href="/tx/{{ r.id }}">bearbeiten →</a>
+      {% else %}
+        <input id="cat-{{ r.id }}" class="catsel" style="width:100%" placeholder="—"
+               value="{{ cat_label.get(r.mgmt_category_id, r.mgmt_category_id or '') }}"
+               data-cur="{{ r.mgmt_category_id or '' }}" autocomplete="off">
+      {% endif %}
+      {# Die Herkunftsmarke. Sie ist die einzige Stelle, an der man sieht, ob
+         eine Zeile noch der Regel folgt oder eigene Entscheidung ist -- und
+         sie aenderte sich beim Speichern nicht, obwohl genau das passierte.
+         Ein gruenes Aufblitzen sagte "gespeichert", aber nicht WAS jetzt
+         gilt. #}
+      <span class="pill {{ 'eigen' if r.source == 'manual' }}" id="src-{{ r.id }}"
+            title="{{ 'Eigene Entscheidung — keine Regel überschreibt sie'
+                      if r.source == 'manual' else 'Von einer Regel gesetzt' }}">
+        {{ r.source or 'none' }}{% if r.rule_id %} · {{ r.rule_id }}{% endif %}</span>
+    </td>
+    {# Wie die Kategorie: speichert beim Waehlen, ein Knopf je Zeile entfaellt. #}
+    <td class="obj"><select id="prop-{{ r.id }}" style="width:100%" data-no-combo
+        data-cur="{{ r.property_id or '' }}" onchange="save({{ r.id }})"><option value="">—</option>
+        {% for p in properties %}<option value="{{ p.id }}"
+          {{ 'selected' if r.property_id==p.id }}>{{ p.name }}</option>{% endfor %}
+        </select></td>
+    <td class="row-actions tun">
+      <a class="plain" href="/tx/{{ r.id }}">aufteilen</a>
+      <a class="plain" href="/regeln?aus={{ r.id }}" title="Neue Regel aus dieser Buchung">Regel</a>
+      {# Die Rueckmeldung steht in der Zeile, die gerade gespeichert hat. #}
+      <div id="msg-{{ r.id }}" class="muted fein" style="margin-top:.2rem"></div>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+
+<script>
+async function repoint(knopf, rule, category){
+  if(!confirm(`Regel "${rule}" künftig auf ${category} setzen?\n\n`
+      + `Ändert config/rules.yaml und gilt ab dem nächsten categorize für alle `
+      + `Buchungen, vergangene wie künftige.`)) return;
+  const res = await fetch('/api/rule-repoint', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({rule, category})});
+  const out = await res.json();
+  if(!res.ok){ meldenNeben(knopf, out.error || 'fehlgeschlagen', true); return; }
+  meldenNeben(knopf, `angewendet — ${out.recategorized} neu kategorisiert, `
+                   + `${out.overrides_cleared} Korrekturen entfernt`, false);
+  setTimeout(() => location.reload(), 2500);
+}
+
+/* Multi-select filter: a chip per chosen value, each carrying its own hidden
+ * input, so a plain GET form produces name=a&name=b with no JavaScript needed
+ * to read the result back. Used for both axes -- one for Kategorie, one for
+ * Steuer -- because filtering by tax position is how you check what an Anlage
+ * is actually built from. */
+function chipFilter(name, boxId, inputId, items, initial){
+  const box = document.getElementById(boxId);
+  const add = document.getElementById(inputId);
+  if(!box || !add) return;
+  const chosen = new Set(initial);
+
+  function render(){
+    box.innerHTML = '';
+    chosen.forEach(id => {
+      const hit = items.find(x => x.id === id);
+      const chip = document.createElement('span');
+      chip.className = 'pill';
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:.3rem;cursor:default';
+      chip.textContent = hit ? hit.label : id;
+      const x = document.createElement('a');
+      x.textContent = '×'; x.href = '#';
+      x.style.cssText = 'text-decoration:none;font-weight:700';
+      x.title = 'entfernen';
+      x.onclick = e => { e.preventDefault(); chosen.delete(id); render(); };
+      chip.appendChild(x);
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden'; hidden.name = name; hidden.value = id;
+      chip.appendChild(hidden);
+      box.appendChild(chip);
+    });
+  }
+  render();
+  makeCombo(add, items, item => {
+    chosen.add(item.id);
+    // Cleared rather than left holding the pick: the box is for adding the
+    // next one, and a filled box reads as "this is the filter".
+    add.value = ''; add.dataset.id = '';
+    render();
+  });
+}
+
+chipFilter('category', 'catchips', 'catadd',
+           [{id: '__none__', label: '— Unklar (ohne Kategorie) —'}]
+             .concat({{ filterable|tojson }}),
+           {{ f.category|tojson }});
+chipFilter('tax', 'taxchips', 'taxadd',
+           {{ tax_filterable|tojson }}, {{ f.tax|tojson }});
+
+const ANSICHT = {{ f.ansicht|tojson }};
+const CATS = ({{ categories|tojson }}).map(c =>
+  // Show the implied tax position in the list, so the deduction is visible at
+  // the moment of choosing rather than discovered at tax time.
+  c.tax ? {...c, label: c.label + '  ·  ' + c.tax} : c);
+document.querySelectorAll('.catsel').forEach(inp => {
+  // Prefilled rows start with their current id, so picking the same value
+  // again is correctly seen as "no change".
+  if(inp.dataset.cur) inp.dataset.id = inp.dataset.cur;
+  makeCombo(inp, CATS, () => save(inp.id.replace('cat-','')));
+  // Ausgeschrieben statt angeklickt: Enter oder Verlassen des Feldes speichert.
+  // Die Vorschlagsliste nimmt ein Enter selbst (defaultPrevented) und
+  // speichert ueber den Rueckruf; das Verlassen wartet kurz, bis ein Klick
+  // in der Liste angekommen ist.
+  const id = inp.id.replace('cat-','');
+  inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter' && !e.defaultPrevented){ e.preventDefault(); save(id); } });
+  inp.addEventListener('change', () => setTimeout(() => save(id, true), 250));
+});
+async function save(id, leise){
+  const sel = document.getElementById('cat-'+id);
+  const prop = document.getElementById('prop-'+id);
+
+  // Only a CHANGED category is written. Re-posting what a rule already
+  // decided would silently convert it into a manual override and freeze it
+  // against every future rulebook correction.
+  // Ein AUSGESCHRIEBENER Treffer zaehlt wie ein angeklickter. `dataset.id`
+  // setzt die Vorschlagsliste nur beim Klicken; wer den Namen zu Ende tippt
+  // und Speichern drueckt, loeste damit gar nichts aus -- der haeufigste Weg
+  // war der einzige, der nicht funktionierte.
+  if(sel && !sel.dataset.id && sel.value.trim()){
+    const tipp = sel.value.trim().toLowerCase();
+    const treffer = CATS.find(c => c.label.toLowerCase() === tipp
+                                || c.label.split('  ·  ')[0].toLowerCase() === tipp
+                                || c.id.toLowerCase() === tipp);
+    if(treffer) sel.dataset.id = treffer.id;
+  }
+  const catChanged = !!(sel && sel.dataset.id
+                        && sel.dataset.id !== (sel.dataset.cur || ''));
+  // Das Objekt nur, wenn es sich geaendert hat -- wie die Kategorie.
+  const propChanged = prop.value !== (prop.dataset.cur || '');
+  if(propChanged && !prop.value){
+    // Die Schnittstelle behaelt ein leeres Objekt; entfernt wird es beim Aufteilen.
+    prop.value = prop.dataset.cur || '';
+    sagen(id, 'Objekt entfernen: über aufteilen', 'bad');
+    return;
+  }
+
+  if(!catChanged && !propChanged){
+    if(leise && !(sel && sel.value.trim() && !sel.dataset.id)) return;
+    sagen(id, sel && sel.value.trim() && !sel.dataset.id
+              ? 'Kategorie unbekannt — aus der Liste wählen'
+              : 'nichts geändert', 'bad');
+    return;
+  }
+
+  const row = document.getElementById('row-'+id);
+  if(row.dataset.laeuft) return;           // Enter und Verlassen zugleich
+  row.dataset.laeuft = '1';
+  const body = new FormData();
+  if(catChanged) body.append('mgmt', sel.dataset.id);
+  if(propChanged) body.append('property', prop.value);
+  const res = await fetch('/api/categorize/'+id, {method:'POST', body})
+    .finally(() => { delete row.dataset.laeuft; });
+  const ok = res.ok;
+  const antwort = await res.json().catch(() => null);
+  if(!ok){ sagen(id, (antwort && antwort.error) || 'Speichern fehlgeschlagen', 'bad'); return; }
+  markiereHerkunft(id, antwort);
+  prop.dataset.cur = prop.value;
+  if(ok){
+    row.classList.add('gespeichert'); setTimeout(()=>row.classList.remove('gespeichert'),900);
+    sagen(id, 'gespeichert', 'pos');
+    // In der Warteschlange ist eine zugeordnete Zeile erledigt: sie wird
+    // blass, und die naechste offene bekommt den Fokus -- ohne zu scrollen.
+    if(ANSICHT === 'offen' && antwort && antwort.kategorie){
+      row.classList.add('done');
+      const naechste = document.querySelector('tr[id^=row-]:not(.done) .catsel');
+      if(naechste) naechste.focus({preventScroll: true});
+    }
+  }
+}
+
+function sagen(id, text, art){
+  const box = document.getElementById('msg-'+id);
+  if(!box) return;
+  box.textContent = text;
+  box.className = (art === 'pos' ? 'pos' : (art === 'bad' ? 'neg' : 'muted')) + ' fein';
+  clearTimeout(box._t);
+  box._t = setTimeout(() => { box.textContent = ''; }, 4000);
+}
+
+// Was der Server geschrieben hat, sichtbar machen. Ohne das blieb "rule ·
+// w82a-hausgeld" stehen, obwohl die Zeile ab diesem Klick manuell war und
+// keine Regelkorrektur sie je wieder anfasst -- die eine Folge des Klicks,
+// die man wissen muss, war die einzige, die man nicht sah.
+function markiereHerkunft(id, antwort){
+  const marke = document.getElementById('src-'+id);
+  if(!marke || !antwort || !antwort.source) return;
+  marke.textContent = antwort.source;
+  marke.classList.toggle('eigen', antwort.source === 'manual');
+  marke.title = antwort.source === 'manual'
+    ? 'Eigene Entscheidung — keine Regel überschreibt sie'
+    : 'Von einer Regel gesetzt';
+  const sel = document.getElementById('cat-'+id);
+  // Der neue Stand ist ab jetzt der ALTE: ein zweites Speichern schreibt nichts.
+  if(sel && antwort.kategorie){
+    sel.dataset.cur = antwort.kategorie;
+    sel.dataset.id = antwort.kategorie;
+    if(antwort.label) sel.value = antwort.label;
+  }
+}
+</script>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/rules.yaml', 'Die Regeln, die Buchungen zuordnen.'),
+  ('config/overrides.yaml', 'Jede Entscheidung von Hand — Kategorie, Objekt, Split.'),
+  ('config/taxonomy.yaml', 'Der Kategorienbaum und das fixkosten-Flag.'),
+  ('config/properties.yaml', 'Die Objekte in der Objekt-Spalte.'),
+  ('finctl/web/templates/transactions.html', 'Die Texte dieser Seite.'),
+], handbuch='transactions') }}
+{% endblock %}

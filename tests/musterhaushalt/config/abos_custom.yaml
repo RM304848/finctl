@@ -1,0 +1,17 @@
+# Musterhaushalt: auf /abos geaendert. Die Namen sind erfunden.
+
+abos:
+  office-paket:
+    geteilt:
+      besetzung:
+      - name: Mitnutzer Eins
+        anteil_cents: 1500
+      - name: Mitnutzer Zwei
+        anteil_cents: 1500
+      zeitraeume:
+      - von: {M-10}
+        bis: {M+2}
+        einsammeln: {M-10}
+        personen:
+        - name: Mitnutzer Eins
+          anteil_cents: 1500

@@ -1,0 +1,14 @@
+ziele:
+  tagesgeld-puffer:
+    notiz: Drei Monatsausgaben.
+    stichtag: '{J+1}-06-01'
+  unabhaengig:
+    basis:
+    - giro
+    - tagesgeld
+    - depot
+    - krypto
+    cents: 60000000
+    name: Unabhaengig
+    notiz: Vier Prozent Entnahme auf die angesetzten Jahreskosten.
+    stichtag: '{J+19}-01-01'

@@ -1,0 +1,100 @@
+{# Ein Konto anlegen -- eine Maske, einmal im Code. Ohne Konto kein Import, ohne Import kein Hauptbuch
+   und keine Tiefpunktwarnung; deshalb steht das Anlegen in der Oberflaeche
+   und nicht in einer Datei, die man im Editor oeffnen muss.
+
+   Braucht `statements_dir`, `arten`, `modi` und `profile` im Kontext. #}
+<style>
+  /* Dasselbe Raster wie die Kontenregeln: bricht auf dem Telefon um. */
+  .felder{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem}
+  .felder label{margin:0}
+  .felder input,.felder select{width:100%}
+  .felder input.betrag{text-align:right}
+  @media (max-width: 700px){ .felder{grid-template-columns:1fr} }
+</style>
+<p style="margin:1rem 0 0"><button type="button" onclick="neuesKonto()"
+  id="neu-knopf">Neues Konto</button></p>
+
+<div id="neu-konto" hidden class="card" style="margin-top:.8rem">
+  <div class="felder">
+    <label>Kennung
+      <input id="n-id" placeholder="sparkasse-giro" maxlength="41"
+             oninput="neuOrdner()"></label>
+    <label>Anzeigename
+      <input id="n-name" placeholder="Sparkasse Giro"></label>
+    <label>Institut
+      <input id="n-institut" placeholder="Sparkasse"></label>
+    <label>Art
+      <select id="n-art" data-no-combo>
+        {% for a in arten %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+      </select></label>
+    <label title="Geparst liest Auszüge Buchung für Buchung. Nur Saldo wird allein über Umbuchungen sichtbar">Einlesen
+      <select id="n-modus" data-no-combo onchange="neuSperren()">
+        {% for m in modi %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+      </select></label>
+    <label>Parserprofil
+      <select id="n-profil" data-no-combo>
+        <option value="">—</option>
+        {% for p in profile %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+      </select></label>
+    <label title="Fällt der Tiefpunkt eines Monats darunter, warnt die Prognose">Warnen unter €
+      <input id="n-schwelle" class="betrag" placeholder="0,00"></label>
+    <label title="Ordnername unter data/statements/ — leer heißt: wie die Kennung">Auszüge in
+      <input id="n-ordner" placeholder="wie die Kennung" oninput="neuOrdner()"></label>
+  </div>
+  <p class="muted klein" id="n-ordner-text" style="margin:.4rem 0 0"></p>
+  <p class="zeilen-knoepfe">
+    <button type="button" onclick="kontoAnlegen()">Anlegen</button>
+    <button type="button" class="ghost" onclick="neuesKonto(false)">Abbrechen</button>
+    <span id="n-meldung" class="muted klein"></span></p>
+</div>
+
+{% include "_betrag.html" %}
+<script>
+const STATEMENTS = {{ statements_dir|tojson }};
+const nf = n => document.getElementById('n-' + n);
+
+function neuesKonto(zeigen = true){
+  document.getElementById('neu-konto').hidden = !zeigen;
+  document.getElementById('neu-knopf').hidden = zeigen;
+  if(zeigen){ neuSperren(); neuOrdner(); nf('id').focus(); }
+}
+
+/* Ohne Profil wuesste der Import nicht, wie er die Datei liest: das Konto
+   saehe eingerichtet aus und bliebe stumm. */
+function neuSperren(){
+  const geparst = nf('modus').value === 'parsed';
+  nf('profil').disabled = !geparst;
+  if(!geparst) nf('profil').value = '';
+}
+
+/* Wohin die Auszuege kommen, waehrend getippt wird -- ein voller Pfad liegt
+   ausserhalb des Datenordners und damit ausserhalb des Backups. */
+function neuOrdner(){
+  const roh = (nf('ordner').value || '').trim();
+  const name = roh || (nf('id').value || '').trim() || 'kennung';
+  const voll = roh.startsWith('/') || roh.startsWith('~');
+  nf('ordner-text').textContent = 'Auszüge liegen in ' +
+    (voll ? roh + ' — außerhalb des Datenordners, nicht im Backup'
+          : STATEMENTS + '/' + name);
+}
+
+async function kontoAnlegen(){
+  const schwelle = (nf('schwelle').value || '').trim();
+  if(schwelle !== '' && centsAus(schwelle) === null){
+    nf('meldung').textContent = 'Schwelle ist keine Zahl.'; return;
+  }
+  const res = await fetch('/api/konto-neu', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      id: nf('id').value, display_name: nf('name').value,
+      institution: nf('institut').value, account_type: nf('art').value,
+      ingest_mode: nf('modus').value, parser_profile: nf('profil').value,
+      statement_folder: nf('ordner').value,
+      dispo_threshold_cents: schwelle === '' ? null : centsAus(schwelle)})});
+  const o = await res.json();
+  if(res.ok){ nf('meldung').textContent = 'angelegt…';
+              if(window.nachKontoAnlegen) await window.nachKontoAnlegen(o.konto);
+              setTimeout(() => location.reload(), 600); }
+  else { nf('meldung').textContent = o.error || 'fehlgeschlagen'; }
+}
+</script>

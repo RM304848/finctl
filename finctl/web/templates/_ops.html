@@ -1,0 +1,86 @@
+{# Die zwei Handgriffe eines Monats: Auszuege einlesen, Stand sichern. Als
+   Include, nicht als Kopie -- zwei Knoepfe an zwei Stellen laufen auseinander.
+
+   Der Knopf hiess "Backup → OneDrive". Der Anbieter gehoert nicht in die
+   Vorlage: wohin gesichert wird, entscheidet der Nutzer, und ein fester Name
+   waere nach dem ersten Wechsel gelogen. #}
+<div class="card" style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap">
+  <button id="btn-update" onclick="runUpdate()">Update</button>
+  <span class="muted klein">Neue PDFs einlesen, Regeln anwenden, prüfen</span>
+  <span style="flex:1"></span>
+  <button id="btn-backup" onclick="runBackup()">Sichern</button>
+  <span class="muted klein" id="ziel-kurz">…</span>
+  <div id="ops-msg" style="flex-basis:100%;margin:0;font-size:13px"></div>
+
+  {# Das Ziel steht hier und nicht nur in der Einrichtung: gefragt wird danach
+     einmal, geaendert wird es dort, wo gesichert wird. Dieselbe Maske, ein
+     Include -- zwei Kopien liefen nach dem ersten Umbau auseinander. #}
+  {% include "_sicherungsziel.html" %}
+</div>
+
+<script>
+function opsBusy(id, busy, label){
+  const b = document.getElementById(id);
+  b.disabled = busy;
+  b.textContent = busy ? 'läuft…' : label;
+}
+function opsSay(html, kind){
+  const box = document.getElementById('ops-msg');
+  box.className = kind ? 'note ' + kind : 'note';
+  box.innerHTML = html;
+}
+function eur(c){ return (c/100).toLocaleString('de-DE',
+  {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+
+async function runUpdate(){
+  opsBusy('btn-update', true, 'Update');
+  opsSay('Auszüge werden eingelesen — das dauert bei vielen PDFs etwas.');
+  try {
+    const res = await fetch('/api/update', {method:'POST'});
+    const out = await res.json();
+    if(!res.ok){ opsSay('Fehlgeschlagen: ' + (out.error || res.status), 'bad');
+                 opsBusy('btn-update', false, 'Update'); return; }
+    const i = out.ingest, c = out.categorize, p = out.problems;
+    let msg = `<strong>${i.imported} Auszüge importiert</strong>, ${i.skipped} bereits bekannt`;
+    if(i.rejected) msg += `, <strong>${i.rejected} abgelehnt</strong>`;
+    msg += `.<br>${c.matched} Buchungen zugeordnet, ${c.replayed} eigene Entscheidungen wiederhergestellt`;
+    if(c.unmatched) msg += `, <a class="plain" href="/transactions?ansicht=offen">${c.unmatched} offen →</a>`;
+    if(c.flagged)   msg += `, <a class="plain" href="/transactions?ansicht=aufteilen">${c.flagged} aufzuteilen →</a>`;
+    msg += '.';
+    // Every problem is named. A rejected statement or a gap in the chain
+    // invalidates numbers that otherwise look perfectly reasonable.
+    const trouble = [];
+    if(p.rejected_statements.length) trouble.push(
+      p.rejected_statements.length + ' Auszug/Auszüge abgelehnt (Saldo geht nicht auf)');
+    if(p.statement_gaps.length) trouble.push(
+      p.statement_gaps.map(g => `Lücke bei ${g.account_id}: ${g.after} → ${g.before}`).join('; '));
+    if(p.split_imbalances.length) trouble.push(p.split_imbalances.length + ' Split-Differenzen');
+    if(p.orphaned_splits.length)  trouble.push(p.orphaned_splits.length + ' verwaiste Splits');
+    if(p.unrecorded_manual.length) trouble.push(
+      p.unrecorded_manual.length + ' manuelle Entscheidungen nicht gesichert');
+    if(trouble.length) msg += '<br><strong>Prüfen:</strong> ' + trouble.join(' · ');
+    opsSay(msg, out.ok ? 'ok' : 'bad');
+    if(i.imported) setTimeout(() => location.reload(), 2500);
+  } catch(e){ opsSay('Fehlgeschlagen: ' + e, 'bad'); }
+  opsBusy('btn-update', false, 'Update');
+}
+
+async function runBackup(){
+  opsBusy('btn-backup', true, 'Sichern');
+  opsSay('Snapshot wird geschrieben.');
+  try {
+    const res = await fetch('/api/backup', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:'{}'});
+    const out = await res.json();
+    if(!res.ok){ opsSay('Backup fehlgeschlagen: ' + (out.error || res.status), 'bad'); }
+    else {
+      let m = `Backup geschrieben — <code>${out.archive}</code>, `
+            + `${(out.bytes/1024).toFixed(0)} KB, ${out.kept} Stände aufbewahrt`;
+      if(out.pruned.length) m += `, ${out.pruned.length} ältere entfernt`;
+      opsSay(m + '.', 'ok');
+    }
+  } catch(e){ opsSay('Backup fehlgeschlagen: ' + e, 'bad'); }
+  opsBusy('btn-backup', false, 'Sichern');
+  zielLaden();
+}
+</script>

@@ -1,0 +1,150 @@
+{# Filterable combobox. A 97-option <select> is unusable; this is a text input
+   that filters as you type, keeps the id as the real value, and supports
+   arrow keys + Enter. No library -- it has to work with no network. #}
+<script>
+function makeCombo(input, items, onPick){
+  const box = document.createElement('div');
+  // Die Breite haengt am Bildschirm, nicht an einem festen Wert. 20rem sind
+  // 320 Pixel; auf einem 375 Pixel breiten Telefon stand die Liste damit halb
+  // ausserhalb und war praktisch unsichtbar.
+  box.style.cssText = 'position:absolute;z-index:50;background:var(--panel);'
+    + 'border:1px solid var(--line);border-radius:6px;max-height:16rem;overflow:auto;'
+    + 'min-width:min(20rem, calc(100vw - 1.5rem));max-width:calc(100vw - 1.5rem);'
+    + 'display:none;box-shadow:0 6px 24px rgba(0,0,0,.25)';
+  document.body.appendChild(box);
+  let active = -1, shown = [];
+
+  // `shown` must be cleared, not just hidden: leaving the last filtered list
+  // in place meant the single-match branch below fired on every subsequent
+  // Enter and preventDefault blocked the form from ever submitting.
+  function close(){ box.style.display='none'; active=-1; shown=[]; }
+  function render(filter){
+    const f = (filter||'').toLowerCase().trim();
+    // Match the id as well as the label. The tables show ids like
+    // "versicherung/rente" while the dropdown shows "Versicherung / Private
+    // Rentenversicherung", so typing exactly what you can see found nothing.
+    shown = f ? items.filter(i =>
+      i.label.toLowerCase().includes(f) || String(i.id).toLowerCase().includes(f)
+    ) : items.slice();
+    if(!shown.length){ close(); return; }
+    box.innerHTML = shown.map((i,ix) =>
+      `<div data-ix="${ix}" style="padding:.35rem .6rem;cursor:pointer;${ix===active?'background:var(--line)':''}">${i.label}</div>`
+    ).join('');
+    box.style.display = 'block';
+    platzieren();
+    // Auf einem Telefon reicht `mousedown` nicht: iOS liefert es beim Tippen
+    // erst nach dem Scrollen der Tastatur, und bis dahin hat `blur` die Liste
+    // geschlossen. `touchstart` kommt sofort.
+    [...box.children].forEach(el => {
+      const nimm = e => { e.preventDefault(); pick(shown[+el.dataset.ix]); };
+      el.onmousedown = nimm;
+      el.ontouchstart = nimm;
+    });
+  }
+  function platzieren(){
+    if(box.style.display === 'none') return;
+    const r = input.getBoundingClientRect();
+    box.style.top = (r.bottom + window.scrollY + 2) + 'px';
+    // Nach links ruecken, wenn die Liste sonst rechts hinausliefe. Ohne das
+    // haengt sie auf schmalen Schirmen halb im Nichts.
+    const breite = box.offsetWidth || 320;
+    const rand = 8;
+    const links = Math.max(rand,
+                           Math.min(r.left, document.documentElement.clientWidth - breite - rand));
+    box.style.left = (links + window.scrollX) + 'px';
+  }
+  // Die Liste haengt an der Seite und nicht am Fenster, also muss sie beim
+  // Scrollen mitgefuehrt werden -- auf dem Telefon schiebt schon das
+  // Aufklappen der Tastatur die Seite unter ihr weg.
+  window.addEventListener('scroll', platzieren, {passive: true});
+  window.addEventListener('resize', platzieren);
+
+  function pick(item){
+    if(!item) return;
+    input.value = item.label; input.dataset.id = item.id; close();
+    if(onPick) onPick(item);
+  }
+
+  input.addEventListener('focus', () => {
+    render('');
+    // iOS scrollt das Feld erst NACH dem Fokus in den Blick. Ohne das zweite
+    // Ausrichten stuende die Liste dort, wo das Feld vorher war.
+    setTimeout(platzieren, 300);
+  });
+  input.addEventListener('input', () => { input.dataset.id=''; render(input.value); });
+  input.addEventListener('blur', () => setTimeout(close, 120));
+  input.addEventListener('keydown', e => {
+    if(e.key==='ArrowDown'){ active=Math.min(active+1, shown.length-1); render(input.value); e.preventDefault(); }
+    else if(e.key==='ArrowUp'){ active=Math.max(active-1, 0); render(input.value); e.preventDefault(); }
+    else if(e.key==='Enter'){
+      // First Enter picks; a second one falls through so the surrounding form
+      // submits normally.
+      if(box.style.display !== 'none' && active>=0 && shown[active]){
+        pick(shown[active]); e.preventDefault();
+      } else if(box.style.display !== 'none' && shown.length===1){
+        pick(shown[0]); e.preventDefault();
+      } else {
+        close();
+      }
+    } else if(e.key==='Escape'){ close(); }
+  });
+  return {clear(){ input.value=''; input.dataset.id=''; }};
+}
+
+/* Any <select> longer than the threshold becomes a filtering combobox.
+ *
+ * Applied automatically rather than per field, so the rule holds as data
+ * grows: a fifth property or a tenth scenario upgrades its own control
+ * without anyone remembering to.
+ *
+ * The original element's id and name move to a HIDDEN input, so existing
+ * code that reads `getElementById(id).value` and normal form submission both
+ * keep working untouched. The visible input is purely for typing.
+ */
+const COMBO_THRESHOLD = 6;
+
+function upgradeSelects(root){
+  (root || document).querySelectorAll('select:not([data-no-combo])').forEach(sel => {
+    const opts = [...sel.options];
+    const real = opts.filter(o => o.value !== '');
+    if(real.length <= COMBO_THRESHOLD) return;
+
+    const items = real.map(o => ({id: o.value, label: o.textContent.trim()}));
+    const chosen = sel.value;
+    const blank = (opts.find(o => o.value === '') || {}).textContent || '—';
+
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    if(sel.name) hidden.name = sel.name;
+    if(sel.id) hidden.id = sel.id;
+    hidden.value = chosen || '';
+
+    const box = document.createElement('input');
+    box.autocomplete = 'off';
+    box.placeholder = sel.dataset.placeholder || 'tippen zum Filtern…';
+    box.style.cssText = sel.style.cssText || 'width:100%';
+    box.className = sel.className;
+    if(chosen){
+      const hit = items.find(i => i.id === chosen);
+      if(hit) box.value = hit.label;
+    }
+    box.title = blank;
+
+    sel.replaceWith(box);
+    box.parentNode.insertBefore(hidden, box.nextSibling);
+
+    // A filter control should apply on pick. Waiting for a second Enter or a
+    // trip to the button makes filtering three actions instead of one.
+    const form = box.closest('form');
+    const autoSubmit = form && !form.hasAttribute('data-no-autosubmit');
+    makeCombo(box, items, item => {
+      hidden.value = item.id;
+      if(autoSubmit) form.submit();
+    });
+    // Clearing the text clears the value, so a filter can be reset.
+    box.addEventListener('input', () => { if(!box.value.trim()) hidden.value = ''; });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => upgradeSelects());
+</script>

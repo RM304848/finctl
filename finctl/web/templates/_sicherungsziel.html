@@ -1,0 +1,72 @@
+{# Zwei Orte fragen nach demselben Ziel: der Sichern-Knopf und die
+   Einrichtung. Eine Kopie waere nach dem ersten Umbau eine zweite Wahrheit.
+
+   Geprueft wird durch SCHREIBEN (`/api/backup/ziel`): ein Ziel einzutragen,
+   das sich nicht beschreiben laesst, liesse den Nutzer im Glauben, er sei
+   gesichert. #}
+{# `auf` klappt den Bereich auf -- die Einrichtung setzt es fuer den
+   Schritt, an dem der Nutzer gerade steht. Ohne die Variable bleibt er
+   zu, so wie neben dem Sichern-Knopf. #}
+<details class="klapp"{% if auf %} open{% endif %} style="flex-basis:100%">
+  <summary>{{ nummer|default("") }}Wohin gesichert wird</summary>
+  <div class="zeile" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+    <label for="ziel-ordner">Ordner</label>
+    <input id="ziel-ordner" style="flex:1;min-width:18rem"
+           placeholder="Cloud-Ordner, externe Platte oder USB-Stick">
+    <label for="ziel-keep">Stände</label>
+    <input id="ziel-keep" type="number" min="1" style="width:5rem" class="betrag">
+    <button class="ghost" onclick="zielSpeichern()">Prüfen und speichern</button>
+  </div>
+  <div class="muted klein" id="ziel-stand"></div>
+</details>
+
+<script>
+{# `ziel-kurz` steht nur neben dem Sichern-Knopf. Die Maske darf auch ohne
+   ihn laufen, sonst waere sie nicht wirklich zweitverwendbar. #}
+async function zielZeigen(s){
+  document.getElementById('ziel-ordner').value = s.ziel || '';
+  document.getElementById('ziel-keep').value   = s.keep;
+  const kurz = document.getElementById('ziel-kurz');
+  const stand = document.getElementById('ziel-stand');
+  if(!s.ziel){
+    if(kurz) kurz.textContent = 'kein Ziel eingetragen';
+    stand.textContent = 'Ohne Ziel wird nicht gesichert. Trag einen Ordner ein.';
+    return;
+  }
+  if(kurz) kurz.textContent = s.erreichbar ? '' : 'Ziel nicht erreichbar';
+  // Den Pfad NICHT wiederholen: er steht daneben im Feld. Hier steht, was
+  // man sonst nirgends sieht -- ob wirklich etwas darin liegt.
+  let m;
+  if(s.letzter) m = `Zuletzt ${s.letzter.am} · `
+                  + `${(s.letzter.bytes/1024).toFixed(0)} KB · `
+                  + `${s.anzahl_staende} Stände`;
+  else m = 'Noch kein Stand in diesem Ordner.';
+  if(s.grund) m += ' · ' + s.grund;
+  stand.textContent = m;
+}
+
+async function zielLaden(){
+  try { zielZeigen(await (await fetch('/api/backup/ziel')).json()); }
+  catch(e){ document.getElementById('ziel-stand').textContent = 'Nicht lesbar: ' + e; }
+}
+
+async function zielSpeichern(){
+  const body = JSON.stringify({
+    directory: document.getElementById('ziel-ordner').value,
+    keep: document.getElementById('ziel-keep').value});
+  const res = await fetch('/api/backup/ziel', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body});
+  const out = await res.json();
+  const stand = document.getElementById('ziel-stand');
+  if(!res.ok){
+    stand.textContent = 'Nicht gespeichert: ' + (out.error || res.status);
+    if(typeof opsSay === 'function') opsSay('Nicht gespeichert: ' + (out.error || res.status), 'bad');
+    return;
+  }
+  zielZeigen(out);
+  if(typeof opsSay === 'function') opsSay('Ziel gespeichert und beschreibbar.', 'ok');
+  if(typeof schrittFertig === 'function') schrittFertig();
+}
+
+document.addEventListener('DOMContentLoaded', zielLaden);
+</script>

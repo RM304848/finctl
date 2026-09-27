@@ -1,0 +1,50 @@
+# Musterhaushalt: wie die Prognose misst und welche Rolle jedes Konto hat.
+
+exclude_from_recurring:
+  - immobilie/kaufnebenkosten
+  - investment/wertpapier
+  - investment/krypto
+  - transfer/extern
+  - transfer/eigenkonto
+  - sonstiges/nicht-zugeordnet
+overrides: {}
+min_occurrences: 5
+variable_kosten: schnitt
+window_months: 6
+window_months_fixkosten: 12
+account_budgets:
+  alltag: 40000             # 400 -- Dauerauftrag vom Girokonto
+  ratenkonto: 52000         # 520 -- deckt die Rate von 001
+account_roles:
+  giro:
+    role: operating
+    floor_cents: 150000       # 1.500
+    ceiling_cents: 700000     # 7.000 -- das Gehalt kommt am 28., der Monat muss bis dahin reichen
+    sweep_to: tagesgeld
+    note: Betriebskonto. Alles ueber dem Deckel gehoert aufs Tagesgeld.
+  alltag:
+    role: consumption
+    auffuellen: false
+    floor_cents: 20000
+    note: Karte fuer den Alltag.
+  tagesgeld:
+    role: savings
+    floor_cents: 0
+    auffuellen: false
+    note: Sammelt Liquiditaet und verzinst sie.
+  ratenkonto:
+    role: servicing
+    floor_from_loan: "001"
+    note: Fuehrt nur die Rate von 001 aus.
+enden: {}
+discontinued:
+  - category: familie/gemeinschaftskonto
+    account: alltag
+    from: {M-6}
+    reason: >
+      Nachforderungen fuers Gemeinschaftskonto vom Alltagskonto sind
+      eingestellt; der Dauerauftrag vom Girokonto laeuft weiter.
+cashflow_ohne_objekt:
+  klammer: ferienhaus
+  ziel_cents: 0
+  gemeinschaftskonto_soll_cents: 30000

@@ -1,0 +1,99 @@
+# Musterhaushalt: Kredite, erfunden.
+#
+# 001 laeuft ueber ein eigenes Ratenkonto und hat ein Anschlussangebot,
+# 002 wird vom Girokonto bedient, 900 ist eine Vorlage fuer einen Plan.
+
+loans:
+  - id: "001"
+    name: Wohnung Nord -- Bausparkasse
+    lender: Bausparkasse
+    property_id: nord
+    servicing_account_id: ratenkonto
+    principal_cents: 18000000            # 180.000
+    start_date: 2016-04-01
+    payment_cents: 52000                 # 520
+    funding_transfer_cents: 52000
+    opening_balance_cents: 13000000      # 130.000
+    opening_balance_as_of: 2024-01-01
+    segments:
+      - start: 2024-01-30
+        end: 2027-12-31
+        annual_rate_pct: 1.4
+        annuity_cents: 52000
+        basis: actual
+      - start: 2028-01-30
+        end: 2050-12-31
+        annual_rate_pct: 3.9
+        annuity_cents: 70000
+        basis: offer
+        opening_balance_cents: 11800000
+    zinsbindung_end: 2028-01-01
+    balance_at_fixing_cents: 11800000
+    followup_from: 2028-01-30
+    followup_payment_cents: 70000
+    followup_rate_pct: 3.9
+    followup_zinsbindung_years: 10
+    followup_balance_at_fixing_cents: 7164029
+    followup_total_interest_cents: 5324095
+    # Wie im Tilgungsplan eines Angebots: Zins, Tilgung, Stand. Unabhaengig
+    # nachgerechnet (Zins je Monat auf den Stand, kaufmaennisch gerundet).
+    # Wie auf den Kontoauszuegen gedruckt: Zins und Tilgung je Rate.
+    beobachtete_raten:
+      - {monat: 2024-01, zins_cents: 15167, tilgung_cents: 36833}
+      - {monat: 2024-02, zins_cents: 15124, tilgung_cents: 36876}
+      - {monat: 2024-03, zins_cents: 15081, tilgung_cents: 36919}
+      - {monat: 2024-04, zins_cents: 15038, tilgung_cents: 36962}
+      - {monat: 2024-05, zins_cents: 14994, tilgung_cents: 37006}
+      - {monat: 2024-06, zins_cents: 14951, tilgung_cents: 37049}
+      - {monat: 2024-07, zins_cents: 14908, tilgung_cents: 37092}
+      - {monat: 2024-08, zins_cents: 14865, tilgung_cents: 37135}
+    angebot_tilgungsplan:
+      - {monat: 2028-01, zins_cents: 38350, tilgung_cents: 31650, stand_cents: 11768350}
+      - {monat: 2028-02, zins_cents: 38247, tilgung_cents: 31753, stand_cents: 11736597}
+      - {monat: 2028-05, zins_cents: 37937, tilgung_cents: 32063, stand_cents: 11640718}
+      - {monat: 2028-12, zins_cents: 37200, tilgung_cents: 32800, stand_cents: 11413337}
+    status: active
+
+  - id: "002"
+    name: Wohnung Sued -- Kreditbank
+    lender: Kreditbank
+    property_id: sued
+    servicing_account_id: giro
+    reference: "4711000001"
+    principal_cents: 12000000            # 120.000
+    start_date: 2020-01-01
+    payment_cents: 48000                 # 480
+    opening_balance_cents: 10500000      # 105.000
+    opening_balance_as_of: 2024-06-01
+    # Der Abschnitt laeuft mit festem Zins bis zur Volltilgung, die
+    # Zinsbindung endet frueher: ab dann ist der Zins variabel. Die
+    # Anschlussrechnung setzt deshalb an der Bindung an, nicht am Abschnitt.
+    segments:
+      - start: 2024-06-03
+        end: 2046-12-31
+        annual_rate_pct: 3.5
+        annuity_cents: 48000
+        basis: actual
+    zinsbindung_ende: 2030-06-30
+    zins_variabel_ab: 2030-07-01
+    status: active
+    open:
+      - Anschlusskondition ab 07/2030.
+
+  - id: "900"
+    name: Eigenheim -- Vorlage
+    szenario: eigenheim
+    servicing_account_id: giro
+    status: geplant
+    principal_cents: 30000000            # 300.000
+    start_date: 2031-07-01
+    payment_cents: 140000                # 1.400
+    opening_balance_cents: 30000000
+    opening_balance_as_of: 2031-07-01
+    laufzeit_ende: 2061-06-01
+    segments:
+      - start: 2031-07-01
+        end: 2061-06-01
+        annual_rate_pct: 3.8
+        annuity_cents: 140000
+        basis: annahme

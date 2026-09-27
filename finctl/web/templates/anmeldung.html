@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Anmelden · Finance OS{% endblock %}
+{% block kopf %}{% endblock %}
+{% block body %}
+<style>
+  form.anmeldung{width:min(320px,100%);margin:18vh auto 0;display:grid;gap:.5rem}
+  form.anmeldung input,form.anmeldung button{width:100%;padding:.6rem;font-size:16px}
+</style>
+<form class="anmeldung" method="post" action="/login">
+  <h1>Finance OS</h1>
+  <p class="zweck">Der Server ist im Netz erreichbar und fragt deshalb nach dem Passwort.</p>
+  <label class="muted klein" for="passwort">Passwort</label>
+  <input id="passwort" type="password" name="passwort" autofocus
+         autocomplete="current-password">
+  <button>Anmelden</button>
+  {% if falsch %}<p class="neg">Falsches Passwort.</p>{% endif %}
+</form>
+{% endblock %}

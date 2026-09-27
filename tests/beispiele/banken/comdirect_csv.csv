@@ -1,0 +1,10 @@
+;
+"Umsätze Girokonto";"Zeitraum: 01.08.2026 - 31.08.2026";
+"Neuer Kontostand";"1.155,50 EUR";
+
+"Buchungstag";"Wertstellung (Valuta)";"Vorgang";"Buchungstext";"Umsatz in EUR";
+"offen";"--";"Visa-Umsatz";"Auftraggeber: Tankstelle Muster Buchungstext: Tanken";"-40,00";
+"20.08.2026";"20.08.2026";"Lastschrift / Belastung";"Auftraggeber: Versicherung Muster AG Buchungstext: Beitrag";"-44,50";
+"05.08.2026";"05.08.2026";"Übertrag / Überweisung";"Auftraggeber: Erika Beispiel Buchungstext: Taschengeld";"200,00";
+
+"Alter Kontostand";"1.000,00 EUR";

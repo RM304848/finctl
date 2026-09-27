@@ -1,0 +1,349 @@
+{% extends "base.html" %}{% block n_kredite %}on{% endblock %}
+{% block title %}Kredite{% endblock %}
+{% block body %}
+<h1>Kredite</h1>
+<p class="zweck">Was jede Rate tilgt, was sie verzinst und wann der Kredit abbezahlt ist.</p>
+
+{# Ein Vierteljahrhundert Laufzeit sind zu viele Pillen: ab mehr als acht
+   Optionen ist die Wahl eine Liste (docs/design_conventions.yaml, auswahlzeile). #}
+<form method="get" action="/kredite" class="auswahl"><label class="k" for="kr-jahr">Jahr</label>
+  <select id="kr-jahr" name="jahr" data-no-combo onchange="this.form.submit()">
+    <option value="">gesamt</option>
+    {% for y in years %}<option value="{{ y }}" {{ 'selected' if jahr == y|string }}>{{ y }}</option>{% endfor %}
+  </select>
+  <noscript><button class="ghost">Anzeigen</button></noscript>
+</form>
+
+{# Ein Kredit ist ein Abschnitt, kein Kapitel. Vier Objekte mit je drei
+   Tabellen sind eine Seite, durch die man scrollt statt sie zu lesen --
+   zugeklappt ist sie eine Übersicht. Dieselbe Klappmechanik wie "Je Jahr",
+   und der Zustand überlebt das Neuladen. #}
+{% for l in loans %}
+<details class="klapp" id="kredit-{{ l.id }}"{% if not l.szenario %} open{% endif %}>
+  <summary><span style="font-size:.95rem;font-weight:600">{{ l.name }}</span>
+    <span class="zahl">— {{ l.rest_cents|euro }} offen
+      {%- if l.rate_cents %} · {{ l.rate_cents|euro }}/Monat{% endif %}
+      {%- if l.zins_pct %} · {{ '%.2f'|format(l.zins_pct) }} %{% endif %}
+      {%- if l.verkauf %} · endet durch Verkauf {{ l.verkauf.ab.strftime('%Y-%m') }}{% endif %}
+      {%- if l.szenario %} · Klammer {{ l.szenario }}
+        {%- if l.szenario_an %}, eingeschaltet{% else %}, aus{% endif %}{% endif %}</span>
+  </summary>
+
+{# Fremde Vertraege muessen weg koennen: eine Rate, die niemand zahlt,
+   drueckt den Tiefpunkt jedes Monats. #}
+<p class="zeilen-knoepfe" style="margin:0 0 .6rem">
+  <button type="button" class="ghost" onclick="kreditEntfernen('{{ l.id }}', '{{ l.name }}')"
+    >Entfernen</button>
+  <span class="muted klein" id="weg-{{ l.id }}"></span></p>
+
+{% if l.verkauf %}
+<div class="note" style="margin:.6rem 0">Endet durch Verkauf in der Klammer
+  <a class="plain" href="/planung#klammer-{{ l.verkauf.klammer_id }}">{{ l.verkauf.klammer }}</a>
+  ab {{ l.verkauf.ab.strftime('%Y-%m') }}: Restschuld dann
+  <strong>{{ l.verkauf.restschuld_cents|euro }}</strong>
+  {%- if l.verkauf.restschuld_stand %} (Stand {{ l.verkauf.restschuld_stand.strftime('%Y-%m') }},
+  der Tilgungsplan reicht nicht weiter){% endif %}. In der Jahresrechnung läuft die Rate ab
+  dem Monat nicht weiter; hier steht der Tilgungsplan unverändert.</div>
+{% endif %}
+{% if l.szenario %}
+<div class="note" style="margin:.6rem 0">Gehört zur Klammer
+  <a class="plain" href="/planung">{{ l.szenario }}</a> und rechnet
+  {% if l.szenario_an %}mit, solange sie eingeschaltet ist.
+  {%- else %}<strong>nicht</strong> mit, solange sie aus ist.{% endif %}</div>
+
+<div class="card" style="margin:.6rem 0">
+  <div class="k klein" style="color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Grundkonditionen</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem">
+    <label>Darlehen (€)<br><input id="v-betrag-{{ l.id }}"
+           value="{{ l.opening_cents|betrag }}"></label>
+    <label>Sollzins (% p.a.)<br><input id="v-zins-{{ l.id }}"
+           value="{{ ('%.2f'|format(l.zins_pct))|replace('.', ',') }}"></label>
+    <label>Beginn<br><input id="v-von-{{ l.id }}"
+           value="{{ (l.vorlage_start or '')[:7] }}" placeholder="2027-01"></label>
+    <label>Getilgt bis<br><input id="v-bis-{{ l.id }}"
+           value="{{ (l.vorlage_ende or '')[:7] }}" placeholder="2061-12"></label>
+    <label>Rate (€/Monat)<br><input id="v-rate-{{ l.id }}"
+           value="{{ l.rate_cents|betrag }}" placeholder="leer = aus Laufzeit"></label>
+  </div>
+  <p style="margin:.8rem 0 0;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+    {# Gefuellt ist nur die Hauptaktion Speichern (knopfgewicht). #}
+    <button onclick="vorlageSpeichern('{{ l.id }}')">Speichern</button>
+    <button class="ghost" onclick="vorlageRechnen('{{ l.id }}')">Rate aus Laufzeit rechnen</button>
+    <button class="ghost" onclick="vorlageZuruecksetzen('{{ l.id }}')">Zurücksetzen</button>
+    <span id="v-st-{{ l.id }}" class="muted klein"></span></p>
+</div>
+{% endif %}
+
+{% if l.error %}
+  <div class="note">Tilgungsplan nicht berechenbar: {{ l.error }}</div>
+{% else %}
+<div class="card">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.4rem">
+
+    {# links: was heute gilt #}
+    <div>
+      <div class="k klein" style="color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">Aktuelle Kondition</div>
+      <table style="width:100%">
+        <tr><td class="muted">Objekt</td>
+            <td class="num">{{ l.property_id }}{% if l.lender %} · {{ l.lender }}{% endif %}</td></tr>
+        <tr><td class="muted">Zins p.a.</td>
+            <td class="num">{{ '%.3f'|format(l.zins_pct) }} %</td></tr>
+        <tr><td class="muted">anfängliche Tilgung</td>
+            <td class="num">{% if l.tilgung_pct is not none %}{{ '%.3f'|format(l.tilgung_pct) }} %{% else %}—{% endif %}</td></tr>
+        <tr><td class="muted">Tilgung heute</td>
+            <td class="num">{% if l.tilgung_heute_pct is not none %}{{ '%.3f'|format(l.tilgung_heute_pct) }} %{% else %}—{% endif %}</td></tr>
+        <tr><td class="muted">Rate</td><td class="num">{{ l.rate_cents|euro }}</td></tr>
+        <tr><td class="muted">Restschuld heute</td>
+            <td class="num"><strong>{{ l.rest_cents|euro }}</strong></td></tr>
+        <tr><td class="muted" title="Der Tilgungsplan über das ganze Jahr, auch die Monate, die noch kommen">Zins {{ l.jahr_heute }} laut Plan</td>
+            <td class="num neg">{{ l.zins_jahr_cents|euro }}</td></tr>
+        <tr><td class="muted" title="Aus dem Ledger. Weicht es ab, ist entweder der Plan falsch oder die Buchung">Zins {{ l.jahr_heute }} gebucht</td>
+            <td class="num neg">{% if l.zins_jahr_gebucht_cents is not none %}
+              {{ l.zins_jahr_gebucht_cents|euro }}{% else %}—{% endif %}</td></tr>
+        <tr><td class="muted">Zins gesamt</td>
+            <td class="num neg">{{ l.total_interest_cents|euro }}</td></tr>
+        <tr><td class="muted">Ende Zinsbindung</td>
+            <td class="num">{{ l.zinsbindung_ende or '—' }}</td></tr>
+        <tr><td class="muted">abbezahlt</td><td class="num">{{ l.payoff or '—' }}</td></tr>
+      </table>
+    </div>
+
+    {# rechts: dieselben Kennzahlen, gerechnet für die Anschlussfinanzierung #}
+    <div>
+      <div class="k klein" style="color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">Anschlussfinanzierung</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.7rem">
+        {% set v_zins = l.anschluss.zins_pct if l.anschluss
+                        else ('%.3f'|format(l.folge.zins_pct) if l.folge and not l.folge.leer
+                              else '%.3f'|format(l.zins_pct)) %}
+        <label class="klein">Zins % p.a.<br><input id="a-zins-{{ l.id }}"
+          style="width:100%" value="{{ v_zins }}" data-start="{{ v_zins }}"></label>
+        {% set v_tilg = l.anschluss.tilgung_pct if l.anschluss
+                        else ('%.3f'|format(l.folge.tilgung_pct) if l.folge and not l.folge.leer
+                              else ('%.3f'|format(l.tilgung_heute_pct) if l.tilgung_heute_pct is not none else '')) %}
+        <label class="klein">Tilgung %<br><input id="a-tilg-{{ l.id }}"
+          style="width:100%" value="{{ v_tilg }}" data-start="{{ v_tilg }}"></label>
+        {% set v_ab = l.anschluss.ab if l.anschluss and l.anschluss.ab else '' %}
+        <label class="klein">ab<br><input id="a-ab-{{ l.id }}" style="width:100%"
+          value="{{ v_ab }}" data-start="{{ v_ab }}"
+          placeholder="{{ l.folge.ab if l.folge and l.folge.ab else (l.zinsbindung_ende or '2033-01-01') }}"></label>
+      </div>
+      <p style="margin:0 0 .7rem;display:flex;gap:.5rem;align-items:center">
+        <button onclick="anschluss(this, '{{ l.id }}')">Berechnen</button>
+        <button class="ghost" onclick="zuruecksetzen(this, '{{ l.id }}', {{ 'true' if l.anschluss else 'false' }})"
+          data-zuruecksetzen-auf="{% if l.anschluss %}{{ 'angebot' if l.hat_angebot else 'vorschau' }}{% else %}eingetragen{% endif %}"
+          title="{% if l.anschluss %}Verwirft die gespeicherte Kondition{% else %}Stellt die angezeigten Werte wieder her{% endif %}"
+          >Zurücksetzen</button></p>
+
+      {% if l.folge and l.folge.leer %}
+      <div class="note">Greift nie: der Kredit ist vor
+        {{ l.folge.ab or 'diesem Datum' }} bereits getilgt.
+        {% if l.folge.quelle == 'eingegeben' %}Startdatum vorziehen oder entfernen.{% endif %}</div>
+      {% elif l.folge %}
+      <div class="muted fein" style="margin-bottom:.4rem">
+        {% if l.folge.quelle == 'dokumentiert' %}Aus dem vorliegenden Angebot in
+          <code>loans.yaml</code> — keine Schätzung.
+        {% elif l.folge.quelle == 'eingegeben' %}Aus deiner Eingabe.
+        {% else %}Vorschau: heutige Konditionen weitergeführt.{% endif %}
+      </div>
+      <table style="width:100%">
+        <tr><td class="muted">ab</td><td class="num">{{ l.folge.ab }}</td></tr>
+        <tr><td class="muted">Zins p.a.</td>
+            <td class="num">{{ '%.3f'|format(l.folge.zins_pct) }} %</td></tr>
+        <tr><td class="muted">anfängliche Tilgung</td>
+            <td class="num">{{ '%.3f'|format(l.folge.tilgung_pct) }} %</td></tr>
+        <tr><td class="muted">neue Rate</td>
+            <td class="num"><strong>{{ l.folge.rate_cents|euro }}</strong>
+              <span class="muted">({{ (l.folge.rate_cents - l.rate_cents)|euro }})</span></td></tr>
+        <tr><td class="muted">Restschuld bei Beginn</td>
+            <td class="num">{{ l.folge.start_balance_cents|euro }}</td></tr>
+        <tr><td class="muted">Zins über die Restlaufzeit</td>
+            <td class="num neg">{{ l.folge.zins_gesamt_cents|euro }}</td></tr>
+        <tr><td class="muted">Tilgung über die Restlaufzeit</td>
+            <td class="num">{{ l.folge.tilgung_gesamt_cents|euro }}</td></tr>
+        <tr><td class="muted">Laufzeit</td>
+            <td class="num">{{ l.folge.monate }} Monate
+              ({{ '%.1f'|format(l.folge.monate / 12) }} Jahre)</td></tr>
+        <tr><td class="muted">abbezahlt</td><td class="num">{{ l.folge.payoff or '—' }}</td></tr>
+      </table>
+      <p class="muted fein" style="margin:.5rem 0 0">
+        Rate = (Zins + Tilgung) × Restschuld ÷ 12.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if l.open %}<div class="note" style="margin-top:.9rem">
+    {% for o in l.open %}<div>{{ o }}</div>{% endfor %}</div>{% endif %}
+</div>
+
+<details class="klapp">
+  <summary>Je Jahr <span class="zahl">— {{ l.years|length }} Jahre</span></summary>
+<div class="wrap"><table>
+  <tr><th>Jahr</th><th class="num">Zinsen</th><th class="num">Tilgung</th><th class="num">Restschuld Ende</th></tr>
+  {% for y, v in l.years %}
+  <tr><td>{{ y }}</td><td class="num neg">{{ v.zins|euro }}</td>
+      <td class="num">{{ v.tilgung|euro }}</td><td class="num">{{ v.rest|euro }}</td></tr>
+  {% endfor %}
+</table></div>
+</details>
+
+{% if jahr %}
+<details class="klapp" open>
+  <summary>Monate {{ jahr }} <span class="zahl">— {{ l.payments|length }} Raten</span></summary>
+<div class="wrap"><table>
+  <tr><th>Monat</th><th class="num">Rate</th><th class="num">Zins</th>
+      <th class="num">Tilgung</th><th class="num">Rest</th><th>Basis</th></tr>
+  {% for p in l.payments %}
+  <tr><td>{{ p.month }}</td><td class="num">{{ p.payment_cents|euro }}</td>
+      <td class="num neg">{{ p.interest_cents|euro }}</td>
+      <td class="num">{{ p.principal_cents|euro }}</td>
+      <td class="num">{{ p.balance_cents|euro }}</td>
+      <td class="muted">{{ p.basis }}</td></tr>
+  {% endfor %}
+</table></div>
+</details>
+{% endif %}
+{% endif %}
+</details>
+{% endfor %}
+<script>
+function pct(v){ const t=String(v||'').replace(',','.').trim(); return t===''?null:parseFloat(t); }
+function vorlageKoerper(id, mitRate){
+  const g = x => document.getElementById(x + '-' + id).value.trim();
+  const b = {id: id, principal_cents: centsAus(g('v-betrag')),
+             annual_rate_pct: pct(g('v-zins')),
+             start: g('v-von'), ende: g('v-bis')};
+  if (mitRate) b.annuitaet_cents = centsAus(g('v-rate'));
+  return b;
+}
+async function vorlageSenden(id, body){
+  const st = document.getElementById('v-st-' + id);
+  const r = await fetch('/api/kredit-vorlage', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json();
+  if (j.error){ st.textContent = 'Fehler: ' + j.error; st.classList.remove('muted','pos'); st.classList.add('neg'); return null; }
+  st.textContent = 'gespeichert'; st.classList.remove('muted','neg'); st.classList.add('pos');
+  return j;
+}
+// Die Rate erscheint im Feld, bevor die Seite neu laedt: man sieht den Preis
+// der Laufzeit, statt ihn im Tilgungsplan suchen zu muessen.
+async function vorlageRechnen(id){
+  const j = await vorlageSenden(id, vorlageKoerper(id, false));
+  if (j && j.annuitaet_cents){
+    document.getElementById('v-rate-' + id).value = centsAlsText(j.annuitaet_cents);
+    document.getElementById('v-st-' + id).textContent =
+      'Rate gerechnet: ' + centsAlsText(j.annuitaet_cents) + ' €';
+  }
+  setTimeout(()=>location.reload(), 1200);
+}
+async function vorlageSpeichern(id){
+  if (await vorlageSenden(id, vorlageKoerper(id, true))) setTimeout(()=>location.reload(), 400);
+}
+async function vorlageZuruecksetzen(id){
+  if (await vorlageSenden(id, {id: id, entfernen: true})) setTimeout(()=>location.reload(), 400);
+}
+async function send(body, knopf){
+  const r = await fetch('/api/kredit-anschluss', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json();
+  if (j.error) { meldenNeben(knopf, j.error, true); return; }
+  location.reload();
+}
+function anschluss(knopf, id){
+  send({id:id, zins_pct: pct(document.getElementById('a-zins-'+id).value),
+        tilgung_pct: pct(document.getElementById('a-tilg-'+id).value),
+        ab: document.getElementById('a-ab-'+id).value}, knopf);
+}
+function anschlussWeg(knopf, id){ send({id:id, entfernen:true}, knopf); }
+// Zwei Fälle, ein Knopf. Ist eine Kondition gespeichert, muss der Server sie
+// löschen -- dann kommt das vorliegende Angebot oder die Vorschau zurück.
+// Ist keine gespeichert, sind nur die Felder verändert, und ein Neuladen wäre
+// unnötig: die Ausgangswerte hängen als data-start an den Feldern.
+function zuruecksetzen(knopf, id, gespeichert){
+  if (gespeichert) { anschlussWeg(knopf, id); return; }
+  for (const feld of ['a-zins-', 'a-tilg-', 'a-ab-']) {
+    const el = document.getElementById(feld + id);
+    if (el) el.value = el.dataset.start || '';
+  }
+}
+</script>
+<p style="margin:1.2rem 0 0"><button type="button" onclick="neuerKredit()"
+  id="neu-knopf">Neuer Ratenkredit</button></p>
+
+<div id="neu-kredit" hidden class="card" style="margin-top:.8rem">
+  <div class="felder">
+    <label>Kennung <input id="k-id" placeholder="moebel" maxlength="41"></label>
+    <label>Name <input id="k-name" placeholder="Möbelfinanzierung"></label>
+    <label>Gläubiger <input id="k-geber" placeholder="Beispielbank"></label>
+    <label title="Von hier wird die Rate abgebucht — das Konto, dessen Tiefpunkt sie drückt">Konto
+      <select id="k-konto" data-no-combo>
+        {% for k in konten %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+      </select></label>
+    <label>Restschuld € <input id="k-rest" class="betrag" placeholder="0,00"></label>
+    <label>Monatsrate € <input id="k-rate" class="betrag" placeholder="0,00"></label>
+    <label>Zinssatz % <input id="k-zins" class="betrag" placeholder="0,00"></label>
+    <label>Beginn <input id="k-start" placeholder="2026-01-01"></label>
+    <label>Ende <input id="k-ende" placeholder="2029-01-01"></label>
+  </div>
+  <p class="zeilen-knoepfe">
+    <button type="button" onclick="kreditAnlegen()">Anlegen</button>
+    <button type="button" class="ghost" onclick="neuerKredit(false)">Abbrechen</button>
+    <span id="k-meldung" class="muted klein"></span></p>
+</div>
+
+<style>
+  .felder{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem}
+  .felder label{margin:0}
+  .felder input,.felder select{width:100%}
+  .felder input.betrag{text-align:right}
+  @media (max-width: 700px){ .felder{grid-template-columns:1fr} }
+</style>
+<script>
+const kf_ = n => document.getElementById('k-' + n);
+
+function neuerKredit(zeigen = true){
+  document.getElementById('neu-kredit').hidden = !zeigen;
+  document.getElementById('neu-knopf').hidden = zeigen;
+  if(zeigen) kf_('id').focus();
+}
+
+async function kreditAnlegen(){
+  const zahl = n => { const t = (kf_(n).value || '').trim();
+                      return t === '' ? null : centsAus(t); };
+  const rest = zahl('rest'), rate = zahl('rate'), zins = zahl('zins');
+  if(rest === null || rate === null || zins === null){
+    kf_('meldung').textContent = 'Restschuld, Rate und Zinssatz sind Zahlen.'; return;
+  }
+  const res = await fetch('/api/kredit-neu', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      id: kf_('id').value, name: kf_('name').value, lender: kf_('geber').value,
+      servicing_account_id: kf_('konto').value,
+      opening_balance_cents: rest, annuity_cents: rate,
+      /* Der Zinssatz ist Prozent, kein Geld -- centsAus() liest das Komma
+         richtig, und hundert macht daraus wieder Prozent. */
+      annual_rate_pct: zins / 100,
+      start: kf_('start').value, ende: kf_('ende').value})});
+  const o = await res.json();
+  if(res.ok){ kf_('meldung').textContent = 'angelegt…';
+              setTimeout(() => location.reload(), 600); }
+  else { kf_('meldung').textContent = o.error || 'fehlgeschlagen'; }
+}
+
+async function kreditEntfernen(id, name){
+  if(!confirm('Kredit „' + name + '“ entfernen? Er fällt aus jeder Prognose.')) return;
+  const res = await fetch('/api/kredit-entfernen', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: id})});
+  const o = await res.json();
+  if(res.ok){ location.reload(); }
+  else { document.getElementById('weg-' + id).textContent = o.error || 'fehlgeschlagen'; }
+}
+</script>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/loans.yaml', 'Die Kredite mit ihren Segmenten und der Herleitung.'),
+  ('config/loans_custom.yaml', 'Hier angelegte Kredite, Anschlusskonditionen und Vorlagen.'),
+  ('config/szenarien.yaml', 'Ob die Klammer eines Vorlagenkredits eingeschaltet ist.'),
+  ('config/properties.yaml', 'Das Objekt hinter jedem Kredit.'),
+  ('finctl/web/templates/kredite.html', 'Die Texte dieser Seite.'),
+], handbuch='kredite') }}
+{% endblock %}

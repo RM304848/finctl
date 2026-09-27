@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ modul.name }} — ausgeschaltet{% endblock %}
+{% block body %}
+<h1>{{ modul.name }}</h1>
+<p class="zweck">Dieses Modul ist ausgeschaltet.</p>
+<p><a class="plain" href="/einrichtung#module">In der Einrichtung einschalten →</a></p>
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/module_custom.yaml', 'Welche Module eingeschaltet sind.'),
+  ('finctl/web/templates/modul_aus.html', 'Die Texte dieser Seite.'),
+], handbuch='einrichtung') }}
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends "base.html" %}{% block n_projekte %}on{% endblock %}
+{% block title %}Projekte{% endblock %}
+{% macro tag(d) %}{{ d[:10] if d else '—' }}{% endmacro %}
+{% block body %}
+<h1>Projekte</h1>
+<p class="zweck">Was hat ein Projekt gekostet, und wer war dabei?</p>
+
+<div class="wrap"><table>
+  <tr><th>Projekt</th><th>Zeitraum</th><th class="num">Buchungen</th><th class="num">Kosten</th>
+      <th class="num">mein Anteil</th><th class="num">offen bei anderen</th><th>Personen</th><th></th></tr>
+  {% for z in zeilen %}{% set p = z.projekt %}
+  <tr>
+    <td>{{ p.name }}</td>
+    <td class="muted">{{ tag(z.von) }} – {{ tag(z.bis) }}</td>
+    <td class="num">{{ z.posten|length }}</td>
+    <td class="num">{{ z.kosten|euro }}</td>
+    <td class="num">{{ z.mein_anteil|euro }}</td>
+    <td class="num {{ 'neg' if z.offen > 0 }}">{{ z.offen|euro if p.personen else '—' }}</td>
+    <td>{% for x in p.personen %}<span class="pill">{{ personen.get(x, x) }}</span> {% endfor %}</td>
+    <td class="aktionen"><button type="button" class="ghost" onclick="oeffne('{{ p.id }}')">Öffnen</button></td>
+  </tr>
+  <tr class="panel" id="panel-{{ p.id }}" {{ '' if offen == p.id else 'hidden' }}><td colspan="8">
+    <div class="projekt" data-id="{{ p.id }}">
+      <div class="zeilen-form">
+        <label>Name<input class="p-name" value="{{ p.name }}"></label>
+        <label>Neue Person<input class="p-neu" placeholder="Name"></label>
+      </div>
+      <p class="zeilen-knoepfe">
+        {% for pid, name in personen.items() %}
+        <label><input type="checkbox" class="p-person" value="{{ pid }}" {{ 'checked' if pid in p.personen }}> {{ name }}</label>
+        {% endfor %}
+      </p>
+      <p class="zeilen-knoepfe">
+        <button type="button" onclick="projektSpeichern(this)">Speichern</button>
+        <button type="button" class="ghost" onclick="projektEntfernen(this, '{{ p.id }}', {{ z.posten|length }})">Projekt entfernen</button>
+        <a class="plain" href="/geteilt/buchungen?projekt={{ p.id }}&von=2000-01-01">Buchungen zuordnen und teilen</a>
+        <span class="meldung muted klein"></span></p>
+
+      {% if z.posten %}
+      <h3>Buchungen</h3>
+      <div class="wrap"><table class="detail">
+        {% for x in z.posten %}
+        <tr><td>{{ tag(x.datum) }}</td><td class="muted">{{ x.konto }}</td>
+            <td><span class="raw">{{ x.text }}</span></td>
+            <td class="muted">{{ kategorienamen.get(x.kategorie, x.kategorie or '—') }}</td>
+            <td class="num">{{ (-x.cents)|euro }}</td>
+            <td class="muted">{% for k, v in x.anteile.items() %}{{ 'ich' if k == 'ich' else personen.get(k, k) }} {{ v|euro }}{{ ', ' if not loop.last }}{% endfor %}{% if x.eigene_teilung %} <span class="pill">eigene Teilung</span>{% endif %}</td></tr>
+        {% endfor %}
+      </table></div>
+      <h3>Nach Kategorie</h3>
+      <div class="wrap"><table class="detail">
+        {% for name, cents in z.nach_kategorie %}<tr><td>{{ name }}</td><td class="num">{{ cents|euro }}</td></tr>{% endfor %}
+      </table></div>
+      <h3>Nach Monat</h3>
+      <div class="wrap"><table class="detail">
+        {% for monat, cents in z.nach_monat %}<tr><td>{{ monat[:7] }}</td><td class="num">{{ cents|euro }}</td></tr>{% endfor %}
+      </table></div>
+      {% endif %}
+    </div>
+  </td></tr>
+  {% endfor %}
+  <tr><td colspan="7"><input id="neu-name" placeholder="Neues Projekt, z. B. eine Reise" style="width:100%;max-width:24rem"></td>
+      <td class="aktionen"><button type="button" onclick="projektNeu(this)">Anlegen</button>
+        <span class="meldung muted klein"></span></td></tr>
+</table></div>
+
+<script>
+function melden(knopf, text, fehler){
+  const m = knopf.parentElement.querySelector('.meldung');
+  m.textContent = text; m.className = 'meldung klein ' + (fehler ? 'neg' : 'pos');
+}
+async function senden(pfad, body){
+  const res = await fetch(pfad, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                 body: JSON.stringify(body)});
+  const out = await res.json().catch(() => ({}));
+  return res.ok ? out : Promise.reject(out.error || 'Speichern fehlgeschlagen');
+}
+function oeffne(id){
+  document.querySelectorAll('tr.panel').forEach(p => { p.hidden = p.id !== 'panel-' + id || !p.hidden; });
+}
+async function projektNeu(knopf){
+  try {
+    const out = await senden('/api/geteilt/projekt',
+      {name: document.getElementById('neu-name').value, personen: []});
+    location.href = '/projekte?offen=' + encodeURIComponent(out.id);
+  } catch (e) { melden(knopf, e, true); }
+}
+async function projektSpeichern(knopf){
+  const v = knopf.closest('.projekt');
+  const personen = [...v.querySelectorAll('.p-person:checked')].map(x => x.value);
+  try {
+    const neu = v.querySelector('.p-neu').value.trim();
+    if (neu) personen.push((await senden('/api/geteilt/person', {name: neu})).id);
+    await senden('/api/geteilt/projekt',
+      {id: v.dataset.id, name: v.querySelector('.p-name').value, personen});
+    melden(knopf, 'gespeichert — neu rechnen …', false);
+    location.href = '/projekte?offen=' + encodeURIComponent(v.dataset.id);
+  } catch (e) { melden(knopf, e, true); }
+}
+async function projektEntfernen(knopf, id, n){
+  if (!confirm(n ? `Projekt entfernen? ${n} Buchungen verlieren ihre Zuordnung.` : 'Projekt entfernen?')) return;
+  try { await senden('/api/geteilt/projekt/entfernen', {id}); }
+  catch (e) { melden(knopf, e, true); return; }
+  location.href = '/projekte';
+}
+</script>
+
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/geteilt_custom.yaml', 'Personen, Projekte, Zuordnungen und Teilungen; von diesen Seiten geschrieben.'),
+  ('finctl/web/templates/projekte.html', 'Die Texte dieser Seite.'),
+], handbuch='projekte') }}
+{% endblock %}

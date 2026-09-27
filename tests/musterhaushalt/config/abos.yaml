@@ -1,0 +1,24 @@
+# Musterhaushalt: Abos, die eine Erklaerung brauchen. Erfunden.
+
+abos:
+  - id: jahresabo-video
+    name: Videodienst Jahresabo
+    kategorie: abo/video-streaming
+    konto: alltag
+    betrag: -99.99
+    takt: 12
+    faellig: {J+1}-03-10
+    weg: direkt
+    warum: >
+      Ein Jahresabo braucht ein Jahr, bis sich daraus ein Takt messen laesst.
+      Bis dahin steht der Termin hier.
+  - id: office-paket
+    name: Office-Paket
+    kategorie: abo/office
+    konto: alltag
+    betrag: -69.00
+    takt: 12
+    faellig: {J+1}-11-01
+    weg: ueber einen Haendler
+    vorrat_bis: {J+1}-11-01
+    warum: Im Auszug steht der Haendler, nicht was gekauft wurde.

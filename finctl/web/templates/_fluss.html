@@ -1,0 +1,67 @@
+{# Das Flussdiagramm, gerechnet von finctl/web/sankey.py. Eine Vorlage fuer
+   Rueckblick und Annahmen, damit beide dasselbe Bild in denselben Farben
+   zeichnen (vorzeichenfarbe): rein gruen, raus rot, der Rest -- gespart oder
+   aus Ruecklagen -- im Akzent bzw. als Warnung, weil er die Differenz ist. #}
+{% macro beschriftung(n, x, anker) %}
+  <text x="{{ x }}" y="{{ n.mitte_y + 4 }}" text-anchor="{{ anker }}">{{ n.kurz }}
+    <tspan class="betrag"> {{ n.text }} · {{ n.pct }} %</tspan></text>
+{% endmacro %}
+
+{% macro knoten(n, seite, breite, x, anker) %}
+  {% if n.href %}<a href="{{ n.href }}">{% endif %}
+  <rect x="{{ n.x }}" y="{{ n.y }}" width="{{ breite }}" height="{{ n.h }}" class="{{ seite }} {{ n.art }}">
+    <title>{{ n.label }}: {{ n.text }}{% if n.teile %} — {{ n.teile|join(', ') }}{% endif %}</title></rect>
+  {{ beschriftung(n, x, anker) }}
+  {% if n.href %}</a>{% endif %}
+{% endmacro %}
+
+{% macro zeichnen(f) %}
+<style>
+  svg.fluss{width:100%;height:auto;display:block}
+  svg.fluss .rein{fill:var(--good)} svg.fluss .raus{fill:var(--bad)}
+  svg.fluss .rest.rein{fill:var(--warn)} svg.fluss .rest.raus{fill:var(--accent)}
+  svg.fluss .mitte{fill:var(--muted)}
+  svg.fluss path{opacity:.28} svg.fluss path:hover{opacity:.5}
+  svg.fluss text{fill:var(--ink);font-size:13px}
+  svg.fluss text .betrag{fill:var(--muted);font-size:12px}
+  svg.fluss text.kopf{fill:var(--muted);font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+  svg.fluss a{cursor:pointer}
+  svg.fluss a:hover text{text-decoration:underline}
+  svg.fluss a:hover path{opacity:.5}
+  .fluss-liste{display:none}
+  @media (max-width:700px){
+    svg.fluss{display:none}
+    .fluss-liste{display:block}
+  }
+  .fluss-liste .balken{height:6px;border-radius:999px;margin:.15rem 0 .5rem}
+</style>
+<div class="card">
+<svg class="fluss" viewBox="0 0 {{ f.breite }} {{ f.hoehe }}" role="img"
+     aria-label="Einnahmen {{ f.rein|euro }}, Ausgaben {{ f.raus|euro }}">
+  {# Band, Balken und Beschriftung fuehren zum selben Ziel: zu den
+     Buchungen hinter dem Knoten, zur Klammer oder zum Kredit. #}
+  {% for b in f.baender %}
+  {% if b.href %}<a href="{{ b.href }}">{% endif %}<path d="{{ b.d }}" class="{{ b.seite }} {{ b.art }}"><title>{{ b.titel }}</title></path>{% if b.href %}</a>{% endif %}
+  {% endfor %}
+  {% for n in f.links %}{{ knoten(n, 'rein', f.knoten, n.x - 8, 'end') }}{% endfor %}
+  {% set m = f.mitte %}
+  <rect x="{{ m.x }}" y="{{ m.y }}" width="{{ f.knoten }}" height="{{ m.h }}" class="mitte"></rect>
+  <text x="{{ f.links[0].x + f.knoten }}" y="16" text-anchor="end" class="kopf">rein {{ f.rein_text }}</text>
+  <text x="{{ f.rechts[0].x }}" y="16" class="kopf">raus {{ f.raus_text }}</text>
+  {% for n in f.rechts %}{{ knoten(n, 'raus', f.knoten, n.x + f.knoten + 8, 'start') }}{% endfor %}
+</svg>
+{# Unter 700 Pixeln waere die Schrift im Diagramm vier Pixel hoch: dort
+   dieselben Knoten als Liste, der Balken ist der Anteil. #}
+<div class="fluss-liste">
+  {% for seite, titel, klasse in [(f.links, 'Woher', 'good'), (f.rechts, 'Wohin', 'bad')] %}
+  <h3>{{ titel }}</h3>
+  {% for n in seite %}
+  <div class="klein" style="display:flex;justify-content:space-between;gap:.6rem">
+    <span>{% if n.href %}<a class="plain" href="{{ n.href }}">{{ n.label }}</a>{% else %}{{ n.label }}{% endif %}</span>
+    <span class="nobr">{{ n.text }} · {{ n.pct }} %</span></div>
+  <div class="balken" style="width:{{ [n.pct, 2]|max }}%;background:var(--{{ 'accent' if n.art == 'rest' and klasse == 'bad' else ('warn' if n.art == 'rest' else klasse) }})"></div>
+  {% endfor %}
+  {% endfor %}
+</div>
+</div>
+{% endmacro %}

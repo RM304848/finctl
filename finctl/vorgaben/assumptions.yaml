@@ -1,0 +1,54 @@
+# Annahmen -- Startwerte.
+#
+# Die EINZIGE Stelle fuer eine Annahme. Fakten stehen woanders: ein
+# Kreditzins in loans.yaml, eine AfA-Basis in properties.yaml, jeweils neben
+# seiner Herleitung. Ein Vertrag ist nicht verhandelbar, eine Annahme schon.
+#
+# Alle Werte hier sind vorsichtige Platzhalter und gehoeren angepasst,
+# sobald die eigenen Zahlen bekannt sind. Betraege in Cent.
+
+# Wie stark Preise steigen. 2 % ist das Ziel der EZB.
+inflation_pa: 0.02
+
+kapital:
+  # Nominal, vor Steuer. Konservativ angesetzt: eine Prognose, die zu gut
+  # aussieht, verleitet zu Entscheidungen, die sie nicht traegt.
+  rendite_nominal_pa: 0.05
+  rendite_depot_pa: 0.05
+  vorabpauschale:
+    # Basiszins der Bundesbank, jaehrlich neu. Teilfreistellung 30 % gilt
+    # fuer Aktienfonds; Abgeltungsteuer plus Soli sind 26,375 %.
+    basiszins_pa: 0.0253
+    teilfreistellung: 0.30
+    steuersatz: 0.26375
+
+erwerbseinkommen:
+  # Der FLOOR ist das, womit die Prognose rechnet -- nicht der Schnitt.
+  # Ein Monat mit Bonus ist kein Monat, auf den eine Dispo-Warnung baut.
+  netto_floor_monatlich_cents: 200000
+  netto_median_monatlich_cents: 200000
+  gehalt_steigerung_pa: 0.02
+
+ziel:
+  # Vier Prozent Entnahme im Jahr, die uebliche Faustregel.
+  entnahmerate: 0.04
+  jahreskosten_angesetzt_cents: 2400000
+
+# Was ein Objekt kuenftig abwirft, steht am Objekt: `prognose:` in
+# properties.yaml, eingetragen auf /immobilie/<id>.
+immobilien: {}
+
+# ------------------------------------------------------------- Ruhestand
+
+ruhestand:
+  # Bis zu welchem Alter gerechnet wird und das Kapital reichen muss. Zu kurz
+  # heisst, im Alter ohne Geld dazustehen; zu lang, laenger zu arbeiten als
+  # noetig. 95 fuer alle: lieber zu lange rechnen als zu kurz.
+  lebenserwartung: 95
+  # Was von einer Rente nach Steuer und Krankenversicherung bleibt, als
+  # Abzug. Die Renteninformation nennt brutto; wer als Rentner freiwillig
+  # versichert ist, zahlt auch auf Mieten und Kapitalertraege.
+  abzug_renten: 0.25
+  # Wie viel des Kapitals bis zur Lebenserwartung verbraucht werden darf.
+  # 100 % heisst: am Ende null; 50 %: die Haelfte bleibt, etwa fuer Erben.
+  aufbrauchen: 1.0

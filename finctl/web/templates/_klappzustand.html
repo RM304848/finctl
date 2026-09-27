@@ -1,0 +1,50 @@
+<script>
+// Aufgeklappte Tabellen und die Scrollposition ueberleben ein Neuladen.
+//
+// Jede Aenderung in der Planung laedt die Seite neu -- anders kaeme die
+// Jahresrechnung daneben nicht mit. Bis hierher hiess das: Sprung nach oben,
+// alle Klammern wieder zu, und wer drei Zeilen nacheinander korrigieren wollte,
+// klappte zwischen jeder zweimal auf. Das Neuladen ist richtig, der
+// Zustandsverlust war der Preis dafuer, und der ist vermeidbar.
+//
+// sessionStorage und nicht localStorage: der Zustand gehoert zu DIESEM
+// Arbeitsgang. Wer die Seite morgen neu oeffnet, will den Ausgangszustand
+// sehen und nicht die Klammer, die er gestern zufaellig offen liess.
+//
+// Je Adresse getrennt, weil zwei Reiter einer Seite dieselben Summary-Texte
+// tragen koennen und sonst uebereinander schreiben wuerden.
+(function(){
+  const raum = 'klapp:' + location.pathname + location.search;
+  const alle = () => Array.from(document.querySelectorAll('details.klapp'));
+  // Die Ueberschrift als Schluessel, nicht die Position: nach dem Anlegen
+  // einer Klammer waere jeder Index darunter verschoben, und das Werkzeug
+  // klappte ausgerechnet dann das Falsche auf, wenn gerade etwas entstanden
+  // ist. Eine id gewinnt, wo es eine gibt.
+  const kennung = (d, i) => d.id ||
+    ((d.querySelector(':scope > summary')?.textContent || '').trim().slice(0, 80) + '#' + i);
+
+  function merken(){
+    const zustand = {};
+    alle().forEach((d, i) => { zustand[kennung(d, i)] = d.open; });
+    try {
+      sessionStorage.setItem(raum, JSON.stringify(zustand));
+      sessionStorage.setItem(raum + ':y', String(window.scrollY));
+    } catch (e) { /* privates Fenster: dann eben ohne */ }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    let zustand = {};
+    try { zustand = JSON.parse(sessionStorage.getItem(raum) || '{}'); } catch (e) {}
+    alle().forEach((d, i) => {
+      const k = kennung(d, i);
+      if (k in zustand) d.open = zustand[k];
+      d.addEventListener('toggle', merken);
+    });
+    // Erst nach dem naechsten Bild scrollen: die wiederhergestellten Tabellen
+    // aendern die Seitenhoehe, und vorher zeigt dieselbe Zahl woandershin.
+    const y = parseInt(sessionStorage.getItem(raum + ':y') || '', 10);
+    if (!isNaN(y) && y > 0) requestAnimationFrame(() => window.scrollTo(0, y));
+  });
+  window.addEventListener('beforeunload', merken);
+})();
+</script>

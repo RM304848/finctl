@@ -1,0 +1,28 @@
+# Musterhaushalt: was im Ruhestand hereinkommt, erfunden.
+
+renten:
+  - id: grv
+    name: Gesetzliche Rente
+    art: rente
+    kaufkraft: heute
+    cents: 180000              # 1.800 je Monat
+    stand: {M-2}-01
+    herleitung: Renteninformation, heutige Kaufkraft.
+  - id: police-a
+    name: Fondspolice A
+    art: kapital
+    kaufkraft: heute
+    cents: 9000000             # 90.000
+    ab: 2050-08
+    konto: police-a
+    stand: null
+    herleitung: Policenwert plus Beitrag, vorsichtig verzinst.
+  - id: police-b
+    name: Kapitalpolice B
+    art: kapital
+    kaufkraft: heute
+    cents: 2500000             # 25.000
+    ab: 2040-06
+    konto: police-b
+    stand: null
+    herleitung: Ablaufleistung laut Standmitteilung.

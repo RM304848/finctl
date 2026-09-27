@@ -1,0 +1,217 @@
+{% extends "base.html" %}{% block n_annahmen %}on{% endblock %}
+{% block title %}Annahmen{% endblock %}
+{% block body %}
+<h1>Annahmen</h1>
+<p class="zweck">Die Zahlen, an denen die Extrapolation hängt — und was jede von ihnen bewegt.</p>
+
+<h2>Stellschrauben</h2>
+<p class="muted klein" style="margin:-.3rem 0 .6rem">Was sie bewirken, zeigt die
+  <a class="plain" href="/hochrechnung">Hochrechnung</a>.</p>
+{% if objekte %}<p class="muted klein" style="margin:-.3rem 0 .6rem">Was ein Objekt abwirft, steht am Objekt:
+  {% for o in objekte %}<a class="plain" href="/immobilie/{{ o.id }}#prognose">{{ o.name }}</a>{{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
+<div class="wrap"><table>
+  <tr><th style="width:230px">Annahme</th><th style="width:150px">Wert</th>
+      <th>Wirkt auf</th><th style="width:170px"></th></tr>
+  {% for d in dreh %}
+  <tr>
+    <td>{{ d.label }}</td>
+    <td><input id="a-{{ d.key }}" style="width:100%"
+        value="{{ ('%.2f'|format(d.wert * 100))|replace('.', ',') if d.einheit == 'prozent'
+                  else (d.wert if d.einheit == 'jahre' else d.wert|betrag) }}"></td>
+    <td class="muted klein">{{ d.wirkung }}
+      {%- if d.ueberschrieben %}
+      <br><span class="pill eigen">überschrieben</span>
+      <span style="opacity:.8">dokumentiert:
+        {{ ('%.2f'|format(d.basis * 100))|replace('.', ',') ~ ' %'
+           if d.einheit == 'prozent' else (d.basis if d.einheit == 'jahre'
+           else d.basis|betrag) }}</span>{% endif %}</td>
+    <td>
+      <button class="ghost" onclick="speichern('{{ d.key }}', '{{ d.einheit }}')">Speichern</button>
+      {%- if d.ueberschrieben %}
+      <button class="ghost" onclick="zuruecksetzen('{{ d.key }}')">zurück</button>{% endif %}
+      <div id="m-{{ d.key }}" class="muted fein" style="margin-top:.2rem"></div></td>
+  </tr>
+  {% endfor %}
+</table></div>
+<p class="muted klein">Prozente als Zahl: <code>2,5</code> für 2,5 %.</p>
+
+<h2>Gemessen</h2>
+{# Der Median wird gemessen, nicht gepflegt: eine Zahl, die von Hand
+   nachgefuehrt werden muss, wird nicht nachgefuehrt -- und im Endkapital
+   macht sie sechsstellige Unterschiede. #}
+<div class="wrap"><table>
+  <tr><th style="width:230px">Wert</th><th style="width:150px" class="num">heute</th>
+      <th>Woher</th></tr>
+  <tr>
+    <td>Gehalts-Median</td>
+    <td class="num {{ median|vz }}"><strong>{{ median|euro if median else '—' }}</strong></td>
+    <td class="muted klein">
+      {% if median %}Aus dem Ledger, {{ median_monate }} vollständige Monate. Das
+      fortgeschriebene Einkommen in der Extrapolation — nicht der Floor.
+      {% else %}Noch keine Gehaltsmonate im Ledger; es gilt der Rückfallwert
+      {{ median_rueckfall|euro }} aus <code>assumptions.yaml</code>.{% endif %}</td>
+  </tr>
+</table></div>
+
+<h2>Belegt</h2>
+<p class="muted klein" style="margin:-.3rem 0 .6rem">
+  Steht in einer Unterlage, deshalb ohne Eingabefeld.</p>
+<div class="wrap"><table>
+  <tr><th style="width:230px">Wert</th><th style="width:150px" class="num">Stand</th>
+      <th>Quelle</th></tr>
+  {% for name, wert, einheit, quelle in belegt %}
+  <tr><td>{{ name }}</td>
+      <td class="num">{% if einheit == 'euro' or einheit == 'euro/Monat' %}{{ wert|euro }}
+        {%- elif einheit == 'anteil' %}{{ ('%.0f'|format(wert * 100)) }} %
+        {%- else %}{{ wert }}{% endif %}</td>
+      <td class="muted klein">{{ quelle }}</td></tr>
+  {% endfor %}
+</table></div>
+
+<script>
+async function senden(key, wert, art){
+  const box = document.getElementById('m-' + key);
+  const r = await fetch('/api/setting', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({key: key, value: wert})});
+  const j = await r.json();
+  if (j.error){ box.textContent = 'Fehler: ' + j.error; box.className = 'neg'; return; }
+  box.textContent = art || 'gespeichert'; box.className = 'pos';
+  setTimeout(()=>location.reload(), 700);
+}
+function speichern(key, einheit){
+  const roh = document.getElementById('a-' + key).value;
+  if (einheit === 'prozent'){
+    const z = parseFloat(roh.replace(',', '.').trim());
+    if (isNaN(z)){ document.getElementById('m-'+key).textContent = 'keine Zahl'; return; }
+    senden(key, z / 100);
+  } else if (einheit === 'jahre'){
+    const j = parseInt(roh.trim(), 10);
+    if (isNaN(j)){ document.getElementById('m-'+key).textContent = 'keine Zahl'; return; }
+    senden(key, j);
+  } else {
+    const c = centsAus(roh);
+    if (c === null){ document.getElementById('m-'+key).textContent = 'keine Zahl'; return; }
+    senden(key, c);
+  }
+}
+function zuruecksetzen(key){ senden(key, '', 'zurückgesetzt'); }
+</script>
+
+{# Die Prognosebasis ist ein Abschnitt und keine eigene Seite: sie beantwortet
+   dieselbe Frage wie die Seite, woraus die Extrapolation rechnet. Zu, weil die
+   Tabelle lang ist; ein Link auf #prognosebasis klappt sie auf. #}
+<details class="klapp" id="prognosebasis">
+  <summary>Prognosebasis je Kategorie
+    {%- if v.fenster %} <span class="zahl">— /konten <span class="{{ v.summe_konten|vz }}">{{ v.summe_konten|euro }}</span> · Jahresrechnung
+      <span class="{{ v.summe_jahr|vz }}">{{ v.summe_jahr|euro }}</span> je Monat</span>{% endif %}</summary>
+{% if not v.fenster %}
+<p class="muted">Noch keine vollständigen Monate im Ledger.</p>
+{% else %}
+<p class="muted klein" style="margin:.4rem 0 .6rem">
+  Gemessen {{ fenster_text }}, je Monat und ohne Umbuchungen.</p>
+
+<div class="card" style="margin:.4rem 0 .8rem;display:flex;gap:2rem;flex-wrap:wrap;align-items:end">
+  <div><div class="muted klein">fortgeschrieben je Monat, /konten</div>
+    <div class="v {{ v.summe_konten|vz }}" id="summe-konten" data-vorher="{{ v.summe_konten }}">{{ v.summe_konten|euro }}</div></div>
+  <div><div class="muted klein">fortgeschrieben je Monat, Jahresrechnung</div>
+    <div class="v {{ v.summe_jahr|vz }}" id="summe-jahr" data-vorher="{{ v.summe_jahr }}">{{ v.summe_jahr|euro }}</div></div>
+  <div style="flex:1;min-width:14rem">
+    <div class="muted klein" id="vorschau-text">Häkchen ändern zeigt hier
+      vorher und nachher, gespeichert wird erst mit dem Knopf.</div>
+    <button id="basis-speichern" onclick="basisSpeichern()" disabled>Speichern</button>
+    <span id="basis-meldung" class="muted klein"></span></div>
+</div>
+
+<div class="wrap"><table>
+  <tr><th>Kategorie</th><th>Block</th>
+    {% for m in v.monate %}<th class="num fein">{{ m[:7] }}</th>{% endfor %}
+    <th class="num">Schnitt</th><th class="num">/konten</th><th class="num">Jahresrechnung</th>
+    <th class="num">Δ</th><th>fortschreiben</th></tr>
+  {% for z in v.zeilen %}
+  <tr{% if z.abgewaehlt %} class="done"{% endif %}>
+    <td style="min-width:17rem"><code>{{ z.kategorie or '—' }}</code>
+      {%- if z.unregelmaessig %} <span class="pill eigen">unregelmäßig</span>{% endif %}
+      {%- if z.grund %}<div class="muted fein">{{ z.grund }}</div>{% endif %}</td>
+    <td class="muted klein">{{ z.block or '—' }}</td>
+    {% for w in z.werte %}
+    <td class="num {{ w|vz or 'muted' }} fein">
+      {{ (w / 100)|round|int if w else '·' }}</td>
+    {% endfor %}
+    <td class="num {{ z.schnitt|vz }}">{{ z.schnitt|euro }}</td>
+    <td class="num {{ 'muted' if z.konten is none else z.konten|vz }}">{{ z.konten|euro if z.konten is not none else '—' }}</td>
+    <td class="num {{ 'muted' if z.jahr is none else z.jahr|vz }}">{{ z.jahr|euro if z.jahr is not none else '—' }}</td>
+    <td class="num {{ z.delta|vz or 'muted' }}">{{ z.delta|euro if z.delta else '—' }}</td>
+    <td>{% if z.abwaehlbar %}<input type="checkbox" class="fort"
+        data-kategorie="{{ z.kategorie }}" data-war="{{ 0 if z.abgewaehlt else 1 }}"
+        data-konten="{{ z.konten_roh or 0 }}" data-jahr="{{ z.jahr_roh or 0 }}"
+        {% if not z.abgewaehlt %}checked{% endif %} onchange="basisVorschau()">{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
+{% if treffer %}
+<h3>Treffer</h3>
+{% include "_treffer.html" %}
+{% endif %}
+</details>
+
+<script>
+function basisGeaendert(){
+  return Array.from(document.querySelectorAll('input.fort'))
+    .filter(k => (k.checked ? '1' : '0') !== k.dataset.war);
+}
+function basisVorschau(){
+  const liste = basisGeaendert();
+  let dk = 0, dj = 0;
+  liste.forEach(k => {
+    const vz = k.checked ? 1 : -1;
+    dk += vz * parseInt(k.dataset.konten, 10);
+    dj += vz * parseInt(k.dataset.jahr, 10);
+  });
+  const sk = document.getElementById('summe-konten'), sj = document.getElementById('summe-jahr');
+  const fmt = c => centsAlsText(c) + ' €';
+  sk.textContent = liste.length ? fmt(+sk.dataset.vorher) + ' → ' + fmt(+sk.dataset.vorher + dk) : fmt(+sk.dataset.vorher);
+  sj.textContent = liste.length ? fmt(+sj.dataset.vorher) + ' → ' + fmt(+sj.dataset.vorher + dj) : fmt(+sj.dataset.vorher);
+  document.getElementById('vorschau-text').textContent = liste.length
+    ? liste.length + ' geändert: ' + liste.map(k => k.dataset.kategorie).join(', ')
+    : 'Häkchen ändern zeigt hier vorher und nachher, gespeichert wird erst mit dem Knopf.';
+  document.getElementById('basis-speichern').disabled = !liste.length;
+}
+async function basisSpeichern(){
+  const box = document.getElementById('basis-meldung');
+  for (const k of basisGeaendert()){
+    const r = await fetch('/api/prognosebasis', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kategorie: k.dataset.kategorie, fortschreiben: k.checked})});
+    const j = await r.json();
+    if (j.error){ box.textContent = 'Fehler: ' + j.error; box.className = 'neg'; return; }
+  }
+  box.textContent = 'gespeichert — neu rechnen …'; box.className = 'pos';
+  setTimeout(() => location.reload(), 600);
+}
+// Nach dem Klappzustand, sonst schliesst der gemerkte Zustand wieder, was
+// der Link oeffnen wollte.
+window.addEventListener('load', () => {
+  if (location.hash === '#prognosebasis') {
+    const d = document.getElementById('prognosebasis');
+    d.open = true; d.scrollIntoView();
+  }
+});
+</script>
+{% include "_klappzustand.html" %}
+
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/assumptions.yaml', 'Die dokumentierten Werte mit ihrer Herleitung.'),
+  ('config/lebensplan.yaml', 'Geburtstag und Schwellenalter — die PKV-Frist rechnet daraus.'),
+  ('config/lebensplan_custom.yaml', 'Was auf der Einrichtung dazu gesetzt wurde.'),
+  ('config/renten.yaml', 'Rentenquellen unter „Belegt“; Betrag und Stand im Monatsabschluss.'),
+  ('config/settings_custom.yaml', 'Was von dieser Seite aus überschrieben wurde.'),
+  ('config/prognosebasis_custom.yaml', 'Was unter Prognosebasis abgewählt ist — gilt für /konten und die Jahresrechnung.'),
+  ('config/forecast.yaml', 'Fenster, Mindestvorkommen und Ausschlüsse der Kontoprognose.'),
+  ('config/abos.yaml', 'Abos mit Termin ersetzen ihren Median auf /konten.'),
+  ('finctl/web/templates/annahmen.html', 'Die Texte dieser Seite.'),
+], handbuch='annahmen') }}
+{% endblock %}

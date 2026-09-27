@@ -1,0 +1,10 @@
+# Musterhaushalt: Ziele, erfunden.
+
+ziele:
+- id: tagesgeld-puffer
+  name: Notgroschen
+  cents: 1500000
+  stichtag: null
+  basis:
+  - tagesgeld
+  - giro

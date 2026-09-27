@@ -1,0 +1,16 @@
+# Der Regelsatz -- leer zum Anfangen.
+#
+# Aufsteigende Prioritaet, die erste passende Regel gewinnt. Der
+# Textvergleich ignoriert Leerzeichen und Satzzeichen, `WEG Musterstr`
+# trifft also auch `WEG Muster str.`.
+#
+#   - id: mein-supermarkt
+#     priority: 30
+#     name: Supermarkt
+#     match: {text: ["REWE", "EDEKA", "ALDI"]}
+#     set: {mgmt: lebensmittel/supermarkt}
+#
+# Was hier keine Regel trifft, landet auf /transactions unter "Offen" und wird von Hand
+# zugeordnet -- und aus dieser Zuordnung laesst sich eine Regel machen.
+
+rules: []
