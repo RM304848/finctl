@@ -52,6 +52,30 @@ es gibt, wer plant und was die App zeigen soll.</p>
   {% include "_sicherungsziel.html" %}
 {% endwith %}
 
+{# Kein nummerierter Schritt: wer neu anfaengt, braucht ihn nicht. Er steht
+   neben der Sicherung, weil er ihr Gegenstueck ist. Wiederhergestellt wird
+   in einen NEUEN Ordner; umgeschaltet erst mit "Diesen Stand verwenden". #}
+<details class="klapp" id="wiederherstellen">
+  <summary>Aus einer Sicherung wiederherstellen</summary>
+  <p class="muted klein">Legt einen neuen Datenordner an. Der bisherige bleibt unverändert.</p>
+  {% if sicherungen %}
+  <div class="wrap"><table>
+    <tr><th>Stand</th><th class="num" style="width:110px">Größe</th><th style="width:220px"></th></tr>
+    {% for s in sicherungen %}
+    <tr><td>{{ s.am or s.name }}</td>
+      <td class="num">{{ (s.bytes / 1024)|round|int }} KB</td>
+      <td><button class="ghost" onclick="wiederherstellen(this, '{{ s.name }}')">Wiederherstellen</button></td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+  <div class="zeile" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+    <label for="w-datei">Sicherung von woanders</label>
+    <input id="w-datei" type="file" accept=".gz">
+    <button class="ghost" onclick="wiederherstellenDatei(this)">Wiederherstellen</button>
+  </div>
+  <div class="muted klein" id="w-stand"></div>
+</details>
+
 {# Das Kontenregister steht hier und nicht auf einer eigenen Seite: dort,
    wo ein Konto angelegt wird, sieht man auch, welche es schon gibt. #}
 <details class="klapp" id="konten"{% if zuerst == 'konten' %} open{% endif %}>
@@ -210,6 +234,38 @@ async function ordnerSpeichern(){
   if(!res.ok){ stand.textContent = 'Nicht eingetragen: ' + (o.error || res.status); return; }
   stand.textContent = o.hinweis;
   schrittFertig();
+}
+
+async function wiederherstellenMit(knopf, res){
+  const o = await res.json();
+  if(!res.ok){ meldenNeben(knopf, o.error || res.status, true); return; }
+  meldenNeben(knopf, 'wiederhergestellt');
+  const stand = document.getElementById('w-stand');
+  stand.textContent = `${o.transaktionen} Transaktionen in ${o.ziel}`
+    + (o.stimmig ? ' · Hauptbuch stimmt.' : ' · Hauptbuch stimmt NICHT.');
+  const knopfNeu = document.createElement('button');
+  knopfNeu.textContent = 'Diesen Stand verwenden';
+  knopfNeu.onclick = async () => {
+    const r = await fetch('/api/datenordner', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({ordner: o.ziel})});
+    const a = await r.json();
+    meldenNeben(knopfNeu, r.ok ? a.hinweis : (a.error || r.status), !r.ok);
+  };
+  stand.append(' ', knopfNeu);
+}
+
+async function wiederherstellen(knopf, name){
+  await wiederherstellenMit(knopf, await fetch('/api/wiederherstellen', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})}));
+}
+
+async function wiederherstellenDatei(knopf){
+  const datei = document.getElementById('w-datei').files[0];
+  if(!datei){ meldenNeben(knopf, 'Erst eine Datei wählen.', true); return; }
+  const form = new FormData();
+  form.append('datei', datei);
+  await wiederherstellenMit(knopf, await fetch('/api/wiederherstellen-datei',
+    {method:'POST', body: form}));
 }
 
 /* Die Zeile oben sagt "offen", bis die Seite sie neu liest. Sie nur im

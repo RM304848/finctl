@@ -287,7 +287,11 @@ Das trennt, was du entschieden hast, von dem, womit du es aufgeschrieben hast.
 bewahre sie dort auf, wo du sie ohnehin ablegst. Aus Auszügen und `config/` lässt
 sich das Hauptbuch jederzeit neu bauen (unten).
 
-So sieht die Wiederherstellung aus — App installieren, Archiv einlesen:
+In der App: Einrichtung → **Aus einer Sicherung wiederherstellen**. Die Sicherung
+landet in einem neuen Ordner neben dem bisherigen, und **Diesen Stand verwenden**
+schaltet ab dem nächsten Öffnen um. Der alte Ordner bleibt unverändert.
+
+Im Terminal sieht die Wiederherstellung so aus — App installieren, Archiv einlesen:
 
 ```bash
 .venv/bin/finctl restore <archiv>.tar.gz --to ~/finance-wieder

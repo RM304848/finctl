@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import contextlib
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, File, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from finctl import module as _module
@@ -229,7 +229,73 @@ def einrichtung(request: Request):
         "module": module_zeilen(),
         "person": _person.angaben(), "kv_arten": _person.KRANKENVERSICHERUNG,
         "eigene": eigene_angaben(),
+        "sicherungen": _sicherungen(),
     })
+
+
+def _sicherungen() -> list[dict]:
+    from finctl import ops
+
+    return ops.sicherungen()
+
+
+def _wiederhergestellt(archiv, name: str) -> JSONResponse | dict:
+    from finctl import ops
+
+    try:
+        bericht = ops.wiederherstellen_neben(archiv, name)
+    except (FileNotFoundError, FileExistsError, ValueError, OSError) as fehler:
+        return JSONResponse({"error": str(fehler)}, status_code=400)
+    except Exception as fehler:          # ein kaputtes Archiv: tarfile, sqlite
+        return JSONResponse({"error": f"Nicht lesbar: {fehler}"}, status_code=400)
+    return {"ok": True, "ziel": bericht["ziel"], "transaktionen": bericht["transaktionen"],
+            "werkzeug": bericht["werkzeug"], "fehlend": bericht["fehlend"],
+            "stimmig": bericht["stimmig"]}
+
+
+@router.post("/api/wiederherstellen")
+async def api_wiederherstellen(request: Request):
+    """Einen Stand aus dem eingetragenen Sicherungsordner wiederherstellen.
+
+    Nur ein Name aus der Liste, kein Pfad: sonst liesse sich ueber diese
+    Schnittstelle jede Datei des Rechners als Archiv anbieten.
+    """
+    from finctl import ops
+
+    body = {}
+    with contextlib.suppress(Exception):
+        body = await request.json()
+    name = str(body.get("name") or "")
+    if name not in {s["name"] for s in ops.sicherungen()}:
+        return JSONResponse({"error": "Diesen Stand gibt es im Sicherungsordner nicht."},
+                            status_code=400)
+    ordner, _ = ops.backup_settings()
+    return _wiederhergestellt(ordner / name, name)
+
+
+#: Eine Sicherung ist meist unter einem Megabyte. Groesser ist ein Irrtum.
+SICHERUNG_MAX = 200 * 1024 * 1024
+
+
+@router.post("/api/wiederherstellen-datei")
+async def api_wiederherstellen_datei(datei: UploadFile = File(...)):
+    """Eine Sicherung von woanders -- etwa auf einem neuen Rechner, auf dem
+    noch kein Sicherungsordner eingetragen ist."""
+    import tempfile
+    from pathlib import Path
+
+    name = Path(datei.filename or "").name
+    if not name.endswith(".tar.gz"):
+        return JSONResponse({"error": "Erwartet wird eine Sicherung (finance-os_….tar.gz)."},
+                            status_code=400)
+    inhalt = await datei.read(SICHERUNG_MAX + 1)
+    if len(inhalt) > SICHERUNG_MAX:
+        return JSONResponse({"error": "Größer als 200 MB -- das ist keine Sicherung."},
+                            status_code=400)
+    with tempfile.TemporaryDirectory() as tmp:
+        archiv = Path(tmp) / name
+        archiv.write_bytes(inhalt)
+        return _wiederhergestellt(archiv, name)
 
 
 @router.post("/api/person")

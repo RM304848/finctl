@@ -272,6 +272,72 @@ def restore(archive: Path | str, to: Path | str) -> dict:
                        f"werden fuer den Betrieb nicht gebraucht."}
 
 
+_STEMPEL = re.compile(r"finance-os_(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})\d{2}\.tar\.gz$")
+
+
+def _stempel(name: str) -> str | None:
+    """"2026-09-27 21.31" aus dem Namen eines Archivs -- mit Punkt, weil
+    Windows keinen Doppelpunkt in Ordnernamen erlaubt."""
+    treffer = _STEMPEL.match(name)
+    if not treffer:
+        return None
+    j, m, t, h, mi = treffer.groups()
+    return f"{j}-{m}-{t} {h}.{mi}"
+
+
+def sicherungen() -> list[dict]:
+    """Die Staende im eingetragenen Sicherungsordner, der neueste zuerst.
+
+    Leer ohne Ziel oder ohne Ordner: auf einem neuen Rechner ist beides der
+    Normalfall, und dort kommt die Sicherung als hochgeladene Datei.
+    """
+    try:
+        ziel, _ = backup_settings()
+    except KeinBackupZielError:
+        return []
+    if not ziel.is_dir():
+        return []
+    return [{"name": a.name, "bytes": a.stat().st_size,
+             "am": (_stempel(a.name) or "").replace(".", ":")}
+            for a in sorted(ziel.glob("finance-os_*.tar.gz"), reverse=True)]
+
+
+def wiederherstellen_neben(archiv: Path | str, name: str | None = None) -> dict:
+    """Eine Sicherung in einen NEUEN Ordner neben dem jetzigen Datenordner.
+
+    Aus der Einrichtung heraus, fuer alle ohne Terminal. Drei Dinge sind
+    anders als bei `restore` allein:
+
+    * Der Ordner wird gewaehlt, nicht erfragt: "<Datenordner> (Sicherung
+      2026-09-27 21.31)" -- sichtbar neben dem alten, und am Namen erkennbar.
+    * Das Hauptbuch wird danach geprueft (Splits gehen auf, keine Waisen).
+      Eine Sicherung, die sich einlesen laesst, aber nicht stimmt, soll das
+      sagen, bevor jemand auf sie umschaltet.
+    * Umgeschaltet wird NICHT. Das tut erst "Diesen Stand verwenden", und es
+      gilt ab dem naechsten Start. Bis dahin arbeitet die App unveraendert
+      weiter, und der alte Ordner bleibt, wie er war.
+    """
+    stempel = _stempel(name or Path(archiv).name) or datetime.now().strftime("%Y-%m-%d %H.%M")
+    jetzt = _p.DATEN.resolve()
+    ziel = jetzt.parent / f"{jetzt.name} (Sicherung {stempel})"
+    nummer = 2
+    while ziel.exists():
+        ziel = jetzt.parent / f"{jetzt.name} (Sicherung {stempel}) {nummer}"
+        nummer += 1
+
+    bericht = restore(archiv, ziel)
+    db = ziel / "data" / "finance.db"
+    unstimmig = 0
+    if db.exists():
+        conn = sqlite3.connect(db)
+        conn.row_factory = sqlite3.Row
+        try:
+            unstimmig = len(ledger.split_imbalances(conn)) + len(ledger.orphaned_splits(conn))
+        finally:
+            conn.close()
+    return {**bericht, "stimmig": db.exists() and not unstimmig, "unstimmig": unstimmig}
+
+
 def _werkzeug_aus(stand: Path) -> str | None:
     """Mit welcher Version das Archiv geschrieben wurde.
 

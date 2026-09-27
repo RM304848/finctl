@@ -6,6 +6,12 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+- Eine Sicherung lässt sich in der App wiederherstellen: Einrichtung → **Aus
+  einer Sicherung wiederherstellen**. Aus dem Sicherungsordner oder als
+  hochgeladene Datei, etwa auf einem neuen Rechner. Die Sicherung landet in
+  einem neuen Ordner neben dem bisherigen; umgeschaltet wird erst mit
+  **Diesen Stand verwenden**, und der alte Ordner bleibt unverändert.
+
 ## 0.2.1 – 2026-09-27
 
 - Beim ersten Öffnen – solange es kein Konto gibt – startet die App in der

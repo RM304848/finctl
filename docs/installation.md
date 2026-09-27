@@ -50,6 +50,15 @@ ersten Start entscheiden.
 Sichern geht über den Knopf **Sichern** im Monatsabschluss; das Ziel legst du
 in der Einrichtung fest.
 
+## Neuer Rechner oder etwas ist schiefgegangen
+
+App installieren und öffnen, dann in der Einrichtung **Aus einer Sicherung
+wiederherstellen**: eine `finance-os_….tar.gz` aus deinem Sicherungsordner
+hochladen. Sie wird in einen neuen Ordner ausgepackt und geprüft; mit
+**Diesen Stand verwenden**, Beenden und erneutem Öffnen arbeitet die App mit
+ihr. Kontoauszüge sind nicht in der Sicherung – für den Betrieb braucht es
+sie nicht.
+
 ## Neue Version
 
 Die neue Datei herunterladen und die alte ersetzen – auf dem Mac in
