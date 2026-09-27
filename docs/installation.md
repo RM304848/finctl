@@ -47,6 +47,17 @@ Die neue Datei herunterladen und die alte ersetzen – auf dem Mac in
 **Programme** überschreiben, unter Windows die alte `.exe` löschen. Deine
 Daten bleiben, wo sie sind. Was sich geändert hat, steht unter Releases.
 
+## Was die App ist und was nicht
+
+Sie rechnet, sie berät nicht: Hinweise zu Steuern, Renten und Anlagen sind
+Rechenhilfen ohne Gewähr und ersetzen keine Steuer- oder Anlageberatung.
+
+Benutzen darfst du sie privat und für andere nicht-kommerzielle Zwecke
+(Lizenz: PolyForm Strict 1.0.0). Weitergeben, verändern oder kommerziell
+nutzen nur mit Zustimmung. Die Lizenzen der mitgelieferten Bibliotheken
+stehen in `DRITTLIZENZEN.txt` neben der App (Mac: in der `.dmg`) und unter
+Releases.
+
 ## Etwas geht nicht
 
 Unter **Issues → New issue → Rückmeldung** beschreiben, was passiert ist.

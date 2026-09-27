@@ -23,6 +23,11 @@ MAC = sys.platform == "darwin"
 daten = (collect_data_files("finctl", includes=["**/*.html", "**/*.yaml", "**/*.sql", "*.md"])
          + collect_data_files("pdfminer")
          + copy_metadata("finctl"))
+# Die eigene Lizenz und die der mitgelieferten Bibliotheken reisen mit
+# (drittlizenzen.py erzeugt die zweite Datei vor dem Bau).
+for datei in ("LICENSE.md", "DRITTLIZENZEN.txt"):
+    if (WURZEL / datei).exists():
+        daten.append((str(WURZEL / datei), "."))
 versteckt = (collect_submodules("finctl") + collect_submodules("uvicorn")
              + ["multipart", "python_multipart"])
 

@@ -27,6 +27,8 @@ venv/
 # Mal mit -- und die Verzweigungsratsche meldete jede Funktion als "neu".
 build/
 dist/
+# Erzeugt vor jedem Paketbau (werkzeuge/paket/drittlizenzen.py).
+DRITTLIZENZEN.txt
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/

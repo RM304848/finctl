@@ -41,6 +41,8 @@ jobs:
         id: version
         shell: bash
         run: echo "nummer=$(python -c 'import finctl; print(finctl.__version__)')" >> "$GITHUB_OUTPUT"
+      - name: Lizenzen der Bibliotheken
+        run: python werkzeuge/paket/drittlizenzen.py DRITTLIZENZEN.txt
       - name: Bauen
         run: pyinstaller --noconfirm werkzeuge/paket/finance_os.spec
 
@@ -53,6 +55,7 @@ jobs:
           mkdir dmg
           cp -R "dist/Finance OS.app" dmg/
           ln -s /Applications dmg/Programme
+          cp LICENSE.md DRITTLIZENZEN.txt dmg/
           hdiutil create -volname "Finance OS" -srcfolder dmg -ov -format UDZO \
             "FinanceOS-${{ steps.version.outputs.nummer }}-mac.dmg"
 
@@ -67,7 +70,9 @@ jobs:
       - uses: actions/upload-artifact@v5
         with:
           name: paket-${{ matrix.system }}
-          path: FinanceOS-*
+          path: |
+            FinanceOS-*
+            DRITTLIZENZEN.txt
           if-no-files-found: error
 
   entwurf:
@@ -82,6 +87,8 @@ jobs:
         with:
           path: pakete
           merge-multiple: true
+      # Beide Systeme liefern eine DRITTLIZENZEN.txt; sie unterscheiden sich
+      # nur in plattformeigenen Paketen. Die des letzten Laufs gewinnt.
       - name: Release-Entwurf
         env:
           GH_TOKEN: ${{ github.token }}

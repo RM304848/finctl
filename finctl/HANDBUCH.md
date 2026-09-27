@@ -7,6 +7,9 @@ laufen lassen ergibt byte-identische Splits — dafür gibt es einen Test.
 Dieses Dokument ist die Bedienungsanleitung für den Fall, dass nie wieder ein Modell
 beteiligt ist.
 
+Die App rechnet, sie berät nicht. Was sie zu Steuern, Renten und Anlagen sagt, sind
+Rechenhilfen ohne Gewähr, keine Steuer- oder Anlageberatung.
+
 ---
 
 ## 1. Der Monatsablauf
