@@ -6,6 +6,8 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+## 0.2.1 – 2026-09-27
+
 - Beim ersten Öffnen – solange es kein Konto gibt – startet die App in der
   Einrichtung statt im Monatsabschluss.
 
