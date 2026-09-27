@@ -96,6 +96,10 @@ finctl serve
 
 → <http://127.0.0.1:8765>, Seite **Transaktionen**, Reiter **Offen**. Dort steht, was keine Regel erkannt hat.
 
+Aus dem Paket (`.dmg`, `.exe`) oder mit `finctl app` startet dasselbe Dashboard
+auf <http://127.0.0.1:8777>, richtet beim ersten Mal ein und öffnet den Browser.
+Beendet wird es dann über **Beenden** oben rechts.
+
 ---
 
 ## 2. Wo was geändert wird

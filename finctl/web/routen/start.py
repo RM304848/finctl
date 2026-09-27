@@ -95,3 +95,20 @@ def handbuch(request: Request):
 @router.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+@router.post("/api/beenden")
+def api_beenden():
+    """Der Knopf "Beenden" der App zum Doppelklicken.
+
+    Ohne Starter gibt es nichts zu beenden, was nicht im Terminal liefe: dann
+    404 statt eines Servers, der sich von einer fremden Seite abschalten liesse.
+    """
+    from fastapi.responses import JSONResponse
+
+    from finctl.web import basis
+
+    if basis.BEENDEN is None:
+        return JSONResponse({"error": "laeuft nicht als App"}, status_code=404)
+    basis.BEENDEN()
+    return {"ok": True}

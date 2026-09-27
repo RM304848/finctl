@@ -393,12 +393,28 @@ try {
      Beschriftung waere nach dem ersten `host:`-Wechsel gelogen, und
      ausgerechnet hier ist eine falsche Beschriftung teuer. #}
   <span class="muted klein" style="margin-left:auto">{{ bindung_text() }}</span>
+  {# Nur in der App zum Doppelklicken: dort gibt es kein Terminal, in dem man
+     sie beendet. #}
+  {% if app_modus() %}
+  <button class="navtoggle" onclick="appBeenden()">Beenden</button>
+  {% endif %}
   {# Drei Stufen statt zwei: "wie das Geraet" muss man zurueckbekommen
      koennen, sonst bleibt nach einem einzigen Klick das Thema fuer immer fest. #}
   <button class="navtoggle themaknopf" id="themaknopf" onclick="themaWechseln()"
           aria-label="Farbthema: wie das Gerät" title="Farbthema: wie das Gerät">◐</button>
 </header>
 <script>
+async function appBeenden(){
+  await fetch('/api/beenden', {method: 'POST'}).catch(() => {});
+  const main = document.createElement('main');
+  const titel = document.createElement('h1');
+  titel.textContent = 'Finance OS ist beendet';
+  const satz = document.createElement('p');
+  satz.className = 'muted';
+  satz.textContent = 'Dieses Fenster kann zu.';
+  main.append(titel, satz);
+  document.body.replaceChildren(main);
+}
 // Eine Rueckmeldung steht neben dem Knopf, der sie ausgeloest hat
 // (speichern-rueckmeldung), nie in einem Dialog. Fehlt dort ein Platz, entsteht er.
 function meldenNeben(knopf, text, fehler){

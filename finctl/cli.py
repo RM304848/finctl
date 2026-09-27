@@ -1561,6 +1561,14 @@ def split_flagged(json: bool = typer.Option(False, "--json")) -> None:
     _emit({"rows": rows}, json, render)
 
 
+@app.command(name="app")
+def app_starten() -> None:
+    """Die App wie per Doppelklick: einrichten, starten, Browser oeffnen."""
+    from finctl import starter
+
+    starter.main()
+
+
 @app.command()
 def serve(
     port: int = typer.Option(None, "--port", help="Sonst aus config/server.yaml."),

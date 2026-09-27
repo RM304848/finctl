@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.datastructures import QueryParams
 from starlette.responses import RedirectResponse
 
+import finctl as _finctl
 from finctl import module as _module
 from finctl import pfade as _p
 from finctl.ledger import db as ledger
@@ -58,9 +59,23 @@ def betrag(cents: int | None) -> str:
     return f"{cents / 100:,.2f}".replace(",", "\u0000").replace(".", ",").replace("\u0000", ".")
 
 
+#: Gesetzt vom Starter (finctl/starter.py): beendet den Server. `None`, wenn
+#: die App mit `finctl serve` laeuft -- dann beendet man sie im Terminal, und
+#: ein Knopf dafuer waere einer, der nichts tut.
+BEENDEN = None
+
+
+def app_modus() -> bool:
+    """Laeuft die App aus dem Paket (Doppelklick), nicht aus `finctl serve`?"""
+    return BEENDEN is not None
+
+
 def _bindung_text() -> str:
     from finctl.web import auth as _auth
 
+    # Der Starter bindet immer an diesen Rechner, egal was server.yaml sagt.
+    if app_modus():
+        return "localhost only"
     host, _ = _auth.bindung()
     if host in ("127.0.0.1", "localhost", "::1"):
         return "localhost only"
@@ -68,6 +83,9 @@ def _bindung_text() -> str:
 
 
 TEMPLATES.env.globals["bindung_text"] = _bindung_text
+TEMPLATES.env.globals["app_modus"] = app_modus
+# Steht unten auf jeder Seite: danach fragt die Vorlage fuer Rueckmeldungen.
+TEMPLATES.env.globals["version"] = _finctl.__version__
 # Die Navigation zeigt nur Seiten eingeschalteter Module (finctl/module.py).
 # `aktive_module` einmal je Seite, `seite_an` je Link mit dieser Menge.
 TEMPLATES.env.globals["aktive_module"] = _module.aktive

@@ -325,12 +325,24 @@ def test_nothing_in_the_runtime_reaches_the_network_or_a_model():
     banned = re.compile(
         r"^\s*(?:from|import)\s+(requests|httpx|urllib|openai|anthropic|socket)\b",
         re.M)
+    # Der Starter der App zum Doppelklicken fragt einen Port auf DIESEM
+    # Rechner ab (frei? laeuft schon Finance OS?). Dafuer braucht er socket
+    # und urllib -- und darf nirgendwo sonst hin.
+    nur_lokal = {"finctl/starter.py"}
     offenders = []
     for path in pathlib.Path("finctl").rglob("*.py"):
+        if path.as_posix() in nur_lokal:
+            continue
         hit = banned.search(path.read_text(encoding="utf-8"))
         if hit:
             offenders.append(f"{path}: {hit.group(0).strip()}")
     assert not offenders, offenders
+
+    from finctl import starter
+
+    quelle = pathlib.Path("finctl/starter.py").read_text(encoding="utf-8")
+    assert starter.HOST == "127.0.0.1"
+    assert not re.search(r"https?://(?!\{HOST\})", quelle), "der Starter nennt eine fremde Adresse"
 
 
 def test_the_dashboard_binds_to_localhost_by_default():
