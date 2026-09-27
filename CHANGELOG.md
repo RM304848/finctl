@@ -6,6 +6,8 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+## 0.2.0 – 2026-09-27
+
 - Die App gibt es zum Doppelklicken: `.dmg` für den Mac (Apple-Chip), `.exe`
   für Windows. Sie richtet sich beim ersten Start selbst ein und lässt sich
   über **Beenden** oben rechts schließen.
