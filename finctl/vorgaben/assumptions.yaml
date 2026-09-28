@@ -33,11 +33,6 @@ erwerbseinkommen:
   netto_median_monatlich_cents: 200000
   gehalt_steigerung_pa: 0.02
 
-ziel:
-  # Vier Prozent Entnahme im Jahr, die uebliche Faustregel.
-  entnahmerate: 0.04
-  jahreskosten_angesetzt_cents: 2400000
-
 # Was ein Objekt kuenftig abwirft, steht am Objekt: `prognose:` in
 # properties.yaml, eingetragen auf /immobilie/<id>.
 immobilien: {}

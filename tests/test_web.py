@@ -1071,8 +1071,11 @@ def test_the_goals_page_carries_no_settings_any_more():
         assert gone not in html, gone
 
 
-def test_the_salary_floor_moved_to_the_planning_page():
-    assert "Gehalts-Untergrenze" in client.get("/planung").text
+def test_the_salary_floor_lives_only_with_the_assumptions():
+    """Sie stand auf /annahmen und /planung -- eine Zahl, zwei Felder. Sie ist
+    eine Annahme, also steht sie bei den Annahmen."""
+    assert "Gehalts-Untergrenze" in client.get("/annahmen").text
+    assert "Gehalts-Untergrenze" not in client.get("/planung").text
 
 
 def test_the_retired_forecast_page_is_gone():
@@ -3373,13 +3376,12 @@ def test_a_new_bracket_is_created_as_plan_or_obligation_in_one_place():
 def test_the_planning_page_puts_the_brackets_first_and_the_basics_last():
     """Worum es geht, steht oben; was selten angefasst wird, unten.
 
-    Abgleich und Gehaltsuntergrenze standen vor den Klammern und verdraengten
-    sie. Jetzt: Verpflichtungen, Plaene, "Neue Klammer", dann Grundlagen.
+    Der Abgleich stand vor den Klammern und verdraengte sie. Jetzt:
+    Verpflichtungen, Plaene, "Neue Klammer", dann der Abgleich.
     """
     html = client.get("/planung").text
     stellen = [html.index(s) for s in ("<h2>Verpflichtungen</h2>", "<h2>Pläne</h2>",
-                                       'id="neue-klammer"', "<h2>Grundlagen</h2>",
-                                       'id="abgleich"')]
+                                       'id="neue-klammer"', 'id="abgleich"')]
     assert stellen == sorted(stellen)
 
 def test_every_projected_year_opens_to_its_derivation():

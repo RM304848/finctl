@@ -19,6 +19,11 @@ macht daraus beim Veröffentlichen die neue Version.
 - Neue Startwerte: Tagesgeld 2,5 %, Depot 7 % im Jahr (vorher je 5 %). Gilt
   für neue Installationen; eigene Annahmen bleiben, wie sie sind.
 - Handbuch: Die Auszüge liegen in `data/statements/`, je Konto ein Ordner.
+- Die Gehalts-Untergrenze steht nur noch unter **Annahmen**, nicht mehr
+  zusätzlich auf **Planung**.
+- Die Entnahmerate ist aus den Annahmen verschwunden: Gerechnet wurde mit ihr
+  nirgends. Die Rentenlücke rechnet mit Lebenserwartung, Rendite und
+  „Vermögen aufbrauchen“.
 
 ## 0.2.1 – 2026-09-27
 

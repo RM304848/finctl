@@ -12,9 +12,6 @@ erwerbseinkommen:
   netto_floor_monatlich_cents: 360000
   netto_median_monatlich_cents: 380000
   gehalt_steigerung_pa: 0.03
-ziel:
-  entnahmerate: 0.04
-  jahreskosten_angesetzt_cents: 3000000
 # Was ein Objekt kuenftig abwirft, steht am Objekt (properties.yaml).
 immobilien: {}
 # Renten stehen in renten.yaml.

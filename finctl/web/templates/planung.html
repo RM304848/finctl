@@ -82,26 +82,6 @@
   </div>
 </details>
 
-{# Grundlagen zuletzt: sie werden selten angefasst, und oben verdraengten sie,
-   worum es auf dieser Seite geht. #}
-<h2>Grundlagen</h2>
-<div class="card">
-  <div style="display:grid;grid-template-columns:180px 1fr auto;gap:.6rem;align-items:end">
-    <label id="gehalt-untergrenze" title="Die niedrigste Monatszahlung, mit der eine Prognose rechnen darf">Gehalts-Untergrenze (€)<br>
-      <input id="floor" value="{{ floor|betrag }}" style="width:100%"></label>
-    <span class="muted klein">
-      {% if gehalt_min and gehalt_max %}Beobachtet
-      {{ gehalt_min|euro }}–{{ gehalt_max|euro }}.{% endif %}
-      {% if floor_source != 'default' %}Überschrieben, Basis
-      {{ floor_default|euro }}.{% endif %}</span>
-    <span class="row-actions"><button onclick="floorSpeichern()">Speichern</button>
-      <span id="st" class="muted"></span></span>
-  </div>
-  {# Steht hier und nicht bei den Zielen, weil es eine ANNAHME ist und kein
-     Ziel -- zwischen den Zielen gelesen sah es aus wie etwas, das erreicht
-     werden soll. #}
-</div>
-
 <details class="klapp" id="abgleich">
   <summary>Abgleich
     <span class="zahl">— letzte {{ abgleich.months }} vollständige Monate,
@@ -224,6 +204,11 @@ async function post(url, body, reload=true, ort=null){
   if (el){ el.textContent = 'gespeichert'; el.className = 'muted'; }
   if (reload) setTimeout(()=>location.reload(), 300);
   return true;
+}
+function neueKlammer(){
+  post('/api/szenario', {neu: true, name: document.getElementById('nk-name').value.trim(),
+                         pflicht: document.getElementById('nk-art').value === 'pflicht'},
+       true, 'meldung-neue-klammer');
 }
 function neueKlammer(){
   post('/api/szenario', {neu: true, name: document.getElementById('nk-name').value.trim(),

@@ -107,8 +107,6 @@ def annahmen(request: Request):
     from finctl import person as _person
 
     belegt = _renten()
-    belegt.append(("Entnahmerate", _ann.get("ziel", "entnahmerate", default=0), "anteil",
-                   "Entnahme je Jahr, aus der ein Zielbetrag hergeleitet ist."))
     beginn = _person.rentenbeginn()
     if beginn:
         belegt.append(("Rentenbeginn", beginn.strftime("%Y-%m"), "text",

@@ -11,7 +11,6 @@ from finctl.web.basis import (
     _slug,
     categories,
     conn,
-    setting,
 )
 from finctl.web.verkauf import _verkauf_kontext
 
@@ -214,12 +213,6 @@ def planung(request: Request):
                      "target": fire.target_cents, "due": fire.due,
                      "pct_before": (100.0 * surplus / needed) if needed else 0.0,
                      "pct_after": (100.0 * (surplus + impact) / needed) if needed else 0.0}
-    # The salary floor belongs here rather than with the goals: it is a
-    # planning INPUT -- the lowest monthly salary a projection may assume --
-    # not a target to be reached. Sitting among the goals it read like one.
-    from finctl import assumptions as _ann
-
-    default_floor = _ann.salary_floor_cents()
     c2 = conn()
     try:
         cats = categories(c2)
@@ -233,7 +226,6 @@ def planung(request: Request):
         fpfad = CONFIG_DIR / "forecast.yaml"
         betriebskonto = _operating_account(
             (_yb.safe_load(fpfad.read_text(encoding="utf-8")) or {}) if fpfad.exists() else {})
-        floor, floor_source = setting(c2, "salary_floor_cents", default_floor)
         # Je Verkaufszeile: Restschuld, Netto, Frist -- dieselbe Rechnung wie
         # auf /immobilien, nur mit Termin und Preis aus der Zeile.
         objekte = [dict(r) for r in c2.execute("SELECT * FROM properties ORDER BY id")]
@@ -249,26 +241,8 @@ def planung(request: Request):
                                            "sale_price_cents": z_.amount_cents})
                 kx["netto_cents"] = (kx["netto_cents"] or 0) - (z_.kosten_cents or 0)
                 verkauf_zeilen[f"{s_.id}-{i_}"] = kx
-        # Die beobachtete Spanne wird GEMESSEN und nicht in den Text
-        # geschrieben. Sie stand dort als "4.809-7.304" und war damit ein
-        # Satz, der jeden Monat ein Stueck unwahrer wird, ohne dass ihn
-        # jemand anfasst.
-        #
-        # Gemessen wird je MONAT, nicht je Buchung: ein Monat mit zwei
-        # Zahlungen ergibt sonst zwei kleine statt einer richtigen Zahl, und
-        # die Spanne begaenne bei 1.596 statt bei 4.599. Der laufende Monat
-        # bleibt draussen, solange er unvollstaendig ist.
-        spanne = c2.execute(
-            "SELECT MIN(summe), MAX(summe) FROM ("
-            "  SELECT SUM(s.amount_cents) AS summe"
-            "  FROM splits s JOIN transactions t ON t.id = s.transaction_id"
-            "  WHERE s.mgmt_category_id = 'einkommen/gehalt'"
-            "    AND t.booking_date >= date('now', '-24 months')"
-            "    AND substr(t.booking_date, 1, 7) < strftime('%Y-%m', 'now')"
-            "  GROUP BY substr(t.booking_date, 1, 7))").fetchone()
     finally:
         c2.close()
-    gehalt_min, gehalt_max = (spanne or (None, None))
 
     pflichten_klammern = [x for x in scenarios if x.obligation]
     plaene = [x for x in scenarios if not x.obligation]
@@ -286,9 +260,7 @@ def planung(request: Request):
         "kategorie_namen": {c["id"]: c["label"] for c in cats},
         "accounts": accounts, "betriebskonto": betriebskonto,
         "frequencies": _sz.FREQUENCIES, "fire": fire_rows,
-        "floor": floor, "floor_source": floor_source,
-        "gehalt_min": gehalt_min, "gehalt_max": gehalt_max,
-        "floor_default": default_floor, "today": today.isoformat(),
+        "today": today.isoformat(),
         "objekte": [{"id": o["id"], "name": o["name"]} for o in objekte],
         "verkauf_zeilen": verkauf_zeilen})
 
