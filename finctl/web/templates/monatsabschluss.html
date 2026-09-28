@@ -111,7 +111,8 @@
     <th class="num">{{ ('Saldo ' ~ g.stichtag) if konten and g.stichtag else 'Wert' }}</th>
     <th>{{ 'Beleg' if konten else 'Stand' }}</th><th>Notiz</th><th></th></tr>
   {% for z in g.zeilen %}{% set p = z.p %}
-  {% set feld = bearbeiten and not z.auszug %}
+  {# Renten werden auf /renten gepflegt; hier steht nur, ob das Schreiben aktuell ist. #}
+  {% set feld = bearbeiten and not z.auszug and g.id != 'renten' %}
   {# Eine Rente kann wie ihre Police heissen: eigener Praefix fuer die id. #}
   <tr id="pos-{{ 'rente-' if g.id == 'renten' }}{{ z.key|e }}" data-key="{{ z.key|e }}"{% if z.api %} data-api="{{ z.api }}"{% endif %}
       data-cents="{{ z.cents if z.cents is not none }}">
@@ -120,17 +121,8 @@
     {# Konten als Kennung (konten-als-kennung), der Anzeigename als Titel. #}
     <td>{% if konten %}<span title="{{ p.name }}">{{ z.key }}</span>{% else %}{{ p.name }}{% endif %}
       {%- if g.id == 'renten' %}<br><span class="muted fein">{{ p.zusatz }}</span>
-      {%- if feld %}<label class="bezug fein muted">Bezug ab <input data-feld="ab" value="{{ z.ab }}"
-          placeholder="{{ z.ab_vorgabe or '2061-03' }}" title="Leer: ab dem Rentenbeginn aus der Einrichtung"
-          oninput="standGeaendert(this)" onkeydown="standTaste(event)"></label>
-      {%- elif z.ab %}<br><span class="muted fein">Bezug ab {{ z.ab }}</span>{% endif %}
-      {%- if feld %}<label class="bezug fein muted">Effektivkosten <input data-feld="kosten" size="5"
-          value="{{ ('%.2f'|format(z.kosten * 100))|replace('.', ',') if z.kosten is not none else '' }}"
-          placeholder="—" title="% im Jahr laut Standmitteilung; bei der gesetzlichen Rente leer"
-          oninput="standGeaendert(this)" onkeydown="standTaste(event)"> %</label>{% endif %}
-      {%- if z.kosten_hoch %} <span class="neg" title="Effektivkosten
-        {{- ' ' ~ ('%.2f'|format(z.kosten * 100))|replace('.', ',') }} % über deiner Schwelle von
-        {{- ' ' ~ ('%.2f'|format(z.schwelle * 100))|replace('.', ',') }} % (Annahmen)">⚠</span>{% endif %}{% endif %}
+      {%- if z.ab %}<br><span class="muted fein">Bezug ab {{ z.ab }}</span>{% endif %}
+      {%- if z.kosten_hoch %} <span class="neg" title="Effektivkosten über deiner Schwelle">⚠</span>{% endif %}{% endif %}
       {%- if z.eigen %} <span class="pill eigen" title="Hier geändert. In {{ 'renten.yaml' if g.id == 'renten' else 'balances.yaml' }}:
         {{ z.base_cents|euro if z.base_cents is not none else 'kein Wert' }}
         {%- if z.base_note %} · {{ z.base_note }}{% endif %}">eigen</span>{% endif %}</td>
@@ -144,17 +136,17 @@
     {% else %}
     <td class="num {{ z.cents|vz }}">{{ z.cents|euro if z.cents is not none else '—' }}</td>
     <td class="stand {{ 'neg' if not p.erledigt }}">{{ p.beleg or p.hinweis }}
-      {%- if p.zusatz %} <span class="muted fein">· {{ p.zusatz }}</span>{% endif %}</td>
+      {%- if p.zusatz and g.id != 'renten' %} <span class="muted fein">· {{ p.zusatz }}</span>{% endif %}</td>
     {% endif %}
-    <td class="notiz">{% if bearbeiten and z.notiz %}<textarea class="still" data-feld="notiz" rows="1"
+    <td class="notiz">{% if bearbeiten and z.notiz and g.id != 'renten' %}<textarea class="still" data-feld="notiz" rows="1"
         maxlength="2000" placeholder="Notiz — woher, wem gehört es?"
         oninput="standGeaendert(this)" onkeydown="standTaste(event)">{{ z.note }}</textarea>
       {%- else %}<span class="muted">{{ z.note }}</span>{% endif %}</td>
-    <td class="tun nobr">{% if bearbeiten %}
+    <td class="tun nobr">{% if g.id == 'renten' %}{% if seite_an("/renten") %}<a class="plain" href="/renten#rente-{{ z.key|e }}">pflegen →</a>{% endif %}
+      {%- elif bearbeiten %}
       <button class="ghost" data-knopf onclick="standAblegen(this)"
         {%- if z.auszug or p.erledigt or z.cents is none %} hidden{% endif %}
         title="Denselben Wert mit heutigem Datum ablegen">unverändert</button>
-      {%- if z.angelegt %} <button class="ghost" onclick="renteLoeschen(this)">löschen</button>{% endif %}
       {%- if z.eigen %} <button class="ghost" onclick="standZurueck(this)"
         title="Zurück auf {{ 'renten.yaml' if g.id == 'renten' else 'balances.yaml' }}">zurück</button>{% endif %}
       <span class="meldung fein"></span>{% endif %}</td>
@@ -163,29 +155,6 @@
 </table></div>
 {% endfor %}
 
-{# Ein neuer Nutzer hat kein renten.yaml: ohne diesen Bereich liesse sich
-   nicht einmal die gesetzliche Rente eintragen. Immer nominal. #}
-{% if bearbeiten %}
-<details class="klapp" id="rente-neu"{% if not staende|selectattr('id', 'equalto', 'renten')|list %} open{% endif %}>
-  <summary>Rente oder Police anlegen</summary>
-  <div class="zeilen-form">
-    <label>Name<input id="rn-name" placeholder="Gesetzliche Rente" maxlength="80"></label>
-    <label>Art<select id="rn-art" data-no-combo>
-      <option value="rente">Monatsrente</option><option value="kapital">Kapital, einmalig</option>
-    </select></label>
-    <label>Betrag laut Schreiben (€)<input id="rn-betrag" class="betrag" placeholder="1.500,00"></label>
-    <label>Bezug ab<input id="rn-ab" placeholder="leer: Rentenbeginn"></label>
-    <label>Effektivkosten (% im Jahr)<input id="rn-kosten" placeholder="leer: unbekannt"></label>
-  </div>
-  <p class="zeilen-knoepfe"><button onclick="renteAnlegen(this)">Anlegen</button></p>
-  <details class="hilfe">
-    <summary>Welche Zahl aus dem Schreiben</summary>
-    <p>Der Betrag, wie er dasteht, ohne Umrechnung.</p>
-    <p>Nennt das Schreiben mehrere Wertentwicklungen, nimm die mit 7 %.</p>
-    <p>Effektivkosten stehen in der Standmitteilung oder im Produktinformationsblatt.</p>
-  </details>
-</details>
-{% endif %}
 
 {% if bestand and bestand.obligations %}
 {% set eine = bestand.obligations|length == 1 %}
@@ -245,36 +214,7 @@ function standKoerper(tr){
   }
   if (geaendert.includes('notiz')) body.note = standFeld(tr, 'notiz').value;
   if (geaendert.includes('ab')) body.ab = standFeld(tr, 'ab').value.trim();
-  if (geaendert.includes('kosten')){
-    const k = prozentAus(standFeld(tr, 'kosten').value);
-    if (Number.isNaN(k)){ standFeld(tr, 'kosten').classList.add('feld-fehlt'); return null; }
-    body.kosten_pa = k;
-  }
   return body;
-}
-// Prozent als Anteil; leer heisst "nicht bekannt" und geht als '' an den Server.
-function prozentAus(text){
-  const t = String(text).replace('%', '').trim();
-  return t === '' ? '' : parseFloat(t.replace(',', '.')) / 100;
-}
-async function renteAnlegen(knopf){
-  const g = id => document.getElementById(id);
-  const cents = centsAus(g('rn-betrag').value);
-  if (cents === null){ g('rn-betrag').classList.add('feld-fehlt'); meldenNeben(knopf, 'Betrag fehlt', true); return; }
-  const kosten = prozentAus(g('rn-kosten').value);
-  if (Number.isNaN(kosten)){ g('rn-kosten').classList.add('feld-fehlt'); meldenNeben(knopf, 'keine Zahl', true); return; }
-  const r = await fetch('/api/rente-neu', {method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name: g('rn-name').value, art: g('rn-art').value, cents,
-                          ab: g('rn-ab').value.trim(), kosten_pa: kosten})});
-  const j = await r.json();
-  if (j.error){ meldenNeben(knopf, j.error, true); return; }
-  meldenNeben(knopf, 'angelegt');
-  setTimeout(() => location.reload(), 600);
-}
-function renteLoeschen(knopf){
-  const tr = knopf.closest('tr');
-  if (!confirm('Diese Rente löschen?')) return;
-  standPost(tr, {key: tr.dataset.key, loeschen: true});
 }
 async function standPost(tr, body){
   try {
@@ -353,7 +293,7 @@ async function verbindlichkeitStreichen(kennung, name){
   ('config/balances.yaml', 'Die Stände, deren Alter hier geprüft wird.'),
   ('config/balances_custom.yaml', 'Was an Werten und Notizen hier geändert wurde.'),
   ('config/renten.yaml', 'Rentenquellen mit Art, Beginn und Herleitung.'),
-  ('config/renten_custom.yaml', 'Betrag und Stand der Renten von hier.'),
+  ('config/renten_custom.yaml', 'Betrag und Stand der Renten, gepflegt auf /renten.'),
   ('config/accounts.yaml', 'Welche Konten einen Auszug liefern müssen.'),
   ('config/backup.yaml', 'Wohin das Backup schreibt und wie viele Stände bleiben.'),
   ('config/szenarien.yaml', 'Welche Pläne eingeschaltet sind.'),

@@ -363,12 +363,13 @@ try {
   </span>
   {% endif %}
 
-  {% if seite_an("/vertraege", "/energie", aktiv=an) %}
+  {% if seite_an("/vertraege", "/energie", "/renten", aktiv=an) %}
   <span class="navgruppe">
     <span class="navlabel">Verträge</span>
     <span class="navlinks">
     {% if seite_an("/vertraege", aktiv=an) %}<a class="{% block n_vertraege %}{% endblock %}" href="/vertraege">Abos und Versicherungen</a>{% endif %}
     {% if seite_an("/energie", aktiv=an) %}<a class="{% block n_energie %}{% endblock %}" href="/energie">Energie</a>{% endif %}
+    {% if seite_an("/renten", aktiv=an) %}<a class="{% block n_renten %}{% endblock %}" href="/renten">Renten</a>{% endif %}
     </span>
   </span>
   {% endif %}

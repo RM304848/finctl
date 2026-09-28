@@ -49,6 +49,7 @@ from finctl.web.routen import (
     kredite,
     planung,
     regeln,
+    renten,
     start,
     system,
     ziele,
@@ -149,6 +150,6 @@ async def login(request: Request):
 # Die Reihenfolge ist Lesereihenfolge, keine Bedeutung: keine zwei Routen
 # teilen sich einen Pfad, also entscheidet sie nichts.
 for _teil in (start, buchungen, konten, abos, auswertung, immobilien, kredite,
-              planung, ziele, annahmen, regeln, kategorien, energie, geteilt,
+              planung, ziele, renten, annahmen, regeln, kategorien, energie, geteilt,
               system, einrichtung, einlesen):
     app.include_router(_teil.router)

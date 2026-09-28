@@ -27,9 +27,11 @@ macht daraus beim Veröffentlichen die neue Version.
   „Teilzeit“ auf **Planung** gibt es immer, auch frisch installiert; sie ist
   von Haus aus aus und schaltet die Teilzeit ein. Werte, die du in der
   Klammer einträgst, gehen vor; leer gelassen gelten die Annahmen.
-- **Renten und Policen anlegen** im Monatsabschluss: Name, Monatsrente oder
-  Kapital, Betrag laut Schreiben (nominal, bei mehreren Szenarien der mit 7 %
-  Wertentwicklung), Bezug ab. Bisher ließen sich nur vorhandene ändern.
+- Neue Seite **Renten** (unter Verträge): gesetzliche Rente und Policen
+  anlegen und pflegen – Betrag laut Schreiben (nominal, bei mehreren
+  Szenarien der mit 7 % Wertentwicklung), Bezug ab, Stand. Bisher ließen sich
+  nur vorhandene ändern. Der Monatsabschluss prüft nur noch, ob das Schreiben
+  aktuell ist, und führt dorthin.
 - **Effektivkosten** je Rente oder Police. Liegen sie über deiner Schwelle
   (Annahmen, Vorgabe 1,3 %), steht ein Warnzeichen daneben.
 - **Steuern in der Hochrechnung**, bewusst vorsichtig: Verkäufe aus dem

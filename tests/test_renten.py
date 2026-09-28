@@ -156,3 +156,43 @@ def test_costs_above_the_threshold_are_flagged_on_the_monthly_close(monkeypatch)
 
     zeilen = auswertung._rentenzeilen([P("p"), P("q")])
     assert [z["kosten_hoch"] for z in zeilen] == [True, False]
+
+
+# --------------------------------------------------------------- /renten
+
+def test_the_pension_page_is_the_one_place_to_maintain_them(monkeypatch):
+    """Anlegen und Pflegen auf /renten; der Monatsabschluss prueft nur und
+    fuehrt hierher -- zwei Felder fuer einen Betrag laufen auseinander."""
+    from fastapi.testclient import TestClient
+
+    from finctl import module
+    from finctl.web.server import app
+
+    if not module.seite_an("/renten"):
+        pytest.skip("Prognose ist ausgeschaltet")
+    q = renten.Quelle(id="erfunden", name="Erfundene Rente", art="rente", cents=123_400,
+                      kosten_pa=0.02)
+    monkeypatch.setattr(renten, "quellen", lambda *a, **k: [q])
+    client = TestClient(app)
+    seite = client.get("/renten").text
+    assert 'id="rente-erfunden"' in seite and 'id="rente-neu"' in seite
+    assert "⚠" in seite.split('id="rente-erfunden"')[1].split("</tr>")[0]
+
+    abschluss = client.get("/monatsabschluss").text
+    zeile = abschluss.split('id="pos-rente-erfunden"')[1].split("</tr>")[0]
+    assert 'href="/renten#rente-erfunden"' in zeile
+    assert 'data-feld="wert"' not in zeile, "im Monatsabschluss nur lesen"
+    assert 'id="rente-neu"' not in abschluss
+
+
+def test_without_any_pension_the_page_opens_the_form(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from finctl import module
+    from finctl.web.server import app
+
+    if not module.seite_an("/renten"):
+        pytest.skip("Prognose ist ausgeschaltet")
+    monkeypatch.setattr(renten, "quellen", lambda *a, **k: [])
+    seite = TestClient(app).get("/renten").text
+    assert '<details class="klapp" id="rente-neu" open>' in seite

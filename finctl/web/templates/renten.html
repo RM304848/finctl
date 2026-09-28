@@ -1,0 +1,163 @@
+{% extends "base.html" %}{% block n_renten %}on{% endblock %}
+{% block title %}Renten{% endblock %}
+{% block body %}
+<h1>Renten</h1>
+<p class="zweck">Was im Ruhestand hereinkommt — laut Renteninformation und Standmitteilung.</p>
+
+{% if not zeilen %}
+<div class="note">Noch keine Rente eingetragen. Fang mit der gesetzlichen an: unten anlegen.</div>
+{% else %}
+{# Eine Quelle, eine Zeile; die Notiz als Unterzeile darunter
+   (bearbeitungstabellen). Der eine Knopf heisst "unverändert", bis getippt
+   wird (eine-position-eine-zeile). #}
+<div class="wrap"><table class="renten">
+  <tr><th style="width:34px"></th><th>Quelle</th><th class="num" style="width:9rem">Betrag</th>
+      <th style="width:7rem">Bezug ab</th><th style="width:7rem">Effektivkosten</th>
+      <th style="width:9rem">Stand</th><th style="width:12rem"></th></tr>
+  {% for z in zeilen %}{% set q = z.q %}
+  <tr id="rente-{{ q.id }}" data-key="{{ q.id }}" data-cents="{{ q.cents }}">
+    <td style="text-align:center">{% if z.aktuell %}<span class="pos" title="Schreiben aus {{ jahr }}">✓</span>
+      {%- else %}<span class="neg" title="kein Schreiben aus {{ jahr }}">○</span>{% endif %}</td>
+    <td>{{ q.name }}
+      {%- if z.kosten_hoch %} <span class="neg" title="Effektivkosten über deiner Schwelle von
+        {{- ' ' ~ ('%.2f'|format(schwelle * 100))|replace('.', ',') }} % (Annahmen)">⚠</span>{% endif %}
+      <br><span class="muted fein">{{ z.art }}, {{ z.kaufkraft }}</span></td>
+    <td><input class="betrag" data-feld="wert" value="{{ q.cents|betrag }}" oninput="renteGeaendert(this)"></td>
+    <td><input data-feld="ab" value="{{ z.ab }}" placeholder="{{ rentenbeginn or 'Rentenbeginn' }}"
+        title="Leer: ab dem Rentenbeginn aus der Einrichtung" oninput="renteGeaendert(this)"></td>
+    <td><input data-feld="kosten" placeholder="—" title="% im Jahr; bei der gesetzlichen Rente leer"
+        value="{{ ('%.2f'|format(q.kosten_pa * 100))|replace('.', ',') if q.kosten_pa is not none else '' }}"
+        oninput="renteGeaendert(this)"></td>
+    <td><input data-feld="stand" value="{{ z.stand }}" placeholder="{{ jahr }}-01-31"
+        oninput="renteGeaendert(this)"></td>
+    <td class="aktionen"><button class="ghost" data-knopf onclick="renteSpeichern(this)"
+        title="Denselben Betrag mit heutigem Datum ablegen">unverändert</button>
+      {%- if q.angelegt %} <button class="ghost" onclick="renteLoeschen(this)">löschen</button>
+      {%- elif q.eigen %} <button class="ghost" onclick="renteZurueck(this)"
+        title="Zurück auf renten.yaml">zurück</button>{% endif %}
+      <span class="meldung fein"></span></td>
+  </tr>
+  <tr class="unterzeile" data-zu="{{ q.id }}"><td></td>
+    <td colspan="6"><input class="still" data-feld="notiz" value="{{ z.notiz|e }}" maxlength="2000"
+        placeholder="Notiz — woher kommt die Zahl?" oninput="renteGeaendert(this)"></td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
+<details class="klapp" id="rente-neu"{% if not zeilen %} open{% endif %}>
+  <summary>Rente oder Police anlegen</summary>
+  <div class="zeilen-form">
+    <label>Name<input id="rn-name" placeholder="Gesetzliche Rente" maxlength="80"></label>
+    <label>Art<select id="rn-art" data-no-combo>
+      <option value="rente">Monatsrente</option><option value="kapital">Kapital, einmalig</option>
+    </select></label>
+    <label>Betrag laut Schreiben (€)<input id="rn-betrag" class="betrag" placeholder="1.500,00"></label>
+    <label>Bezug ab<input id="rn-ab" placeholder="leer: Rentenbeginn"></label>
+    <label>Effektivkosten (% im Jahr)<input id="rn-kosten" placeholder="leer: unbekannt"></label>
+  </div>
+  <p class="zeilen-knoepfe"><button onclick="renteAnlegen(this)">Anlegen</button></p>
+</details>
+
+<details class="hilfe">
+  <summary>Welche Zahl aus dem Schreiben</summary>
+  <p>Der Betrag, wie er dasteht, ohne Umrechnung.</p>
+  <p>Nennt das Schreiben mehrere Wertentwicklungen, nimm die mit 7 %.</p>
+  <p>Effektivkosten stehen in der Standmitteilung oder im Produktinformationsblatt.</p>
+  <p>Der Wert einer Police gehört in den Monatsabschluss, zu den Rentenversicherungen.</p>
+</details>
+
+<style>
+  table.renten input{width:100%;box-sizing:border-box}
+  table.renten input.betrag{text-align:right}
+  table.renten tr.unterzeile td{border-top:0;padding-top:0}
+  table.renten .still{border-color:transparent;background:transparent;font:inherit}
+  table.renten .still:hover,table.renten .still:focus{border-color:var(--feldrand);background:var(--panel)}
+</style>
+<script>
+function renteZeile(el){
+  const tr = el.closest('tr');
+  return tr.classList.contains('unterzeile')
+    ? document.getElementById('rente-' + tr.dataset.zu) : tr;
+}
+function renteFeld(tr, name){
+  const unter = document.querySelector(`tr.unterzeile[data-zu="${tr.dataset.key}"]`);
+  return tr.querySelector(`[data-feld="${name}"]`) || unter.querySelector(`[data-feld="${name}"]`);
+}
+function renteGeaendert(el){
+  const tr = renteZeile(el);
+  const geaendert = new Set((tr.dataset.geaendert || '').split(' ').filter(Boolean));
+  geaendert.add(el.dataset.feld);
+  // Ein neuer Betrag ist ein neues Schreiben: der Stand zieht auf heute,
+  // solange er nicht selbst gesetzt wurde.
+  if (el.dataset.feld === 'wert' && !geaendert.has('stand'))
+    renteFeld(tr, 'stand').value = new Date().toLocaleDateString('sv');
+  tr.dataset.geaendert = [...geaendert].join(' ');
+  const k = tr.querySelector('[data-knopf]');
+  k.textContent = 'Speichern'; k.title = '';
+}
+// Prozent als Anteil; leer heisst "nicht bekannt" und geht als '' an den Server.
+function prozentAus(text){
+  const t = String(text).replace('%', '').trim();
+  return t === '' ? '' : parseFloat(t.replace(',', '.')) / 100;
+}
+async function renteSenden(knopf, body){
+  const r = await fetch('/api/rente', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json();
+  if (j.error){ meldenNeben(knopf, j.error, true); return; }
+  meldenNeben(knopf, 'gespeichert');
+  setTimeout(() => location.reload(), 700);
+}
+function renteSpeichern(knopf){
+  const tr = knopf.closest('tr');
+  const geaendert = (tr.dataset.geaendert || '').split(' ');
+  const body = {key: tr.dataset.key};
+  if (!tr.dataset.geaendert){
+    renteSenden(knopf, {...body, cents: Number(tr.dataset.cents),
+                        as_of: new Date().toLocaleDateString('sv')});
+    return;
+  }
+  if (geaendert.includes('wert') || geaendert.includes('stand')){
+    const cents = centsAus(renteFeld(tr, 'wert').value);
+    if (cents === null){ renteFeld(tr, 'wert').classList.add('feld-fehlt'); meldenNeben(knopf, 'keine Zahl', true); return; }
+    body.cents = cents;
+    body.as_of = renteFeld(tr, 'stand').value.trim();
+  }
+  if (geaendert.includes('ab')) body.ab = renteFeld(tr, 'ab').value.trim();
+  if (geaendert.includes('notiz')) body.note = renteFeld(tr, 'notiz').value;
+  if (geaendert.includes('kosten')){
+    const k = prozentAus(renteFeld(tr, 'kosten').value);
+    if (Number.isNaN(k)){ renteFeld(tr, 'kosten').classList.add('feld-fehlt'); meldenNeben(knopf, 'keine Zahl', true); return; }
+    body.kosten_pa = k;
+  }
+  renteSenden(knopf, body);
+}
+function renteZurueck(knopf){ renteSenden(knopf, {key: knopf.closest('tr').dataset.key, remove: true}); }
+function renteLoeschen(knopf){
+  if (!confirm('Diese Rente löschen?')) return;
+  renteSenden(knopf, {key: knopf.closest('tr').dataset.key, loeschen: true});
+}
+async function renteAnlegen(knopf){
+  const g = id => document.getElementById(id);
+  const cents = centsAus(g('rn-betrag').value);
+  if (cents === null){ g('rn-betrag').classList.add('feld-fehlt'); meldenNeben(knopf, 'Betrag fehlt', true); return; }
+  const kosten = prozentAus(g('rn-kosten').value);
+  if (Number.isNaN(kosten)){ g('rn-kosten').classList.add('feld-fehlt'); meldenNeben(knopf, 'keine Zahl', true); return; }
+  const r = await fetch('/api/rente-neu', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: g('rn-name').value, art: g('rn-art').value, cents,
+                          ab: g('rn-ab').value.trim(), kosten_pa: kosten})});
+  const j = await r.json();
+  if (j.error){ meldenNeben(knopf, j.error, true); return; }
+  meldenNeben(knopf, 'angelegt');
+  setTimeout(() => location.reload(), 600);
+}
+</script>
+
+{% import "_konfig.html" as kf %}
+{{ kf.fuss([
+  ('config/renten.yaml', 'Rentenquellen mit Art, Beginn und Herleitung, von Hand gepflegt.'),
+  ('config/renten_custom.yaml', 'Was hier angelegt und geändert wurde.'),
+  ('config/assumptions.yaml', 'Abzug auf Renten und die Kostenschwelle für Policen.'),
+  ('finctl/web/templates/renten.html', 'Die Texte dieser Seite.'),
+], handbuch='renten') }}
+{% endblock %}

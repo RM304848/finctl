@@ -412,9 +412,8 @@ rotes ○ davor und sie zählt oben bei „offen" mit.
   Saldos jemand anderem gehört, steht in keinem Auszug. Gespeichert wird in
   `balances_custom.yaml`; „eigen" zeigt, was dort von `balances.yaml` abweicht, „zurück"
   nimmt es wieder heraus.
-- **Renten laut Mitteilung**: Betrag wie im Schreiben (Monatsrente oder Kapital) und
-  **Bezug ab** — leer heißt ab dem Rentenbeginn aus der Einrichtung. Gespeichert in
-  `renten_custom.yaml`, die Herleitung steht in `renten.yaml`.
+- **Renten laut Mitteilung** stehen hier nur zur Prüfung, ob das Schreiben aus diesem
+  Jahr ist. Gepflegt werden sie unter [Renten](#renten).
 - **Verbindlichkeiten** werden hier nicht gepflegt. Geld, das jemand anderem gehört,
   steht als Verpflichtung in der [Planung](#planung). Was noch in `balances.yaml` steht,
   zieht weiter ab; die Seite nennt es, bis es gestrichen ist.
@@ -538,6 +537,19 @@ Alles, was noch nicht im Ledger steht, als **Klammern** mit beliebig vielen Posi
   nicht doppelt zählt.
 - Sind zwei Pläne gleichzeitig an, summiert die Prognose sie. Varianten derselben
   Entscheidung gehören einzeln eingeschaltet.
+
+### /renten
+
+Gesetzliche Rente, Fondsrenten und Policen: was im Ruhestand hereinkommt.
+
+- **Anlegen**: Name, Monatsrente oder Kapital, Betrag laut Schreiben, Bezug ab. Immer
+  nominal, wie im Schreiben; nennt es mehrere Wertentwicklungen, die mit 7 %.
+- **Bezug ab** leer heißt ab dem Rentenbeginn aus der Einrichtung.
+- **Effektivkosten** stehen in der Standmitteilung. Über der Schwelle aus den Annahmen
+  steht ein ⚠ – deine Schwelle, keine Bewertung des Vertrags.
+- **Unverändert** legt denselben Betrag mit heutigem Datum ab.
+- Gespeichert in `renten_custom.yaml`; was in `renten.yaml` steht, bleibt dort und
+  lässt sich hier nicht löschen, nur zurücksetzen.
 
 ### /annahmen
 

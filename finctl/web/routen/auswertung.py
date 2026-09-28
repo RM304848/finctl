@@ -573,7 +573,8 @@ _STAENDE_TEXT = {
     "konten": "Aus dem Auszug — aktuell, wenn er den {vormonat} abdeckt.",
     "vermoegen": "Getippt — aktuell, wenn der Stand aus dem {monat} ist.",
     "jaehrlich": "Getippt nach der Standmitteilung — aktuell, wenn sie aus {jahr} ist.",
-    "renten": "Laut Renteninformation und Standmitteilung — aktuell, wenn aus {jahr}.",
+    "renten": ("Laut Renteninformation und Standmitteilung — aktuell, wenn aus {jahr}. "
+               "Gepflegt unter Renten."),
 }
 
 
