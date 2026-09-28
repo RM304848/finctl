@@ -129,7 +129,10 @@
     {% if feld %}
     <td class="num"><input class="betrag" data-feld="wert" value="{{ z.cents|betrag }}"
         placeholder="unbekannt" oninput="standGeaendert(this)"
-        onkeydown="standTaste(event)"></td>
+        onkeydown="standTaste(event)">
+      {%- if z.depot %}<label class="bezug fein muted" title="Wie in der Depot-App: Wert minus Kaufpreis. Leer: unbekannt">davon Gewinn
+        <input class="betrag" data-feld="gewinn" value="{{ z.gewinn|betrag if z.gewinn is not none else '' }}"
+          placeholder="—" oninput="standGeaendert(this)" onkeydown="standTaste(event)"></label>{% endif %}</td>
     <td class="stand"><input data-feld="stand" value="{{ z.as_of }}" placeholder="2026-01-01"
         class="{{ 'alt' if not p.erledigt }}" oninput="standGeaendert(this)"
         onkeydown="standTaste(event)"></td>
@@ -214,6 +217,12 @@ function standKoerper(tr){
   }
   if (geaendert.includes('notiz')) body.note = standFeld(tr, 'notiz').value;
   if (geaendert.includes('ab')) body.ab = standFeld(tr, 'ab').value.trim();
+  if (geaendert.includes('gewinn')){
+    const g = standFeld(tr, 'gewinn');
+    const cents = g.value.trim() === '' ? '' : centsAus(g.value);
+    if (cents === null){ g.classList.add('feld-fehlt'); return null; }
+    body.gewinn_cents = cents;
+  }
   return body;
 }
 async function standPost(tr, body){

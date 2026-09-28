@@ -474,6 +474,7 @@ def jahre(
             runs.append((name, jm.project(conn, end_year=end,
                                           opening_cents=opening,
                                           toepfe=zm.toepfe(balances),
+                                          depot_gewinn_cents=zm.depot_gewinn(balances),
                                           puffer_cents=zm.puffer_cents(goals),
                                           policen_je_konto=zm.policen_je_konto(balances),
                                           target_cents=scaled,

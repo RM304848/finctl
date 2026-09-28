@@ -1016,7 +1016,8 @@ def project(conn: sqlite3.Connection, *, base_year: int | None = None,
             szenarien: Path | str | None = None,
             toepfe: dict[str, int] | None = None,
             puffer_cents: int | None = None,
-            policen_je_konto: dict[str, int] | None = None) -> Projection:
+            policen_je_konto: dict[str, int] | None = None,
+            depot_gewinn_cents: int = 0) -> Projection:
     """Jahr fuer Jahr bis zum Stichtag. Ein Szenario ist ein anderer Pfad.
 
     `toepfe` teilt den Anfangsbestand auf (siehe `ziele.toepfe`). Ohne sie
@@ -1033,9 +1034,10 @@ def project(conn: sqlite3.Connection, *, base_year: int | None = None,
     if toepfe is None:
         toepfe = {"tagesgeld": opening_cents}
     tg, dp, po = (int(toepfe.get(k, 0)) for k in ("tagesgeld", "depot", "policen"))
-    # Was heute im Depot steht, gilt als Einstand: seine bisherigen Gewinne
-    # kennt die Rechnung nicht. Versteuert wird, was ab heute dazukommt.
-    einstand = dp
+    # Einstand ist, was heute im Depot steht, abzueglich des Gewinns, den der
+    # Monatsabschluss nennt ("davon Gewinn"). Ohne Angabe gilt der ganze Wert
+    # als Einstand: dann wird nur versteuert, was ab heute dazukommt.
+    einstand = max(dp - int(depot_gewinn_cents or 0), 0)
     satz_depot = ann.rendite_depot_pa(assumptions)
     vorab_satz, steuer_quote = ann.vorabpauschale(assumptions)
     grenze = max(int(puffer_cents), 0) if puffer_cents is not None else None

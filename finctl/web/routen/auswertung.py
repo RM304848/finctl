@@ -587,6 +587,7 @@ def _staende(posten: list, bestand: dict | None, auszug: dict, jahr: str,
     Bestaenden, jedes Konto dazu ein drittes Mal als Kachel. Gepflegt wird
     ein Stand dort, wo man bemerkt, dass er alt ist.
     """
+    from finctl.forecast.ziele import TOPF as _TOPF
     from finctl.forecast.ziele import art as _art
 
     zu = {r["key"]: r for r in (bestand or {}).get("rows", [])}
@@ -610,6 +611,9 @@ def _staende(posten: list, bestand: dict | None, auszug: dict, jahr: str,
                 # Nur was in balances.yaml steht, hat eine Notiz: nur das
                 # zaehlt zum Vermoegen.
                 "notiz": key in zu, "note": b.get("note", ""),
+                # Nur ein Depot hat einen Gewinn, der beim Verkauf Steuer kostet.
+                "depot": _TOPF.get(str(p.art or "").lower()) == "depot",
+                "gewinn": b.get("gewinn_cents"),
                 "eigen": bool(b.get("overridden") or b.get("note_eigen")),
                 "base_cents": b.get("base_cents"), "base_note": b.get("base_note", ""),
             })
@@ -703,6 +707,7 @@ def _fortschritt_zeile(c: sqlite3.Connection) -> dict:
     jahr = int(ziel.due.year) if ziel.due else 2045
     lauf = _jm.project(c, opening_cents=_ziele.liquid_cents(merged),
                        toepfe=_ziele.toepfe(merged),
+                       depot_gewinn_cents=_ziele.depot_gewinn(merged),
                        puffer_cents=_ziele.puffer_cents(goals), end_year=max(2045, jahr),
                        policen_je_konto=_ziele.policen_je_konto(merged))
     kapital = lauf.year(min(jahr, lauf.years[-1].year)).frei_cents

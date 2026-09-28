@@ -137,6 +137,10 @@ def zusammenfuehren(conn: sqlite3.Connection, basis: dict,
             row["cents"] = over.get("cents", row.get("cents"))
             if over.get("as_of"):
                 row["as_of"] = over["as_of"]
+            # Wie viel vom Depotwert Gewinn ist: gehoert zum Wert und kommt
+            # mit ihm aus demselben Blick in die Depot-App.
+            if "gewinn_cents" in over:
+                row["gewinn_cents"] = over["gewinn_cents"]
         # DIE NOTIZ GILT AUCH FUER KONTEN MIT AUSZUG. Der Wert ist belegt, die
         # Notiz ist eine Aussage des Eigentuemers -- "davon gehoert ein Teil
         # jemand anderem" steht in keinem Auszug und muss trotzdem aenderbar

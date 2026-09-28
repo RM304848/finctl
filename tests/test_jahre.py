@@ -514,3 +514,34 @@ def test_a_broker_account_is_not_a_depot(conn, tmp_path):
                       toepfe={"tagesgeld": 100_000_00, "depot": 100_000_00},
                       puffer_cents=33_000_00).year(2029)
     assert not jahr.posten.get("depotentnahme")
+
+
+# ------------------------------------------------------- Gewinn im Depot
+
+def test_the_stated_gain_lowers_the_cost_basis_of_the_depot(conn, monkeypatch):
+    """"davon Gewinn" aus dem Monatsabschluss: Einstand ist Wert minus Gewinn.
+    Ohne Angabe gilt der ganze Wert als Einstand."""
+    gesehen = []
+    echt = jm.kaskade
+
+    def mitschreiben(*a, **k):
+        gesehen.append(k.get("einstand"))
+        return echt(*a, **k)
+
+    monkeypatch.setattr(jm, "kaskade", mitschreiben)
+    jm.project(conn, base_year=2026, end_year=2026,
+               toepfe={"tagesgeld": 0, "depot": 100_000_00}, depot_gewinn_cents=30_000_00)
+    jm.project(conn, base_year=2026, end_year=2026, toepfe={"tagesgeld": 0, "depot": 100_000_00})
+    assert gesehen == [70_000_00, 100_000_00]
+
+
+def test_only_a_depot_contributes_its_gain():
+    from finctl.forecast import ziele as z
+
+    bestand = {"balances": [
+        {"kind": "depot", "cents": 50_000_00, "gewinn_cents": 10_000_00},
+        {"kind": "krypto", "cents": 5_000_00, "gewinn_cents": -1_000_00},
+        {"kind": "rentenversicherung", "cents": 20_000_00, "gewinn_cents": 9_000_00},
+        {"kind": "depot", "cents": 10_000_00}]}
+    assert z.toepfe(bestand)["depot"] == 65_000_00
+    assert z.depot_gewinn(bestand) == 9_000_00

@@ -414,6 +414,8 @@ rotes ○ davor und sie zählt oben bei „offen" mit.
   nimmt es wieder heraus.
 - **Renten laut Mitteilung** stehen hier nur zur Prüfung, ob das Schreiben aus diesem
   Jahr ist. Gepflegt werden sie unter [Renten](#renten).
+- **davon Gewinn** (nur Depots): wie in der Depot-App. Die Hochrechnung versteuert ihn
+  beim Verkauf; leer gilt der ganze Wert als Einstand.
 - **Verbindlichkeiten** werden hier nicht gepflegt. Geld, das jemand anderem gehört,
   steht als Verpflichtung in der [Planung](#planung). Was noch in `balances.yaml` steht,
   zieht weiter ab; die Seite nennt es, bis es gestrichen ist.

@@ -60,6 +60,7 @@ def ziele(request: Request):
         # dem die Rentenluecke ihren Bedarf nimmt.
         lauf = _jm.project(c, opening_cents=_ziele.liquid_cents(merged),
                            toepfe=_ziele.toepfe(merged),
+                           depot_gewinn_cents=_ziele.depot_gewinn(merged),
                            puffer_cents=_ziele.puffer_cents(goals),
                            policen_je_konto=_ziele.policen_je_konto(merged),
                            end_year=max([2045, *_ziel_jahre(goals), *_rentenjahr()]))

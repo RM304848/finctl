@@ -319,6 +319,7 @@ def bestaende_daten() -> dict:
             "account_id": item.get("account_id") or "",
             "kind": _art(item.get("kind")),
             "cents": item.get("cents"),
+            "gewinn_cents": item.get("gewinn_cents"),
             "as_of": str(item.get("as_of") or ("" if aus_auszug else spec.get("as_of"))
                          or ""),
             # Konten mit Auszug: Wert und Stichtag belegt, nicht aenderbar.
@@ -381,6 +382,37 @@ def _overlay_schreiben(path, spec: dict) -> None:
 BESTAND_NOTIZ_MAX = 2000
 
 
+def _leer_heisst_weg(entry: dict, feld: str, wert) -> None:
+    """Ein leerer Wert nimmt das Feld aus dem Overlay, statt ihn leer zu speichern."""
+    if wert in (None, ""):
+        entry.pop(feld, None)
+    else:
+        entry[feld] = wert
+
+
+def _bestand_eintrag(entry: dict, body: dict) -> dict | None:
+    """Der Overlay-Eintrag einer Position nach dem Speichern -- None, wenn der Betrag fehlt.
+
+    Eine leere Notiz loescht die Notiz, statt die Begruendung aus balances.yaml
+    unsichtbar zu machen. Ein leerer Gewinn heisst "nicht bekannt": dann gilt
+    der Wert als Einstand.
+    """
+    if "note" in body:
+        _leer_heisst_weg(entry, "note", str(body.get("note") or "").strip()[:BESTAND_NOTIZ_MAX])
+    if "cents" in body:
+        if body.get("cents") in (None, ""):
+            return None
+        entry["cents"] = int(body["cents"])
+    elif "note" not in body and "gewinn_cents" not in body:
+        return None
+    if body.get("as_of"):
+        entry["as_of"] = str(body["as_of"])
+    if "gewinn_cents" in body:
+        wert = body["gewinn_cents"]
+        _leer_heisst_weg(entry, "gewinn_cents", None if wert in (None, "") else int(wert))
+    return entry
+
+
 @router.post("/api/bestand")
 async def api_bestand(request: Request):
     """Record a stated holding, without touching the documented base file.
@@ -419,23 +451,9 @@ async def api_bestand(request: Request):
     if body.get("remove"):
         overrides.pop(key, None)
     else:
-        entry = dict(overrides.get(key) or {})
-        if "note" in body:
-            # Leer heisst loeschen, nicht "leere Notiz": sonst waere die
-            # Begruendung aus balances.yaml unsichtbar, ohne geloescht zu sein.
-            notiz = str(body.get("note") or "").strip()[:BESTAND_NOTIZ_MAX]
-            if notiz:
-                entry["note"] = notiz
-            else:
-                entry.pop("note", None)
-        if "cents" in body:
-            if body.get("cents") in (None, ""):
-                return JSONResponse({"error": "amount required"}, status_code=400)
-            entry["cents"] = int(body["cents"])
-        elif "note" not in body:
+        entry = _bestand_eintrag(dict(overrides.get(key) or {}), body)
+        if entry is None:
             return JSONResponse({"error": "amount required"}, status_code=400)
-        if body.get("as_of"):
-            entry["as_of"] = str(body["as_of"])
         if entry:
             overrides[key] = entry
         else:

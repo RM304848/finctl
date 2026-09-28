@@ -3761,3 +3761,13 @@ def test_the_transactions_filter_takes_several_blocks():
     beide = zahl("/transactions?block=steuern&block=kredit&limit=2000")
     assert beide == a + b
     assert zahl("/transactions?block=gibt-es-nicht&limit=2000") >= beide
+
+
+def test_the_depot_gain_is_saved_and_cleared_like_a_note():
+    """Leer heisst "nicht bekannt" -- dann gilt der Wert als Einstand."""
+    from finctl.web.routen.konten import _bestand_eintrag
+
+    eintrag = _bestand_eintrag({}, {"cents": 100_000_00, "gewinn_cents": 25_000_00})
+    assert eintrag == {"cents": 100_000_00, "gewinn_cents": 25_000_00}
+    assert _bestand_eintrag(dict(eintrag), {"gewinn_cents": ""}) == {"cents": 100_000_00}
+    assert _bestand_eintrag({}, {"as_of": "2026-01-01"}) is None, "ohne Betrag nichts"

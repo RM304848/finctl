@@ -201,6 +201,14 @@ def toepfe(balances: dict) -> dict[str, int]:
     return out
 
 
+def depot_gewinn(balances: dict) -> int:
+    """Der Gewinn, der heute im Depot-Topf steckt -- soweit im Monatsabschluss
+    angegeben ("davon Gewinn"). Die Hochrechnung versteuert ihn beim Verkauf."""
+    return sum(int(row["gewinn_cents"]) for row in balances.get("balances") or []
+               if TOPF.get((row.get("kind") or "").lower()) == "depot"
+               and row.get("cents") is not None and row.get("gewinn_cents") is not None)
+
+
 def policen_je_konto(balances: dict) -> dict[str, int]:
     """Der Topf `policen`, je Police -- damit eine Auszahlung genau ihren
     Anteil aus dem Topf nimmt."""

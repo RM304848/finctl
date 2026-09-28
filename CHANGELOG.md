@@ -51,6 +51,9 @@ macht daraus beim Veröffentlichen die neue Version.
   von Claude (auch der kostenlosen Version) fügst du ein; die App prüft jede
   Zeile gegen deine Kategorien und dein Hauptbuch, übernommen wird nur, was
   du anhakst. Die App selbst schickt nichts ins Netz.
+- Depots haben im Monatsabschluss ein Feld **davon Gewinn** (wie in der
+  Depot-App). Die Hochrechnung versteuert damit auch den Gewinn, der heute
+  schon im Depot steckt; ohne Angabe gilt der Wert als Einstand.
 - Die Gehalts-Untergrenze steht nur noch unter **Annahmen**, nicht mehr
   zusätzlich auf **Planung**.
 - Die Entnahmerate ist aus den Annahmen verschwunden: Gerechnet wurde mit ihr

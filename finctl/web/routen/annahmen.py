@@ -183,6 +183,7 @@ def _jahresrechnung():
             c, _lies("balances.yaml"), _lies("balances_custom.yaml").get("overrides"))
         lauf = _jm.project(c, opening_cents=_zm.liquid_cents(merged),
                            toepfe=_zm.toepfe(merged),
+                           depot_gewinn_cents=_zm.depot_gewinn(merged),
                            puffer_cents=_zm.puffer_cents(ziele),
                            policen_je_konto=_zm.policen_je_konto(merged),
                            end_year=max([2045, *stichtage, *_lebensende()]))
