@@ -30,8 +30,9 @@ KAUFKRAFT = ("heute", "nominal")
 
 KOPF = """# Im Monatsabschluss eingetragen: Betrag und Stand je Rentenquelle.
 #
-# Ueberschreibt config/renten.yaml je Quelle, wo die Herleitung steht. Nur
-# was davon abweicht, steht hier.
+# `renten:` ueberschreibt config/renten.yaml je Quelle, wo die Herleitung
+# steht -- nur was davon abweicht. `neu:` sind Quellen, die im
+# Monatsabschluss angelegt wurden, immer nominal.
 
 """
 
@@ -53,6 +54,12 @@ class Quelle:
     notiz: str = ""
     eigen: bool = False           # im Monatsabschluss geaendert
     basis_cents: int | None = None
+    #: Effektivkosten der Police je Jahr, 0,013 fuer 1,3 % -- aus
+    #: Standmitteilung oder Produktinformationsblatt. None: nicht bekannt.
+    kosten_pa: float | None = None
+    #: Im Monatsabschluss angelegt, nicht in renten.yaml -- und deshalb dort
+    #: auch loeschbar.
+    angelegt: bool = False
 
     def aktuell(self, heute: date) -> bool:
         """Ein Schreiben kommt einmal im Jahr: aktuell, wenn aus diesem Jahr."""
@@ -75,11 +82,19 @@ def _datum(wert) -> date | None:
 
 
 def quellen(config_dir: Path | None = None) -> list[Quelle]:
-    """Alle Quellen, das Overlay Feld fuer Feld ueber der Basisdatei."""
+    """Alle Quellen, das Overlay Feld fuer Feld ueber der Basisdatei.
+
+    Dazu die im Monatsabschluss angelegten (`neu:` in renten_custom.yaml):
+    ein neuer Nutzer hat kein renten.yaml, und seine gesetzliche Rente muss
+    er trotzdem eintragen koennen.
+    """
     config_dir = config_dir or CONFIG_DIR
-    eigen = _yaml(config_dir / EIGEN).get("renten") or {}
+    datei = _yaml(config_dir / EIGEN)
+    eigen = datei.get("renten") or {}
+    basis = [(roh, False) for roh in _yaml(config_dir / BASIS).get("renten") or []]
+    angelegt = [(roh, True) for roh in datei.get("neu") or []]
     aus = []
-    for roh in _yaml(config_dir / BASIS).get("renten") or []:
+    for roh, neu in basis + angelegt:
         kennung = str(roh.get("id") or "")
         if not kennung:
             continue
@@ -97,9 +112,15 @@ def quellen(config_dir: Path | None = None) -> list[Quelle]:
             stand=_datum(ueber.get("stand", roh.get("stand"))),
             herleitung=str(roh.get("herleitung") or ""),
             notiz=str(ueber.get("notiz") or ""),
-            eigen=bool(ueber), basis_cents=roh.get("cents"),
-            basis_ab=_datum(roh.get("ab"))))
+            eigen=bool(ueber) and not neu, basis_cents=roh.get("cents"),
+            basis_ab=_datum(roh.get("ab")),
+            kosten_pa=_zahl(ueber.get("kosten_pa", roh.get("kosten_pa"))),
+            angelegt=neu))
     return aus
+
+
+def _zahl(wert) -> float | None:
+    return None if wert in (None, "") else float(wert)
 
 
 def beginn(q: Quelle) -> date | None:
@@ -156,9 +177,20 @@ def _notiz(wert, _q: Quelle):
     return str(wert or "").strip()[:2000] or None
 
 
+def _kosten(wert, q: Quelle):
+    """Effektivkosten als Anteil, 0 bis 10 %. Leer: nicht bekannt."""
+    if wert in (None, ""):
+        return None
+    kosten = float(wert)
+    if not 0 <= kosten <= 0.1:
+        raise ValueError("Effektivkosten zwischen 0 und 10 %")
+    return round(kosten, 5)
+
+
 #: Je Feld: wie es geprueft wird. None heisst "wie die Basisdatei" und nimmt
 #: das Feld aus dem Overlay (nur-abweichungen-speichern).
-_FELDER = {"cents": _betrag, "ab": _bezug_ab, "stand": _stand, "notiz": _notiz}
+_FELDER = {"cents": _betrag, "ab": _bezug_ab, "stand": _stand, "notiz": _notiz,
+           "kosten_pa": _kosten}
 
 
 def setzen(kennung: str, felder: dict, config_dir: Path | None = None) -> None:
@@ -187,6 +219,62 @@ def setzen(kennung: str, felder: dict, config_dir: Path | None = None) -> None:
     else:
         eigen.pop(kennung, None)
     roh["renten"] = eigen
+    _schreiben(config_dir, roh)
+
+
+def _kennung(name: str, vergeben: set[str]) -> str:
+    stamm = re.sub(r"[^a-z0-9]+", "-", name.lower()
+                   .translate(str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})))
+    stamm = stamm.strip("-")[:40] or "rente"
+    kennung, n = stamm, 2
+    while kennung in vergeben:
+        kennung, n = f"{stamm}-{n}", n + 1
+    return kennung
+
+
+def anlegen(felder: dict, config_dir: Path | None = None) -> str:
+    """Eine Rente oder Police aus dem Monatsabschluss anlegen.
+
+    Immer NOMINAL, wie sie im Schreiben steht: nach heutiger Kaufkraft zu
+    fragen hiesse, eine Zahl zu verlangen, die in keinem Schreiben steht --
+    die DRV nennt ihre ohne Anpassungen, eine Police in Euro des Auszahlungs-
+    jahres. Nominal ohne Anpassung ist die vorsichtige Lesart.
+    """
+    config_dir = config_dir or CONFIG_DIR
+    name = str(felder.get("name") or "").strip()[:80]
+    if not name:
+        raise ValueError("Name fehlt")
+    art = str(felder.get("art") or "rente")
+    if art not in ARTEN:
+        raise ValueError(f"Art {', '.join(ARTEN)}")
+    if felder.get("cents") in (None, ""):
+        raise ValueError("Betrag fehlt")
+    vorlage = Quelle(id="", name=name, art=art, cents=0)
+    eintrag = {"id": _kennung(name, {q.id for q in quellen(config_dir)}),
+               "name": name, "art": art, "kaufkraft": "nominal",
+               "cents": _betrag(felder["cents"], vorlage)}
+    for feld, pruefen in (("ab", _bezug_ab), ("kosten_pa", _kosten)):
+        wert = pruefen(felder.get(feld), vorlage)
+        if wert is not None:
+            eintrag[feld] = wert
+    roh = _yaml(config_dir / EIGEN)
+    roh["neu"] = [*(roh.get("neu") or []), eintrag]
+    _schreiben(config_dir, roh)
+    return eintrag["id"]
+
+
+def loeschen(kennung: str, config_dir: Path | None = None) -> None:
+    """Eine hier angelegte Quelle entfernen. Was in renten.yaml steht, bleibt."""
+    config_dir = config_dir or CONFIG_DIR
+    roh = _yaml(config_dir / EIGEN)
+    neu = roh.get("neu") or []
+    if not any(str(e.get("id")) == kennung for e in neu):
+        raise ValueError(f"„{kennung}“ steht in renten.yaml und bleibt dort")
+    roh["neu"] = [e for e in neu if str(e.get("id")) != kennung]
+    (roh.get("renten") or {}).pop(kennung, None)
+    _schreiben(config_dir, roh)
+
+
+def _schreiben(config_dir: Path, roh: dict) -> None:
     (config_dir / EIGEN).write_text(
-        KOPF + yaml.safe_dump(roh, allow_unicode=True, sort_keys=True),
-        encoding="utf-8")
+        KOPF + yaml.safe_dump(roh, allow_unicode=True, sort_keys=True), encoding="utf-8")

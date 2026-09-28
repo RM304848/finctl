@@ -53,6 +53,7 @@ UEBERSCHREIBBAR: dict[str, tuple[str, ...]] = {
     "inflation_pa": ("inflation_pa",),
     "rendite_nominal_pa": ("kapital", "rendite_nominal_pa"),
     "rendite_depot_pa": ("kapital", "rendite_depot_pa"),
+    "kostenschwelle_pa": ("kapital", "kostenschwelle_pa"),
     "gehalt_steigerung_pa": ("erwerbseinkommen", "gehalt_steigerung_pa"),
     "salary_floor_cents": ("erwerbseinkommen", "netto_floor_monatlich_cents"),
     "teilzeit_anteil": ("erwerbseinkommen", "teilzeit_anteil"),
@@ -165,6 +166,16 @@ def vorabpauschale(path: Path | str = PATH) -> tuple[float, float]:
 def salary_floor_cents(path: Path | str = PATH) -> int:
     """Der schlechteste beobachtete Monat. Fuer die Liquiditaetsfrage."""
     return int(get("erwerbseinkommen", "netto_floor_monatlich_cents", path=path))
+
+
+#: Ohne Eintrag: ab welchen Effektivkosten eine Police ein Warnzeichen traegt.
+KOSTENSCHWELLE_VORGABE = 0.013
+
+
+def kostenschwelle_pa(path: Path | str = PATH) -> float:
+    """Effektivkosten, ab denen eine Police markiert wird -- eine Meinung, keine Norm."""
+    return float(get("kapital", "kostenschwelle_pa", path=path,
+                     default=KOSTENSCHWELLE_VORGABE))
 
 
 def teilzeit_anteil(path: Path | str = PATH) -> float | None:

@@ -88,3 +88,71 @@ def test_the_payout_start_is_chosen_in_the_monthly_close(tmp_path):
     assert renten.quellen(cfg)[1].ab == date(2045, 6, 1)
     with pytest.raises(ValueError):
         renten.setzen("police", {"ab": "62"}, cfg)
+
+
+# -------------------------------------------------- anlegen, Effektivkosten
+
+def test_a_newcomer_creates_a_pension_without_any_file(tmp_path):
+    """Ohne renten.yaml: angelegt wird im Overlay, immer nominal."""
+    kennung = renten.anlegen({"name": "Gesetzliche Rente", "art": "rente",
+                              "cents": 150_000}, tmp_path)
+    [q] = renten.quellen(tmp_path)
+    assert (q.id, q.kaufkraft, q.cents, q.angelegt) == (kennung, "nominal", 150_000, True)
+    assert kennung == "gesetzliche-rente"
+
+
+def test_a_created_pension_takes_amount_updates_and_can_be_deleted(tmp_path):
+    kennung = renten.anlegen({"name": "Police", "art": "kapital", "cents": 5_000_000,
+                              "ab": "2050-01", "kosten_pa": 0.018}, tmp_path)
+    renten.setzen(kennung, {"cents": 5_500_000}, tmp_path)
+    [q] = renten.quellen(tmp_path)
+    assert (q.cents, q.ab, q.kosten_pa) == (5_500_000, date(2050, 1, 1), 0.018)
+    renten.loeschen(kennung, tmp_path)
+    assert renten.quellen(tmp_path) == []
+
+
+def test_a_pension_from_the_base_file_is_not_deleted_here(tmp_path):
+    with pytest.raises(ValueError):
+        renten.loeschen("drv", _config(tmp_path))
+
+
+def test_two_pensions_with_the_same_name_get_two_ids(tmp_path):
+    a = renten.anlegen({"name": "Police", "cents": 1}, tmp_path)
+    b = renten.anlegen({"name": "Police", "cents": 1}, tmp_path)
+    assert (a, b) == ("police", "police-2")
+
+
+@pytest.mark.parametrize("felder", [
+    {"name": "", "cents": 1}, {"name": "x"}, {"name": "x", "cents": -5},
+    {"name": "x", "cents": 1, "art": "lotto"}, {"name": "x", "cents": 1, "ab": "2050"},
+    {"name": "x", "cents": 1, "kosten_pa": 0.5}])
+def test_a_pension_with_wrong_input_is_refused(tmp_path, felder):
+    with pytest.raises(ValueError):
+        renten.anlegen(felder, tmp_path)
+
+
+def test_costs_are_set_and_cleared_on_an_existing_source(tmp_path):
+    cfg = _config(tmp_path)
+    renten.setzen("drv", {"kosten_pa": 0.015}, cfg)
+    assert renten.quellen(cfg)[0].kosten_pa == 0.015
+    renten.setzen("drv", {"kosten_pa": ""}, cfg)
+    assert renten.quellen(cfg)[0].kosten_pa is None
+
+
+def test_costs_above_the_threshold_are_flagged_on_the_monthly_close(monkeypatch):
+    from finctl import assumptions as ann
+    from finctl.web.routen import auswertung
+
+    teuer = renten.Quelle(id="p", name="Police", art="kapital", cents=1, kosten_pa=0.02)
+    guenstig = renten.Quelle(id="q", name="Fonds", art="kapital", cents=1, kosten_pa=0.01)
+    monkeypatch.setattr(renten, "quellen", lambda *a, **k: [teuer, guenstig])
+    monkeypatch.setattr(ann, "kostenschwelle_pa", lambda *a, **k: 0.013)
+
+    class P:
+        gruppe = "renten"
+
+        def __init__(self, schluessel):
+            self.schluessel = schluessel
+
+    zeilen = auswertung._rentenzeilen([P("p"), P("q")])
+    assert [z["kosten_hoch"] for z in zeilen] == [True, False]

@@ -188,7 +188,8 @@ def eigene_angaben() -> list[dict]:
         ("Depots, Krypto, Rentenversicherungen", "/monatsabschluss#vermoegen",
          "balances.yaml", _anzahl(len(lies("balances.yaml").get("balances") or []),
                                   "Position", "Positionen")),
-        ("Renten laut Mitteilung", "/monatsabschluss#renten", "renten.yaml",
+        ("Renten laut Mitteilung",
+         "/monatsabschluss#renten" if renten else "/monatsabschluss#rente-neu", "renten.yaml",
          _anzahl(len(renten), "Quelle", "Quellen")
          + (f", {sum(1 for q in renten if not q.stand)} ohne Stand"
             if any(not q.stand for q in renten) else "")),

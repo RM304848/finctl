@@ -34,6 +34,8 @@ STELLSCHRAUBEN = (
      "Ziele. Tagesgeld bis zur Puffergrenze, nach Steuer gemessen."),
     ("rendite_depot_pa", "Rendite Depot und Policen (vor Steuern)", "prozent",
      "Ziele. Alles über dem Tagesgeld-Ziel fließt ins Depot."),
+    ("kostenschwelle_pa", "Kostenschwelle für Policen", "prozent",
+     "Monatsabschluss: Warnzeichen an Policen mit höheren Effektivkosten."),
     ("gehalt_steigerung_pa", "Gehaltssteigerung p.a.", "prozent",
      "Ziele. Die grösste Einzelwirkung von allen."),
     ("salary_floor_cents", "Gehalts-Untergrenze", "euro",
@@ -450,11 +452,29 @@ async def api_rente(request: Request):
         felder["notiz"] = body["note"]
     if "ab" in body:
         felder["ab"] = body["ab"]
+    if "kosten_pa" in body:
+        felder["kosten_pa"] = body["kosten_pa"]
     try:
-        _renten.setzen(str(body.get("key") or ""), felder)
+        if body.get("loeschen"):
+            _renten.loeschen(str(body.get("key") or ""))
+        else:
+            _renten.setzen(str(body.get("key") or ""), felder)
     except (TypeError, ValueError) as fehler:
         return JSONResponse({"error": str(fehler)}, status_code=400)
     return {"ok": True}
+
+
+@router.post("/api/rente-neu")
+async def api_rente_neu(request: Request):
+    """Eine Rente oder Police anlegen -- nominal, wie im Schreiben."""
+    from finctl import renten as _renten
+
+    body = await request.json()
+    try:
+        kennung = _renten.anlegen(body)
+    except (TypeError, ValueError) as fehler:
+        return JSONResponse({"error": str(fehler)}, status_code=400)
+    return {"ok": True, "id": kennung}
 
 
 @router.post("/api/setting")

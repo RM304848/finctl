@@ -27,6 +27,11 @@ macht daraus beim Veröffentlichen die neue Version.
   „Teilzeit“ auf **Planung** gibt es immer, auch frisch installiert; sie ist
   von Haus aus aus und schaltet die Teilzeit ein. Werte, die du in der
   Klammer einträgst, gehen vor; leer gelassen gelten die Annahmen.
+- **Renten und Policen anlegen** im Monatsabschluss: Name, Monatsrente oder
+  Kapital, Betrag laut Schreiben (nominal, bei mehreren Szenarien der mit 7 %
+  Wertentwicklung), Bezug ab. Bisher ließen sich nur vorhandene ändern.
+- **Effektivkosten** je Rente oder Police. Liegen sie über deiner Schwelle
+  (Annahmen, Vorgabe 1,3 %), steht ein Warnzeichen daneben.
 - Die Gehalts-Untergrenze steht nur noch unter **Annahmen**, nicht mehr
   zusätzlich auf **Planung**.
 - Die Entnahmerate ist aus den Annahmen verschwunden: Gerechnet wurde mit ihr

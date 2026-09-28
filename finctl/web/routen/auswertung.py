@@ -630,11 +630,13 @@ def _staende(posten: list, bestand: dict | None, auszug: dict, jahr: str,
 def _rentenzeilen(posten: list) -> list[dict]:
     """Die Rentenquellen als Zeilen derselben Tabelle -- gespeichert wird
     ueber /api/rente nach renten_custom.yaml."""
+    from finctl import assumptions as _ann
     from finctl import person as _person
     from finctl import renten as _renten
 
     je = {q.id: q for q in _renten.quellen()}
     rentenbeginn = _person.rentenbeginn()
+    schwelle = _ann.kostenschwelle_pa()
     zeilen = []
     for p in (p for p in posten if p.gruppe == "renten"):
         q = je[p.schluessel]
@@ -644,7 +646,10 @@ def _rentenzeilen(posten: list) -> list[dict]:
                        "eigen": q.eigen, "base_cents": q.basis_cents,
                        "base_note": q.herleitung, "api": "/api/rente",
                        "ab": q.ab.strftime("%Y-%m") if q.ab else "",
-                       "ab_vorgabe": rentenbeginn.strftime("%Y-%m") if rentenbeginn else ""})
+                       "ab_vorgabe": rentenbeginn.strftime("%Y-%m") if rentenbeginn else "",
+                       "kosten": q.kosten_pa, "schwelle": schwelle,
+                       "kosten_hoch": q.kosten_pa is not None and q.kosten_pa > schwelle,
+                       "angelegt": q.angelegt})
     return zeilen
 
 
