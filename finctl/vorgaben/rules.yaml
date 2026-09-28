@@ -12,5 +12,11 @@
 #
 # Was hier keine Regel trifft, landet auf /transactions unter "Offen" und wird von Hand
 # zugeordnet -- und aus dieser Zuordnung laesst sich eine Regel machen.
+#
+# Darunter liegen die mitgelieferten allgemeinen Regeln
+# (finctl/vorgaben/regeln_allgemein.yaml): Supermaerkte, Tankstellen,
+# Streaming, Steuern. Jede Regel hier gewinnt gegen sie. Abschalten mit
+# `false` oder auf /regeln.
+allgemeine_regeln: true
 
 rules: []

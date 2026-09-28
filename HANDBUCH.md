@@ -653,6 +653,8 @@ Welche Regel welche Buchung zuordnet.
   Ledger um.
 - Gespeichert wird nur, was von `config/rules.yaml` abweicht; die Begründungen dort
   bleiben stehen.
+- **Allgemeine Regeln** liefert die App mit: Supermärkte, Tankstellen, Streaming,
+  Steuern. Sie gelten nach allen eigenen und lassen sich einzeln oder ganz abschalten.
 
 ### /vertraege
 

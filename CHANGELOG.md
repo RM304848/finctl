@@ -40,6 +40,11 @@ macht daraus beim Veröffentlichen die neue Version.
   von Policen geht derselbe Abzug wie auf Renten. Was vereinfacht ist, steht
   auf der Hochrechnung.
 - Geteilt: **Budgettöpfe** statt Projekte – derselbe Inhalt, ein passenderer Name.
+- **Allgemeine Regeln** kommen mit: rund vierzig Regeln für Supermärkte,
+  Tankstellen, Streaming, Mobilfunk, Steuern und mehr. Wer neu anfängt, muss
+  nicht jede Buchung von Hand zuordnen. Eigene Regeln gehen immer vor; unter
+  **Regeln** lässt sich die Grundschicht abschalten, und vorher steht dort, wie
+  viele offene Buchungen sie zuordnen würde.
 - Die Gehalts-Untergrenze steht nur noch unter **Annahmen**, nicht mehr
   zusätzlich auf **Planung**.
 - Die Entnahmerate ist aus den Annahmen verschwunden: Gerechnet wurde mit ihr

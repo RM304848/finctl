@@ -50,6 +50,9 @@ KEIN_NAME = {
     "APPLE.COM/BILL", "C24 Bank", "Microsoft Payments", "Spotify",
     "PayPal Europe S.a.r.l. et Cie S.C.A", "RTL interactive GmbH",
     "JET-Tankstelle",
+    # Buchungsarten und eine Handelskette, die in den mitgelieferten
+    # allgemeinen Regeln stehen (finctl/vorgaben/regeln_allgemein.yaml).
+    "Interest payment", "Kontoführungsentgelt", "Uniqlo",
 }
 
 

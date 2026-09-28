@@ -75,6 +75,11 @@ def regeln_seite(request: Request, q: str = "", kategorie: str = "", aus: int | 
                 vorlage = rw.vorlage_aus_buchung(dict(t))
                 vorlage["buchung"] = (f"{t['booking_date']} · {t['account_id']} · "
                                       f"{euro(t['amount_cents'])}")
+        from finctl.rules import categorize as _cz
+        from finctl.rules import engine as _en
+
+        grund = {"an": _en.grundschicht_an(), "anzahl": len(_en.grundschicht())}
+        grund["wuerde"] = 0 if grund["an"] else _cz.grundschicht_vorschau(c)
     finally:
         c.close()
 
@@ -100,8 +105,24 @@ def regeln_seite(request: Request, q: str = "", kategorie: str = "", aus: int | 
     return TEMPLATES.TemplateResponse(request, "regeln.html", {
         "rows": rows, "formwerte": {e["id"]: rw.formwerte(e) for e in alle},
         "vorlage": vorlage, "categories": cats, "tax_categories": taxes,
-        "properties": props, "q": q, "kategorie": kategorie,
+        "properties": props, "q": q, "kategorie": kategorie, "grund": grund,
     })
+
+
+@router.post("/api/regeln/grundschicht")
+async def api_grundschicht(request: Request):
+    """Die mitgelieferten allgemeinen Regeln ein- oder ausschalten, und neu zuordnen."""
+    from finctl.rules import engine
+    from finctl.rules.categorize import categorize
+
+    body = await request.json()
+    engine.grundschicht_setzen(bool(body.get("an")))
+    c = conn()
+    try:
+        result = categorize(c, recompute=True)
+    finally:
+        c.close()
+    return {"ok": True, "queue": result.unmatched}
 
 
 @router.post("/api/regeln/vorschau")

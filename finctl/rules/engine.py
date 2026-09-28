@@ -39,6 +39,11 @@ RULES_PATH = CONFIG_DIR / "rules.yaml"
 # traegt die Begruendung jeder Regel in Kommentaren, und ein YAML-Schreiber
 # wuerde jede davon loeschen -- dasselbe Overlay-Muster wie bei den Abos.
 RULES_CUSTOM_PATH = CONFIG_DIR / "rules_custom.yaml"
+#: Die mitgelieferten allgemeinen Regeln (finctl/vorgaben). Sie gelten nach
+#: allen eigenen: ihre Prioritaet wird um GRUNDSCHICHT_ABSTAND nach hinten
+#: gerueckt. Eingeschaltet mit `allgemeine_regeln: true` in rules.yaml -- die
+#: Startvorlage traegt das, ein aelterer Regelsatz nicht.
+GRUNDSCHICHT_ABSTAND = 10_000
 
 MATCHERS = frozenset({
     "text", "text_all", "regex", "counterparty", "iban", "iban_is_own", "account",
@@ -143,7 +148,8 @@ def rohe_regeln(path: Path | None = None,
     Regeldatei soll nicht die Aenderungen des Eigentuemers mitlesen.
 
     Ein Feld der Kopie ersetzt das gleichnamige der Basis (match und set als
-    Ganzes). Jeder Eintrag traegt `herkunft`: basis, geaendert oder eigen.
+    Ganzes). Jeder Eintrag traegt `herkunft`: basis, allgemein (die
+    mitgelieferte Grundschicht), geaendert oder eigen.
     """
     if path is None:
         path = RULES_PATH
@@ -155,20 +161,74 @@ def rohe_regeln(path: Path | None = None,
         roh = (yaml.safe_load(custom_path.read_text(encoding="utf-8")) or {}).get("regeln") or {}
         eigen = {str(k): dict(v or {}) for k, v in roh.items()}
 
-    out: list[dict] = []
-    basis_ids: set[str] = set()
-    for entry in spec.get("rules", []) or []:
-        rule_id = entry.get("id")
-        basis_ids.add(rule_id)
-        aenderung = eigen.get(rule_id)
-        if aenderung is None:
-            out.append({**entry, "herkunft": "basis"})
-        elif not aenderung.get("entfernt"):
-            out.append({**entry, **aenderung, "id": rule_id, "herkunft": "geaendert"})
+    schichten = [(spec.get("rules", []) or [], "basis")]
+    if spec.get("allgemeine_regeln"):
+        schichten.append((grundschicht(), "allgemein"))
+    out, basis_ids = _schichten(schichten, eigen)
     for rule_id, entry in eigen.items():
         if rule_id not in basis_ids and not entry.get("entfernt"):
             out.append({**entry, "id": rule_id, "herkunft": "eigen"})
     return out
+
+
+def _schichten(schichten: list[tuple[list[dict], str]],
+               eigen: dict[str, dict]) -> tuple[list[dict], set[str]]:
+    """Die Schichten der Reihe nach, jede mit den Aenderungen von /regeln."""
+    out: list[dict] = []
+    ids: set[str] = set()
+    for eintraege, herkunft in schichten:
+        for entry in eintraege:
+            rule_id = entry.get("id")
+            # Eine eigene mit derselben Kennung gewinnt; eine doppelte eigene
+            # faellt dagegen in regeln_aus laut auf.
+            if herkunft == "allgemein" and rule_id in ids:
+                continue
+            ids.add(rule_id)
+            zeile = _mit_aenderung(entry, eigen.get(rule_id), herkunft)
+            if zeile is not None:
+                out.append(zeile)
+    return out, ids
+
+
+def _mit_aenderung(entry: dict, aenderung: dict | None, herkunft: str) -> dict | None:
+    """Ein Eintrag mit der Aenderung von /regeln darueber -- oder None, wenn entfernt."""
+    if aenderung is None:
+        return {**entry, "herkunft": herkunft}
+    if aenderung.get("entfernt"):
+        return None
+    return {**entry, **aenderung, "id": entry.get("id"), "herkunft": "geaendert"}
+
+
+def grundschicht() -> list[dict]:
+    """Die allgemeinen Regeln, nach hinten gerueckt und als solche markiert."""
+    from finctl.vorgaben import ORDNER
+
+    spec = yaml.safe_load((ORDNER / "regeln_allgemein.yaml").read_text(encoding="utf-8"))
+    return [{**e, "priority": GRUNDSCHICHT_ABSTAND + int(e.get("priority", 100)),
+             "provenance": "allgemein"} for e in (spec or {}).get("rules") or []]
+
+
+def grundschicht_an(path: Path = RULES_PATH) -> bool:
+    if not path.exists():
+        return False
+    return bool((yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("allgemeine_regeln"))
+
+
+def grundschicht_setzen(an: bool, path: Path = RULES_PATH) -> None:
+    """Die Grundschicht ein- oder ausschalten -- eine Zeile, der Rest bleibt.
+
+    Wie `repoint_rule` ein Eingriff in den Text: rules.yaml traegt die
+    Begruendung jeder Regel in Kommentaren.
+    """
+    text = path.read_text(encoding="utf-8") if path.exists() else "rules: []\n"
+    zeile = f"allgemeine_regeln: {'true' if an else 'false'}"
+    if re.search(r"(?m)^allgemeine_regeln:.*$", text):
+        text = re.sub(r"(?m)^allgemeine_regeln:.*$", zeile, text, count=1)
+    elif re.search(r"(?m)^rules:", text):
+        text = re.sub(r"(?m)^rules:", zeile + "\n\nrules:", text, count=1)
+    else:
+        text = zeile + "\n" + text
+    path.write_text(text, encoding="utf-8")
 
 
 def load_rules(path: Path | None = None, custom_path: Path | None = None) -> list[Rule]:

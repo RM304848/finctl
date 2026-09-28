@@ -1,0 +1,255 @@
+# Die allgemeinen Regeln -- die Grundschicht unter den eigenen.
+#
+# Mitgeliefert, damit ein neuer Nutzer nicht bei null anfaengt: oeffentliche
+# Haendler, Dienste und Behoerden, wie sie auf deutschen Kontoauszuegen
+# stehen. Keine Person, keine IBAN, kein Betrag, kein eigener Vertrag.
+#
+# Sie gelten NACH allen eigenen Regeln: Jede Regel in config/rules.yaml
+# gewinnt, egal welche Prioritaet sie hat (engine.rohe_regeln rueckt die
+# Grundschicht dafuer um GRUNDSCHICHT_ABSTAND nach hinten). Eine eigene Regel
+# mit derselben Kennung ersetzt die allgemeine; auf /regeln laesst sich eine
+# ausschalten oder die ganze Schicht abwaehlen.
+#
+# Der Textvergleich ignoriert Gross- und Kleinschreibung, Leerzeichen und
+# Satzzeichen und sucht ueberall im Buchungstext. Darum stehen hier keine
+# kurzen Woerter, die in anderen stecken ("Esso" in "Espresso", "Norma" in
+# "normal"), und keine Marken, die auch Vor- oder Nachnamen sind.
+#
+# Die Kategorien stammen aus der Startvorlage (taxonomy.yaml). Wer eine davon
+# umbenennt, traegt das in taxonomy_migrations.yaml ein -- dann folgen auch
+# diese Regeln.
+
+rules:
+
+  # ------------------------------------------------------------- Umbuchungen
+  - id: allg-eigenes-konto
+    priority: 5
+    name: Überweisung zwischen eigenen Konten
+    match: {iban_is_own: true}
+    set: {mgmt: transfer/eigenkonto}
+
+  # --------------------------------------------------------------- Steuern
+  - id: allg-kapitalertragsteuer
+    priority: 20
+    name: Kapitalertragsteuer und Soli
+    match: {sign: "-", text: [Kapitalertragsteuer, Kapitalertragssteuer, Abgeltungsteuer,
+                              Solidaritätszuschlag]}
+    set: {mgmt: steuern/kapitalertragsteuer}
+
+  - id: allg-kfz-steuer
+    priority: 20
+    name: Kfz-Steuer
+    match: {text: [Kraftfahrzeugsteuer, Kfz-Steuer]}
+    set: {mgmt: mobilitaet/kfz-steuer}
+
+  - id: allg-finanzamt
+    priority: 22
+    name: Finanzamt
+    match: {text: [Finanzamt, Finanzkasse]}
+    set: {mgmt: steuern/einkommensteuer}
+
+  # ------------------------------------------------------------- Einnahmen
+  - id: allg-gehalt
+    priority: 30
+    name: Gehalt
+    match: {sign: "+", text: [Lohn/Gehalt, Gehalt, Bezüge, Entgeltabrechnung]}
+    set: {mgmt: einkommen/gehalt}
+
+  - id: allg-zinsen
+    priority: 30
+    name: Zinsen
+    match: {sign: "+", text: [Habenzinsen, Zinsgutschrift, Erhaltene Zinsen, Interest payment]}
+    set: {mgmt: einkommen/zinsen}
+
+  - id: allg-dividende
+    priority: 30
+    name: Dividende und Ausschüttung
+    match: {sign: "+", text: [Dividende, Ausschüttung, Cash Dividend]}
+    set: {mgmt: einkommen/dividende}
+
+  - id: allg-cashback
+    priority: 32
+    name: Cashback und Boni
+    match: {sign: "+", text: [Cashback, Saveback, Payback]}
+    set: {mgmt: einkommen/cashback}
+
+  # ---------------------------------------------------------------- Wohnen
+  - id: allg-rundfunk
+    priority: 40
+    name: Rundfunkbeitrag
+    match: {text: [Rundfunkbeitrag, Beitragsservice, Rundfunk]}
+    set: {mgmt: wohnen/gez}
+
+  - id: allg-miete
+    priority: 45
+    name: Miete
+    match: {sign: "-", text: [Miete]}
+    set: {mgmt: wohnen/miete}
+
+  # ----------------------------------------------------------------- Abos
+  - id: allg-mobilfunk
+    priority: 50
+    name: Mobilfunk
+    match: {text: [Vodafone, Telefonica, congstar, Drillisch, Lebara, ALDI TALK, fraenk]}
+    set: {mgmt: abo/mobilfunk}
+
+  - id: allg-video-streaming
+    priority: 50
+    name: Video-Streaming
+    match: {text: [Netflix, Disney Plus, DisneyPlus, DAZN, Sky Deutschland, RTL+, RTLplus,
+                   Joyn, Prime Video, Apple TV, Crunchyroll]}
+    set: {mgmt: abo/video-streaming}
+
+  - id: allg-audio-streaming
+    priority: 50
+    name: Audio-Streaming
+    match: {text: [Spotify, Deezer, Audible, Apple Music]}
+    set: {mgmt: abo/audio-streaming}
+
+  - id: allg-cloud
+    priority: 50
+    name: Cloud-Speicher
+    match: {text: [iCloud, Google One, Dropbox]}
+    set: {mgmt: abo/cloud}
+
+  - id: allg-office
+    priority: 50
+    name: Office und Produktivität
+    match: {text: [Microsoft 365, Office 365, Adobe]}
+    set: {mgmt: abo/office}
+
+  - id: allg-ki
+    priority: 50
+    name: KI-Dienste
+    match: {text: [OpenAI, ChatGPT, Anthropic, Claude.ai, Perplexity, Midjourney]}
+    set: {mgmt: abo/ki}
+
+  - id: allg-steuersoftware
+    priority: 50
+    name: Steuersoftware
+    match: {text: [WISO, Taxfix, Smartsteuer, Buhl Data]}
+    set: {mgmt: abo/steuersoftware}
+
+  - id: allg-fitness
+    priority: 50
+    name: Fitnessstudio
+    match: {text: [Urban Sports, McFit, FitX, Clever Fit]}
+    set: {mgmt: abo/sport}
+
+  - id: allg-spende
+    priority: 55
+    name: Spende
+    match: {sign: "-", text: [Spende]}
+    set: {mgmt: abo/spende}
+
+  # ------------------------------------------------------------ Mobilitaet
+  - id: allg-kraftstoff
+    priority: 60
+    name: Tankstelle
+    match: {text: [Tankstelle, Aral Station, ARAL AG, Shell Station, Esso Station,
+                   TotalEnergies, Agip]}
+    set: {mgmt: mobilitaet/kraftstoff}
+
+  - id: allg-parken
+    priority: 60
+    name: Parken
+    match: {text: [Parkhaus, APCOA, Contipark, Parkgebühr]}
+    set: {mgmt: mobilitaet/parken}
+
+  - id: allg-bahn
+    priority: 60
+    name: Bahn
+    match: {text: [DB Vertrieb, DB Fernverkehr, Deutsche Bahn]}
+    set: {mgmt: mobilitaet/bahn-privat}
+
+  # --------------------------------------------------------------- Alltag
+  - id: allg-supermarkt
+    priority: 60
+    name: Supermarkt
+    match: {text: [REWE, ALDI, Lidl, EDEKA, Penny, Kaufland, Netto Marken, tegut]}
+    set: {mgmt: lebensmittel/supermarkt}
+
+  - id: allg-drogerie
+    priority: 60
+    name: Drogerie
+    match: {text: [DM DROGERIE, dm-drogerie markt, Rossmann]}
+    set: {mgmt: konsum/drogerie}
+
+  - id: allg-apotheke
+    priority: 60
+    name: Apotheke
+    match: {text: [Apotheke]}
+    set: {mgmt: gesundheit/medikamente}
+
+  - id: allg-zahnarzt
+    priority: 58
+    name: Zahnarzt
+    match: {text: [Zahnarzt, Zahnärzt, Zahnarztpraxis]}
+    set: {mgmt: gesundheit/zahnarzt}
+
+  - id: allg-optik
+    priority: 60
+    name: Optiker
+    match: {text: [Fielmann, Apollo-Optik]}
+    set: {mgmt: gesundheit/optik}
+
+  - id: allg-lieferdienst
+    priority: 60
+    name: Lieferdienst
+    match: {text: [Lieferando, Wolt Enterprises, Uber Eats]}
+    set: {mgmt: gastronomie/restaurant}
+
+  - id: allg-kleidung
+    priority: 60
+    name: Kleidung
+    match: {text: [Zalando, About You, Uniqlo, Primark]}
+    set: {mgmt: konsum/kleidung}
+
+  - id: allg-elektronik
+    priority: 60
+    name: Elektronik
+    match: {text: [MediaMarkt, Media Markt, Cyberport, notebooksbilliger]}
+    set: {mgmt: konsum/elektronik}
+
+  - id: allg-moebel
+    priority: 60
+    name: Möbel
+    match: {text: [IKEA, XXXLutz]}
+    set: {mgmt: konsum/moebel}
+
+  - id: allg-gaming
+    priority: 60
+    name: Spiele
+    match: {text: [Nintendo, PlayStation, Xbox, Steam Games, STEAMGAMES, Epic Games]}
+    set: {mgmt: konsum/gaming}
+
+  - id: allg-events
+    priority: 60
+    name: Kino und Veranstaltungen
+    match: {text: [Eventim, Ticketmaster, CinemaxX, Cinestar, UCI Kinowelt]}
+    set: {mgmt: konsum/event}
+
+  - id: allg-reise
+    priority: 60
+    name: Reise
+    match: {text: [Airbnb, Booking.com, Lufthansa, Ryanair, Eurowings]}
+    set: {mgmt: reisen/reise-privat}
+
+  - id: allg-versandhandel
+    priority: 65
+    name: Versandhandel
+    match: {text: [AMAZON, AMZN, eBay]}
+    set: {mgmt: konsum/sonstiges}
+
+  # -------------------------------------------------------------- Gebuehren
+  - id: allg-bargeld
+    priority: 70
+    name: Bargeld
+    match: {sign: "-", text: [Geldautomat, Bargeldauszahlung, Barauszahlung]}
+    set: {mgmt: sonstiges/bargeld}
+
+  - id: allg-kontofuehrung
+    priority: 70
+    name: Kontoführung
+    match: {text: [Kontoführungsgebühr, Kontofuehrungsgebuehr, Kontoführungsentgelt]}
+    set: {mgmt: sonstiges/gebuehren}

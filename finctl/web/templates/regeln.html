@@ -17,6 +17,17 @@
   <button type="button" onclick="oeffne('')">Neue Regel</button>
 </form>
 
+{# Die Grundschicht gilt nach allen eigenen Regeln; der Schalter sagt vorher,
+   wie viele offene Buchungen sie zuordnen wuerde (vorschau-vor-wirkung). #}
+<div class="zeile" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+  <label><input type="checkbox" id="grundschicht"{% if grund.an %} checked{% endif %}>
+    Mitgelieferte allgemeine Regeln verwenden</label>
+  <span class="muted klein">{{ grund.anzahl }} Regeln für Supermärkte, Tankstellen, Streaming,
+    Steuern; eigene gehen vor
+    {%- if not grund.an and grund.wuerde %} · würden {{ grund.wuerde }} offene Buchungen zuordnen{% endif %}</span>
+  <button type="button" class="ghost" onclick="grundschichtSpeichern(this)">Speichern</button>
+</div>
+
 <div class="wrap"><table class="regeln">
   <tr id="kopfzeile"><th class="num">Prio</th><th>Regel</th><th>Bedingung</th><th>setzt</th>
       <th class="num">Buchungen</th><th></th></tr>
@@ -87,7 +98,16 @@ const VORLAGE = {{ vorlage|tojson }};
 const CATS = {{ categories|tojson }};
 const TAXES = {{ tax_categories|tojson }};
 const HERKUNFT = {basis: 'aus config/rules.yaml', geaendert: 'aus config/rules.yaml, hier geändert',
-                  eigen: 'hier angelegt'};
+                  eigen: 'hier angelegt', allgemein: 'mitgeliefert, gilt nach den eigenen'};
+async function grundschichtSpeichern(knopf){
+  const r = await fetch('/api/regeln/grundschicht', {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({an: document.getElementById('grundschicht').checked})});
+  const j = await r.json();
+  if (j.error){ meldenNeben(knopf, j.error, true); return; }
+  meldenNeben(knopf, `gespeichert — ${j.queue} offen`);
+  setTimeout(() => location.reload(), 900);
+}
 const TEXTFELDER = ['name', 'priority', 'text', 'text_all', 'counterparty', 'account',
                     'datum_von', 'datum_bis', 'note'];
 const escH = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

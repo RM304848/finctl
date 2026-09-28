@@ -450,8 +450,30 @@ def replay_overrides(conn: sqlite3.Connection,
     return applied
 
 
+def ohne_fremde_kategorien(conn: sqlite3.Connection, rules: list) -> list:
+    """Allgemeine Regeln, deren Kategorie es im eigenen Baum nicht mehr gibt, fallen weg.
+
+    Die Grundschicht kennt nur die Startvorlage. Wer eine Kategorie daraus
+    loescht, soll keine Buchungen auf etwas bekommen, das kein Bericht zeigt.
+    """
+    bekannt = {r[0] for r in conn.execute("SELECT id FROM mgmt_categories WHERE active = 1")}
+    return [r for r in rules if r.provenance != "allgemein"
+            or not r.actions.get("mgmt") or r.actions["mgmt"] in bekannt]
+
+
+def grundschicht_vorschau(conn: sqlite3.Connection) -> int:
+    """Wie viele offene Buchungen die allgemeinen Regeln zuordnen wuerden."""
+    offen = {r[0] for r in conn.execute("SELECT id FROM v_review_queue")}
+    if not offen:
+        return 0
+    regeln = ohne_fremde_kategorien(conn, engine.regeln_aus(engine.grundschicht()))
+    own_ibans, abdeckung = engine.own_iban_map(conn), engine.abdeckung_map(conn)
+    return sum(1 for tx in engine.load_contexts(conn) if tx.id in offen
+               and engine.first_match(regeln, tx, own_ibans, abdeckung) is not None)
+
+
 def categorize(conn: sqlite3.Connection, *, recompute: bool = True) -> CategorizeResult:
-    rules = engine.load_rules()
+    rules = ohne_fremde_kategorien(conn, engine.load_rules())
     own_ibans = engine.own_iban_map(conn)
     abdeckung = engine.abdeckung_map(conn)
     result = CategorizeResult()
