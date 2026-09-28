@@ -23,6 +23,10 @@ macht daraus beim Veröffentlichen die neue Version.
   mit drei Monaten Gehalts-Untergrenze, bis du einen eigenen Betrag
   einträgst. Die Rentenlücke steht immer da; ohne Geburtsdatum sagt sie, was
   fehlt.
+- **Teilzeit**: Anteil und Beginn stehen wieder in den Annahmen. Die Klammer
+  „Teilzeit“ auf **Planung** gibt es immer, auch frisch installiert; sie ist
+  von Haus aus aus und schaltet die Teilzeit ein. Werte, die du in der
+  Klammer einträgst, gehen vor; leer gelassen gelten die Annahmen.
 - Die Gehalts-Untergrenze steht nur noch unter **Annahmen**, nicht mehr
   zusätzlich auf **Planung**.
 - Die Entnahmerate ist aus den Annahmen verschwunden: Gerechnet wurde mit ihr

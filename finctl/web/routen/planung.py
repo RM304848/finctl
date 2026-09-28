@@ -57,9 +57,12 @@ SZENARIEN_HEADER = """# Eigene Was-wäre-wenn-Pläne, im Dashboard gepflegt.
 def _read_szenarien() -> dict:
     import yaml as _y
 
+    from finctl.forecast.szenarien import mit_teilzeit
+
     if not SZENARIEN_PATH.exists():
-        return {"szenarien": []}
-    return _y.safe_load(SZENARIEN_PATH.read_text(encoding="utf-8")) or {"szenarien": []}
+        return mit_teilzeit({"szenarien": []})
+    return mit_teilzeit(_y.safe_load(SZENARIEN_PATH.read_text(encoding="utf-8"))
+                        or {"szenarien": []})
 
 
 def _write_szenarien(spec: dict) -> None:
@@ -299,14 +302,9 @@ async def api_szenario(request: Request):
         # Schuld, und die Sperre auf alles zu legen hiess, dass ausgerechnet
         # die Klammer mit den echten Verpflichtungen fuer immer den Namen
         # behaelt, den sie bei der Anlage bekam.
-        schutz = "aktiv" in body or body.get("loeschen")
-        if (target.get("pflicht") and schutz
-                and (target.get("zeilen") or not body.get("loeschen"))):
-            return JSONResponse(
-                {"error": "Verpflichtungen lassen sich nicht abschalten. Zum "
-                          "Entfernen zuerst die einzelnen Positionen löschen -- "
-                          "eine Schuld wegzuklicken darf kein Versehen sein."},
-                status_code=400)
+        gesperrt = _sperre(target, body)
+        if gesperrt:
+            return JSONResponse({"error": gesperrt}, status_code=400)
         if body.get("loeschen"):
             items = [x for x in items if x.get("id") != sid]
         else:
@@ -318,6 +316,20 @@ async def api_szenario(request: Request):
     spec["szenarien"] = items
     _write_szenarien(spec)
     return {"ok": True, "id": sid}
+
+
+def _sperre(target: dict, body: dict) -> str | None:
+    """Was sich an einer Klammer nicht wegklicken laesst -- oder None."""
+    schutz = "aktiv" in body or body.get("loeschen")
+    if (target.get("pflicht") and schutz
+            and (target.get("zeilen") or not body.get("loeschen"))):
+        return ("Verpflichtungen lassen sich nicht abschalten. Zum Entfernen zuerst "
+                "die einzelnen Positionen löschen -- eine Schuld wegzuklicken darf "
+                "kein Versehen sein.")
+    # Die Teilzeit ist ein Schalter, den es immer gibt (szenarien.mit_teilzeit).
+    if body.get("loeschen") and target.get("id") == "teilzeit":
+        return "Die Klammer Teilzeit bleibt – ausschalten genügt."
+    return None
 
 
 def _verkaufszeile(body: dict, label: str):
@@ -359,16 +371,19 @@ def _teilzeitzeile(body: dict, label: str):
     for wert in (start, ende):
         if wert and not _re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", wert[:7]):
             return JSONResponse({"error": "Monat als JJJJ-MM"}, status_code=400)
-    if not start:
-        return JSONResponse({"error": "Startmonat fehlt"}, status_code=400)
-    try:
-        anteil = float(body.get("anteil"))
-    except (TypeError, ValueError):
-        return JSONResponse({"error": "Anteil fehlt"}, status_code=400)
-    if not 0 <= anteil < 1:
-        return JSONResponse({"error": "Anteil zwischen 0 und 100 %"}, status_code=400)
-    eintrag = {"label": label, "art": "teilzeit", "anteil": round(anteil, 4),
-               "frequenz": "monatlich", "start": start[:7]}
+    # Leer heisst: aus den Annahmen. So folgt eine Zeile ihnen wieder, nachdem
+    # sie einmal eigene Werte hatte.
+    eintrag = {"label": label, "art": "teilzeit", "frequenz": "monatlich"}
+    if body.get("anteil") not in (None, ""):
+        try:
+            anteil = float(body.get("anteil"))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "Anteil ist keine Zahl"}, status_code=400)
+        if not 0 <= anteil < 1:
+            return JSONResponse({"error": "Anteil zwischen 0 und 100 %"}, status_code=400)
+        eintrag["anteil"] = round(anteil, 4)
+    if start:
+        eintrag["start"] = start[:7]
     if ende:
         eintrag["ende"] = ende[:7]
     return eintrag

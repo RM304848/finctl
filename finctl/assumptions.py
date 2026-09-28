@@ -20,6 +20,7 @@ drifted apart.
 from __future__ import annotations
 
 import copy
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
@@ -45,13 +46,17 @@ def _load(path: str) -> dict:
 #: stehen. Nur diese: es sind die, an denen der ganze Plan haengt und die
 #: eine Meinung sind, keine Messung und keine Unterlage. Eine Standmitteilung
 #: der GRV gehoert nicht in ein Eingabefeld, was ein Objekt abwirft, steht am
-#: Objekt (`prognose:` in properties.yaml), und Teilzeit ist ein Plan.
+#: Objekt (`prognose:` in properties.yaml). Teilzeit hat beides: ihre Werte
+#: sind eine Annahme und stehen hier, ob sie gilt, schaltet die Klammer
+#: "Teilzeit" auf /planung.
 UEBERSCHREIBBAR: dict[str, tuple[str, ...]] = {
     "inflation_pa": ("inflation_pa",),
     "rendite_nominal_pa": ("kapital", "rendite_nominal_pa"),
     "rendite_depot_pa": ("kapital", "rendite_depot_pa"),
     "gehalt_steigerung_pa": ("erwerbseinkommen", "gehalt_steigerung_pa"),
     "salary_floor_cents": ("erwerbseinkommen", "netto_floor_monatlich_cents"),
+    "teilzeit_anteil": ("erwerbseinkommen", "teilzeit_anteil"),
+    "teilzeit_ab": ("erwerbseinkommen", "teilzeit_ab"),
     "lebenserwartung": ("ruhestand", "lebenserwartung"),
     "abzug_renten": ("ruhestand", "abzug_renten"),
     "aufbrauchen": ("ruhestand", "aufbrauchen"),
@@ -160,6 +165,23 @@ def vorabpauschale(path: Path | str = PATH) -> tuple[float, float]:
 def salary_floor_cents(path: Path | str = PATH) -> int:
     """Der schlechteste beobachtete Monat. Fuer die Liquiditaetsfrage."""
     return int(get("erwerbseinkommen", "netto_floor_monatlich_cents", path=path))
+
+
+def teilzeit_anteil(path: Path | str = PATH) -> float | None:
+    """Der Anteil am vollen Gehalt in Teilzeit, 0,8 fuer 80 % -- oder None."""
+    wert = get("erwerbseinkommen", "teilzeit_anteil", path=path, default="")
+    return float(wert) if wert not in ("", None) else None
+
+
+def teilzeit_ab(path: Path | str = PATH) -> date | None:
+    """Der erste Monat in Teilzeit -- oder None, solange keiner eingetragen ist."""
+    wert = str(get("erwerbseinkommen", "teilzeit_ab", path=path, default="") or "")
+    if not wert:
+        return None
+    try:
+        return date.fromisoformat(wert[:7] + "-01")
+    except ValueError:
+        return None
 
 
 def salary_median_cents(path: Path | str = PATH) -> int:

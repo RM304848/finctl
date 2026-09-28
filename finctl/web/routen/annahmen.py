@@ -7,6 +7,7 @@ der Oberflaeche.
 from __future__ import annotations
 
 import datetime as _dtm
+import re
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -37,6 +38,10 @@ STELLSCHRAUBEN = (
      "Ziele. Die grösste Einzelwirkung von allen."),
     ("salary_floor_cents", "Gehalts-Untergrenze", "euro",
      "Konten, NICHT die Ziele — dort rechnet der gemessene Median."),
+    ("teilzeit_anteil", "Teilzeit: Anteil am Gehalt", "prozent",
+     "Hochrechnung, sobald die Klammer Teilzeit auf Planung an ist."),
+    ("teilzeit_ab", "Teilzeit ab (JJJJ-MM)", "monat",
+     "Erster Monat in Teilzeit; ohne Eintrag rechnet die Klammer nicht."),
     ("lebenserwartung", "Lebenserwartung (Alter)", "jahre",
      "Hochrechnung: bis zu welchem Alter gerechnet wird und das Kapital reichen muss."),
     ("abzug_renten", "Abzug auf Renten (Steuer und KV)", "prozent",
@@ -84,7 +89,7 @@ def annahmen(request: Request):
     ueber = _ov.einstellungen()
     dreh = []
     for key, label, einheit, wirkung in STELLSCHRAUBEN:
-        wert = _ann.get(*_ann.UEBERSCHREIBBAR[key], default=0)
+        wert = _ann.get(*_ann.UEBERSCHREIBBAR[key], default="" if einheit == "monat" else 0)
         basis = _ann.basiswert(key)
         dreh.append({"key": key, "label": label,
                      "einheit": einheit,
@@ -419,6 +424,10 @@ def _setting_pruefen(key: str, value) -> str | None:
             return "keine Zahl"
     if einheit == "jahre" and not 60 <= float(value) <= 120:
         return "Alter zwischen 60 und 120"
+    if key == "teilzeit_anteil" and not 0 < float(value) < 1:
+        return "Anteil zwischen 0 und 100 %"
+    if einheit == "monat" and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", str(value)):
+        return "Monat als JJJJ-MM"
     return None
 
 

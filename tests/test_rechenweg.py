@@ -170,10 +170,63 @@ def test_the_plan_api_refuses_a_malformed_teilzeit():
 
     assert _teilzeitzeile({"anteil": 0.7, "start": "2045"}, "x").status_code == 400
     assert _teilzeitzeile({"anteil": 1.7, "start": "2045-01"}, "x").status_code == 400
-    assert _teilzeitzeile({"start": "2045-01"}, "x").status_code == 400
+    assert _teilzeitzeile({"anteil": "viel", "start": "2045-01"}, "x").status_code == 400
     assert _teilzeitzeile({"anteil": 0.7, "start": "2045-01"}, "x") == {
         "label": "x", "art": "teilzeit", "anteil": 0.7, "frequenz": "monatlich",
         "start": "2045-01"}
+    # Leer gelassen folgt die Zeile wieder den Annahmen.
+    assert _teilzeitzeile({"anteil": None, "start": ""}, "x") == {
+        "label": "x", "art": "teilzeit", "frequenz": "monatlich"}
+
+
+def test_the_teilzeit_bracket_always_exists_and_is_off():
+    """Auch in einer frischen Installation: sonst liesse sich die Teilzeit
+    weder einschalten noch zum Vergleich wieder ausschalten."""
+    from finctl.forecast import szenarien as sz
+
+    [klammer] = sz.load({})
+    assert klammer.id == sz.TEILZEIT_ID and not klammer.active
+    assert [z.kind for z in klammer.lines] == ["teilzeit"]
+    # Eine vorhandene wird nicht verdoppelt.
+    vorhanden = {"szenarien": [{"id": "teilzeit", "name": "Teilzeit", "aktiv": True,
+                                "zeilen": []}]}
+    assert [k.id for k in sz.load(vorhanden)] == ["teilzeit"]
+
+
+def test_the_teilzeit_line_takes_what_it_lacks_from_the_assumptions(monkeypatch):
+    from finctl import assumptions as ann
+    from finctl.forecast import szenarien as sz
+
+    monkeypatch.setattr(ann, "teilzeit_anteil", lambda *a, **k: 0.6)
+    monkeypatch.setattr(ann, "teilzeit_ab", lambda *a, **k: dt_date(2040, 1, 1))
+    [klammer] = sz.load({})
+    [zeile] = klammer.lines
+    assert (zeile.anteil, zeile.start) == (0.6, dt_date(2040, 1, 1))
+    assert zeile.aus_annahmen == ("anteil", "start")
+
+    eigen = sz.load({"szenarien": [{"id": "teilzeit", "name": "Teilzeit", "zeilen": [
+        {"label": "x", "art": "teilzeit", "anteil": 0.5}]}]})
+    [zeile] = eigen[0].lines
+    assert (zeile.anteil, zeile.start, zeile.aus_annahmen) == (0.5, dt_date(2040, 1, 1),
+                                                              ("start",))
+
+
+def test_without_a_start_the_bracket_counts_nothing(monkeypatch):
+    """Ohne Beginn in den Annahmen rechnet auch die eingeschaltete Klammer nicht."""
+    from finctl import assumptions as ann
+    from finctl.forecast import szenarien as sz
+
+    monkeypatch.setattr(ann, "teilzeit_ab", lambda *a, **k: None)
+    geladen = sz.load({"szenarien": [{"id": "teilzeit", "name": "Teilzeit", "aktiv": True,
+                                      "zeilen": [{"label": "x", "art": "teilzeit"}]}]})
+    assert sz.teilzeitzeilen(geladen) == []
+
+
+def test_the_teilzeit_bracket_cannot_be_deleted():
+    from finctl.web.routen.planung import _sperre
+
+    assert _sperre({"id": "teilzeit"}, {"loeschen": True})
+    assert _sperre({"id": "teilzeit"}, {"aktiv": True}) is None
 
 
 def test_the_settings_api_refuses_a_non_number():
@@ -181,6 +234,9 @@ def test_the_settings_api_refuses_a_non_number():
 
     assert _setting_pruefen("inflation_pa", "zwei") is not None
     assert _setting_pruefen("inflation_pa", 0.02) is None
+    assert _setting_pruefen("teilzeit_ab", "2045") is not None
+    assert _setting_pruefen("teilzeit_ab", "2045-01") is None
+    assert _setting_pruefen("teilzeit_anteil", 1.2) is not None
 
 
 def test_cash_in_and_out_add_up_to_the_saving_rate(lauf):

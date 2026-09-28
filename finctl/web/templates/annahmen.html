@@ -17,13 +17,14 @@
     <td>{{ d.label }}</td>
     <td><input id="a-{{ d.key }}" style="width:100%"
         value="{{ ('%.2f'|format(d.wert * 100))|replace('.', ',') if d.einheit == 'prozent'
-                  else (d.wert if d.einheit == 'jahre' else d.wert|betrag) }}"></td>
+                  else (d.wert if d.einheit in ('jahre', 'monat') else d.wert|betrag) }}"
+        {%- if d.einheit == 'monat' %} placeholder="2045-01"{% endif %}></td>
     <td class="muted klein">{{ d.wirkung }}
       {%- if d.ueberschrieben %}
       <br><span class="pill eigen">überschrieben</span>
       <span style="opacity:.8">dokumentiert:
         {{ ('%.2f'|format(d.basis * 100))|replace('.', ',') ~ ' %'
-           if d.einheit == 'prozent' else (d.basis if d.einheit == 'jahre'
+           if d.einheit == 'prozent' else (d.basis if d.einheit in ('jahre', 'monat')
            else d.basis|betrag) }}</span>{% endif %}</td>
     <td>
       <button class="ghost" onclick="speichern('{{ d.key }}', '{{ d.einheit }}')">Speichern</button>
@@ -85,6 +86,8 @@ function speichern(key, einheit){
     const z = parseFloat(roh.replace(',', '.').trim());
     if (isNaN(z)){ document.getElementById('m-'+key).textContent = 'keine Zahl'; return; }
     senden(key, z / 100);
+  } else if (einheit === 'monat'){
+    senden(key, roh.trim());
   } else if (einheit === 'jahre'){
     const j = parseInt(roh.trim(), 10);
     if (isNaN(j)){ document.getElementById('m-'+key).textContent = 'keine Zahl'; return; }

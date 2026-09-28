@@ -32,6 +32,10 @@ erwerbseinkommen:
   netto_floor_monatlich_cents: 200000
   netto_median_monatlich_cents: 200000
   gehalt_steigerung_pa: 0.02
+  # Teilzeit: Anteil am vollen Gehalt und erster Monat (JJJJ-MM). Ob sie
+  # gilt, schaltet die Klammer "Teilzeit" auf /planung -- von Haus aus aus.
+  teilzeit_anteil: 0.8
+  teilzeit_ab: ""
 
 # Was ein Objekt kuenftig abwirft, steht am Objekt: `prognose:` in
 # properties.yaml, eingetragen auf /immobilie/<id>.

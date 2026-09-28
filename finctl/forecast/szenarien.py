@@ -79,6 +79,9 @@ class Line:
     kosten_cents: int = 0
     #: Nur bei Teilzeit: der Anteil am vollen Gehalt, 0,7 fuer 70 %.
     anteil: float | None = None
+    #: Nur bei Teilzeit: welche Werte ("anteil", "start") aus den Annahmen
+    #: kommen, weil die Zeile selbst keine eigenen traegt.
+    aus_annahmen: tuple[str, ...] = ()
 
     def months(self, horizon_end: date) -> list[date]:
         """Every month this line touches, up to the horizon.
@@ -163,10 +166,45 @@ def _as_date(value) -> date | None:
     return date.fromisoformat(text + "-01" if len(text) == 7 else text).replace(day=1)
 
 
+#: Die Klammer, die es immer gibt: der Schalter fuer die Teilzeit.
+TEILZEIT_ID = "teilzeit"
+_TEILZEIT_KLAMMER = {"id": TEILZEIT_ID, "name": "Teilzeit", "aktiv": False,
+                     "zeilen": [{"label": "Teilzeit laut Annahmen", "art": "teilzeit",
+                                 "frequenz": "monatlich"}]}
+
+
+def mit_teilzeit(spec: dict) -> dict:
+    """Die Klammer "Teilzeit" gibt es immer, von Haus aus ausgeschaltet.
+
+    Ihre Werte stehen in den Annahmen (Anteil, Beginn); die Klammer ist der
+    Schalter. Ohne sie liesse sich die Teilzeit weder einschalten noch fuer
+    einen Vergleich wieder ausschalten, und eine frische Installation kennte
+    sie gar nicht.
+    """
+    szenarien = list(spec.get("szenarien") or [])
+    if any(str(s.get("id")) == TEILZEIT_ID for s in szenarien):
+        return spec
+    import copy
+
+    return {**spec, "szenarien": [*szenarien, copy.deepcopy(_TEILZEIT_KLAMMER)]}
+
+
+def _teilzeit_aus_annahmen(line: Line) -> None:
+    """Was die Zeile nicht selbst traegt, kommt aus den Annahmen."""
+    from finctl import assumptions as _ann
+
+    if line.anteil is None:
+        line.anteil = _ann.teilzeit_anteil()
+        line.aus_annahmen += ("anteil",)
+    if line.start is None:
+        line.start = _ann.teilzeit_ab()
+        line.aus_annahmen += ("start",)
+
+
 def load(spec: dict) -> list[Scenario]:
     """Read scenarios_custom.yaml into objects, skipping nothing silently."""
     out = []
-    for raw in spec.get("szenarien") or []:
+    for raw in mit_teilzeit(spec).get("szenarien") or []:
         lines = []
         for item in raw.get("zeilen") or []:
             freq = str(item.get("frequenz") or "monatlich")
@@ -192,6 +230,8 @@ def load(spec: dict) -> list[Scenario]:
                 kosten_cents=int(item.get("verkaufskosten_cents") or 0),
                 anteil=(float(item["anteil"]) if item.get("anteil") is not None
                         else None)))
+            if kind == "teilzeit":
+                _teilzeit_aus_annahmen(lines[-1])
         pflicht = bool(raw.get("pflicht"))
         out.append(Scenario(
             id=str(raw.get("id")), name=str(raw.get("name") or raw.get("id")),

@@ -133,8 +133,15 @@ def _annahmen_angepasst() -> tuple[int, int]:
         return knoten
 
     schluessel = list(_ann.UEBERSCHREIBBAR.values())
+    def jetzt(pfad):
+        try:
+            return _ann.get(*pfad)
+        except KeyError:              # in einem aelteren Datenordner nie eingetragen
+            return None
+
+    # Was nie eingetragen wurde, ist auch nicht angepasst.
     anders = sum(1 for pfad in schluessel
-                 if _ann.get(*pfad, default=None) != startwert(pfad))
+                 if (wert := jetzt(pfad)) is not None and wert != startwert(pfad))
     return anders, len(schluessel)
 
 

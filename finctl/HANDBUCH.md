@@ -525,7 +525,7 @@ Alles, was noch nicht im Ledger steht, als **Klammern** mit beliebig vielen Posi
   und Ziele gemeinsam.
 - Eine Position ist ein **Betrag** oder ein **Wegfall**. Ein neues Auto kostet nicht
   seine Rate, sondern die Rate minus dem, was der alte Wagen kostet.
-- **Teilzeit** ist ein Anteil am Gehalt ab einem Monat, nur in der Jahresrechnung.
+- **Teilzeit**: Anteil und Beginn aus den Annahmen, die Klammer schaltet sie ein.
 - Beträge werden **ohne Vorzeichen** eingetragen, die Richtung ist eine Auswahl.
 - Gemessen wird über die **zugeordneten Buchungen**, nicht über die Kategorie und nie
   eingetippt. Ein Haken genügt: dazu zählt die Reihe, also derselbe Empfänger in

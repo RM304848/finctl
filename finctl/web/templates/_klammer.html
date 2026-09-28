@@ -10,7 +10,8 @@
     {{ k.name }}
     <span class="zahl">— {% if k.obligation %}Verpflichtung{% else %}Plan · {{ 'an' if k.active else 'aus' }}{% endif %}
       {%- if k.summiert %} · wirkt noch <span class="{{ ns.rest|vz }}">{{ ns.rest|euro }}</span>/Monat
-      {%- else %}{% for z in k.lines %} · {{ (z.anteil * 100)|round|int }} % Gehalt ab {{ z.start.strftime('%Y-%m') }}{% endfor %}{% endif %}
+      {%- else %}{% for z in k.lines %} · {% if z.anteil is not none and z.start %}{{ (z.anteil * 100)|round|int }} % Gehalt ab {{ z.start.strftime('%Y-%m') }}
+        {%- else %}Beginn fehlt{% endif %}{% endfor %}{% endif %}
       {%- if k.one_off_cents() %} · einmalig <span class="{{ k.one_off_cents()|vz }}">{{ k.one_off_cents()|euro }}</span>{% endif %}</span>
   </summary>
 
@@ -25,7 +26,7 @@
     <button class="ghost" onclick="umbenennen('{{ k.id }}')">Umbenennen</button>
     <span class="muted">Kennung <code>{{ k.id }}</code> bleibt</span>
     <span id="meldung-{{ k.id }}" class="muted"></span>
-    {% if not k.obligation %}
+    {% if not k.obligation and k.id != 'teilzeit' %}
     <span style="flex:1"></span>
     <button class="ghost" onclick="entfernen('{{ k.id }}', '{{ k.name|e }}')">Plan löschen</button>
     {% endif %}
@@ -42,7 +43,7 @@
       <td>{{ z.label }}</td>
       {% set vk = verkauf_zeilen.get(zid) if z.kind == 'verkauf' else none %}
       <td><span class="pill">{% if z.kind == 'verkauf' %}Verkauf · {{ z.property_id }}
-        {%- elif z.kind == 'teilzeit' %}Teilzeit · {{ (z.anteil * 100)|round|int }} %
+        {%- elif z.kind == 'teilzeit' %}Teilzeit · {{ (z.anteil * 100)|round|int if z.anteil is not none else '—' }} %
         {%- elif z.kind == 'wegfall' %}Wegfall · gemessen
         {%- elif z.frequency == 'einmalig' %}einmalig{% else %}Betrag · {{ z.frequency }}{% endif %}</span></td>
       <td class="muted">
@@ -50,8 +51,10 @@
           · netto <span class="{{ vk.netto_cents|vz }}">{{ vk.netto_cents|euro }}</span>
           {%- if vk.steuerfrei == false %} · <span class="neg">vor Ende der §23-Frist {{ vk.frist_ende }}</span>{% endif %}
           {%- endif %} · nur Jahresrechnung
-        {%- elif z.kind == 'teilzeit' %}Gehalt ab {{ z.start.strftime('%Y-%m') }}
-          {%- if z.end %} bis {{ z.end.strftime('%Y-%m') }}{% endif %} · nur Jahresrechnung
+        {%- elif z.kind == 'teilzeit' %}{% if z.start %}Gehalt ab {{ z.start.strftime('%Y-%m') }}
+          {%- else %}<span class="neg">Beginn fehlt</span> — in den <a href="/annahmen">Annahmen</a> eintragen{% endif %}
+          {%- if z.end %} bis {{ z.end.strftime('%Y-%m') }}{% endif %}
+          {%- if z.aus_annahmen %} · aus den Annahmen{% endif %} · nur Jahresrechnung
         {%- elif z.frequency == 'einmalig' %}{{ 'bezahlt' if z.buchungen else 'noch nicht bezahlt' }}
         {%- elif z.buchungen %}{{ z.buchungen|length }} zugeordnet
           {%- if m and m.reihe %} + {{ m.reihe|length }} gleiche Reihe{% endif %}
@@ -59,7 +62,7 @@
         {%- else %}nichts zugeordnet — zählt voll{% endif %}</td>
       {% set geplant = 0 if z.kind == 'wegfall' else (z.amount_cents if z.kind == 'verkauf'
            or z.frequency == 'einmalig' else z.monthly_equivalent_cents()) %}
-      <td class="num {{ geplant|vz }}">{% if z.kind == 'teilzeit' %}{{ (z.anteil * 100)|round|int }} % Gehalt
+      <td class="num {{ geplant|vz }}">{% if z.kind == 'teilzeit' %}{{ (z.anteil * 100)|round|int if z.anteil is not none else '—' }} % Gehalt
         {%- elif z.kind == 'verkauf' %}{{ z.amount_cents|euro }}
         {%- elif z.kind == 'wegfall' %}—
         {%- elif z.frequency == 'einmalig' %}{{ z.amount_cents|euro }}
@@ -95,8 +98,14 @@
         {% elif z.kind == 'teilzeit' %}
         <div class="zeilen-form">
           <label>Bezeichnung<input id="e-label-{{ zid }}" value="{{ z.label|e }}"></label>
-          <label>Anteil am Gehalt (%)<input id="e-anteil-{{ zid }}" value="{{ (z.anteil * 100)|round|int }}"></label>
-          <label>von<input id="e-von-{{ zid }}" value="{{ z.start.strftime('%Y-%m') if z.start else '' }}" placeholder="2045-01"></label>
+          {# Leer gelassen gilt der Wert aus den Annahmen; er steht als Platzhalter da. #}
+          {% set eigen_anteil = z.anteil is not none and 'anteil' not in z.aus_annahmen %}
+          {% set eigen_start = z.start and 'start' not in z.aus_annahmen %}
+          <label>Anteil am Gehalt (%)<input id="e-anteil-{{ zid }}"
+            value="{{ (z.anteil * 100)|round|int if eigen_anteil else '' }}"
+            placeholder="{{ (z.anteil * 100)|round|int if z.anteil is not none else '80' }}"></label>
+          <label>von<input id="e-von-{{ zid }}" value="{{ z.start.strftime('%Y-%m') if eigen_start else '' }}"
+            placeholder="{{ z.start.strftime('%Y-%m') if z.start else '2045-01' }}"></label>
           <label>bis<input id="e-bis-{{ zid }}" value="{{ z.end.strftime('%Y-%m') if z.end else '' }}" placeholder="offen"></label>
         </div>
         <p class="zeilen-knoepfe">
