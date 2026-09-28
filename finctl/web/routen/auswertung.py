@@ -26,17 +26,18 @@ from finctl.web.routen.start import _kacheln
 router = APIRouter()
 
 
-# Drei Blicke zurueck auf dieselben Buchungen, vorher drei Menuepunkte: der
-# Vergleich mit dem Vorjahr, die Fixkosten und alle Kategorien. Jeder Reiter
-# hat seine eigene Adresse, und die alten leiten dorthin um.
-RUECKBLICK = {"vorjahr": "Vorjahr", "fixkosten": "Fixkosten", "alle": "Alle Kategorien",
-              "fluss": "Fluss"}
+# Vier Blicke zurueck auf dieselben Buchungen. Jeder Reiter hat seine eigene
+# Adresse, und die alten Seiten leiten dorthin um. Der Fluss steht vorn: er
+# zeigt auf einen Blick, wohin das Geld gegangen ist; die anderen gehen von
+# dort ins Einzelne.
+RUECKBLICK = {"fluss": "Fluss", "alle": "Alle Kategorien", "fixkosten": "Fixkosten",
+              "vorjahr": "Vorjahr"}
 
 
 @router.get("/rueckblick", response_class=HTMLResponse)
-def rueckblick(request: Request, ansicht: str = "vorjahr", year: str = "", vs: str = "",
+def rueckblick(request: Request, ansicht: str = "fluss", year: str = "", vs: str = "",
                basis: str = "laufend", konto: str = "all"):
-    ansicht = ansicht if ansicht in RUECKBLICK else "vorjahr"
+    ansicht = ansicht if ansicht in RUECKBLICK else "fluss"
     if ansicht == "vorjahr":
         daten = _vergleich(year, vs, basis)
     elif ansicht == "fluss":

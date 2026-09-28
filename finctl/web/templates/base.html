@@ -104,6 +104,9 @@ try {
   .navtoggle:hover{color:var(--ink)}
   header.alleoffen .navtoggle{color:var(--ink)}
   .themaknopf{margin-left:.4rem}
+  /* Gefuellt wie ein Hauptknopf: im Kopf zwischen lauter leisen Links ging
+     er sonst unter, und auf dem Mac ist er der einzige Weg hinaus. */
+  .beenden{margin-left:.6rem;padding:.2rem .7rem;font-size:13px}
   header{flex-wrap:wrap;row-gap:.5rem}
   /* Auf dem Telefon ist der Kopf ein Kopf und kein Inhaltsverzeichnis.
      Ausgeklappt nahm er drei Zeilen und 170 Pixel ein, bevor die Seite
@@ -400,7 +403,7 @@ try {
   {# Nur in der App zum Doppelklicken: dort gibt es kein Terminal, in dem man
      sie beendet. #}
   {% if app_modus() %}
-  <button class="navtoggle" onclick="appBeenden()">Beenden</button>
+  <button class="beenden" onclick="appBeenden()">Beenden</button>
   {% endif %}
   {# Drei Stufen statt zwei: "wie das Geraet" muss man zurueckbekommen
      koennen, sonst bleibt nach einem einzigen Klick das Thema fuer immer fest. #}

@@ -341,11 +341,11 @@ def _hinweis_funde(roh: str, name: str, p: dict, funde: list[str],
         n = len(_worte(inneres))
         # Die Begruessung (Regel app-zweck): eigenes Mass, nur wo erlaubt,
         # und ihre Absaetze zaehlen nicht einzeln.
-        grenze = p["note_woerter_max"]
+        grenze, begruessung = p["note_woerter_max"], False
         if kopf := re.match(r'<div class="note willkommen"[^>]*>', roh[stelle:]):
             if name not in p["willkommen_nur"]:
                 funde.append("Begruessung ausserhalb von " + ", ".join(p["willkommen_nur"]))
-            grenze = p["willkommen_woerter_max"]
+            grenze, begruessung = p["willkommen_woerter_max"], True
             ende = stelle + kopf.end() + len(inneres)
             willkommen |= {s for s, _i, _h in _bloecke(roh, r"<p\b[^>]*>", "p")
                            if stelle < s < ende}
@@ -353,7 +353,7 @@ def _hinweis_funde(roh: str, name: str, p: dict, funde: list[str],
             funde.append(f"Hinweis mit {n} Woertern (hoechstens {grenze})")
         # Ein leerer Kasten ist ein Behaelter fuer eine Meldung, die erst beim
         # Speichern entsteht -- kein Text, der immer dasteht.
-        if n and not _bedingt(roh, stelle):
+        if n and not begruessung and not _bedingt(roh, stelle):
             funde.append(f"Hinweis steht immer da: „{' '.join(_worte(inneres)[:8])}…“ — "
                          "ein Hinweis beschreibt einen Zustand und wird bedingt gerendert")
         sichtbar.append(inneres)

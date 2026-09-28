@@ -122,7 +122,7 @@ client = TestClient(app)
 
 def test_the_page_offers_the_form_and_a_way_out():
     html = client.get("/kredite").text
-    assert 'id="neu-kredit"' in html and "Neuer Ratenkredit" in html
+    assert 'id="neu-kredit"' in html and "Neues Annuitätendarlehen" in html
     # Je Kredit ein Weg, ihn loszuwerden.
     assert html.count("kreditEntfernen(") >= 1
 

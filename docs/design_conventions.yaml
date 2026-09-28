@@ -657,17 +657,18 @@ regeln:
   - id: app-zweck
     regel: >
       Wozu die App da ist, steht in drei Saetzen: oben in README.md und
-      HANDBUCH.md und in der App genau einmal, auf /einrichtung als
-      `div.note.willkommen`, solange es kein Konto gibt. Hoechstens 70 Woerter,
-      Akzent statt Warnfarbe am Rand. Keine andere Seite begruesst.
+      HANDBUCH.md und in der App genau einmal, oben auf /einrichtung als
+      `div.note.willkommen`, immer, mit dem Verweis ins Handbuch. Hoechstens
+      70 Woerter, Akzent statt Warnfarbe am Rand. Es ist der einzige Kasten,
+      der ohne Bedingung dasteht; keine andere Seite begruesst.
     warum: >
       Wer die App zum ersten Mal oeffnet, landet in der Einrichtung und sieht
-      Fragen nach Ordnern und Konten, ohne zu wissen, wofuer. Wer ein Konto
-      angelegt hat, weiss es -- dann ist der Kasten nur noch im Weg.
+      Fragen nach Ordnern und Konten, ohne zu wissen, wofuer. Die Einrichtung
+      ist auch die Seite, die man jemandem zeigt, der fragt, was die App kann.
     pruefung:
       art: datei_enthaelt
       datei: finctl/web/templates/einrichtung.html
-      muss: ['{% if not konten %}', '<div class="note willkommen">']
+      muss: ['<div class="note willkommen">', 'href="/handbuch"']
 
   - id: jede-erklaerung-steht-einmal
     regel: >

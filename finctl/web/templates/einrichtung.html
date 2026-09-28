@@ -6,8 +6,7 @@
 es gibt, wer plant und was die App zeigen soll.</p>
 <p class="muted klein">Die App rechnet, sie berät nicht: keine Steuer- oder Anlageberatung.</p>
 
-{# Begruessung beim ersten Start (design_conventions: app-zweck). #}
-{% if not konten %}
+{# Die Begruessung (design_conventions: app-zweck). #}
 <div class="note willkommen">
   <p>Finance OS liest deine Kontoauszüge ein und ordnet jede Buchung zu –
   lokal auf deinem Rechner, ohne Cloud und ohne Bankzugang.</p>
@@ -16,8 +15,8 @@ es gibt, wer plant und was die App zeigen soll.</p>
   <p>Und der Blick nach vorn: Kredite, Immobilien, Anschlussfinanzierungen,
   Lebensziele, große Anschaffungen und Urlaube, Rentenlücke – durchgerechnet
   bis zum Lebensende, sodass Entscheidungen auf Zahlen beruhen statt auf Gefühl.</p>
+  <p>Wie alles zusammenhängt: <a href="/handbuch">Handbuch</a>.</p>
 </div>
-{% endif %}
 
 {# Der Stand kommt aus den Daten, nicht aus einem Haken: ein anklickbarer
    Haken waere eine Behauptung daneben, die falsch werden kann, ohne dass es
@@ -52,7 +51,7 @@ Prognose rechnet damit – geh sie einmal auf <a href="/annahmen">Annahmen</a> d
     <label for="d-ordner">Ordner</label>
     <input id="d-ordner" style="flex:1;min-width:18rem"
            placeholder="{{ vorgabe }}">
-    <button class="ghost" onclick="ordnerSpeichern()">Prüfen und eintragen</button>
+    <button onclick="ordnerSpeichern()">Prüfen und eintragen</button>
   </div>
   <div class="muted klein" id="d-stand"></div>
   {# Kurze Absaetze, weil jeder einzeln zaehlt -- ein Hilfebereich ist kein
@@ -198,7 +197,7 @@ Prognose rechnet damit – geh sie einmal auf <a href="/annahmen">Annahmen</a> d
     {% endfor %}
   </table></div>
   <div class="zeile" style="display:flex;gap:.6rem;align-items:center">
-    <button class="ghost" onclick="moduleSpeichern()">Speichern</button>
+    <button onclick="moduleSpeichern()">Speichern</button>
     <span class="muted klein" id="m-stand"></span>
   </div>
   <details class="hilfe">

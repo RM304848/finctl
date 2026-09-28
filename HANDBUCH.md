@@ -698,8 +698,8 @@ dazu.
 Die Tilgungspläne aus `config/loans.yaml`, je Kredit mit aktueller Kondition und
 Anschlussfinanzierung nebeneinander.
 
-- **Neuer Ratenkredit** legt einen Kredit mit einem Segment an: Restschuld, Zins, Rate,
-  Laufzeit. Ein Immobiliendarlehen entsteht hier nicht — dessen Zinsbindung und Anschluss
+- **Neues Annuitätendarlehen** legt einen Kredit mit einem Segment an: Restschuld, Zins,
+  Rate, Laufzeit. Ein Immobiliendarlehen entsteht hier nicht — dessen Zinsbindung und Anschluss
   stehen in `loans.yaml`.
 - **Entfernen** blendet einen Kredit aus jeder Prognose aus. Was aus `loans.yaml` kommt,
   wird nur ausgeblendet, damit die Begründung dort bleibt.
