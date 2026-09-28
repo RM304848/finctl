@@ -6,6 +6,8 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+## 0.3.0 – 2026-09-29
+
 - Die Einrichtung sagt oben in drei Sätzen, wozu die App da ist, und
   verweist ins Handbuch. Derselbe Text steht oben im Handbuch.
 - Rückblick: Der Fluss ist die erste Ansicht, danach Alle Kategorien,
