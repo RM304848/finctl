@@ -765,24 +765,24 @@ ergibt sich.
 
 ### /projekte
 
-Ein Projekt sammelt Ausgaben, die zusammengehören: eine Reise, ein Umbau, ein
-Geschenk. Kategorie und Steuer bleiben davon unberührt; das Projekt ist eine eigene
+Ein Budgettopf sammelt Ausgaben, die zusammengehören: eine Reise, ein Umbau, ein
+Geschenk. Kategorie und Steuer bleiben davon unberührt; der Budgettopf ist eine eigene
 Achse daneben.
 
 - **Mit Personen** wird geteilt, **ohne Personen** sammelt es nur die Kosten.
 - Eine zugeordnete Ausgabe ist gleich auf alle Personen und dich geteilt, bis du für
   diese eine Buchung etwas anderes einstellst.
-- Aufgeklappt zeigt ein Projekt seine Buchungen mit den Anteilen, die Kosten nach
+- Aufgeklappt zeigt ein Budgettopf seine Buchungen mit den Anteilen, die Kosten nach
   Kategorie und nach Monat.
 - Zugeordnet und geteilt wird unter „Buchungen".
 
 ### /salden
 
-Je Person und Projekt: ihr Anteil an den Ausgaben, und was davon offen ist.
+Je Person und Budgettopf: ihr Anteil an den Ausgaben, und was davon offen ist.
 
 - **Rückzahlungen werden nicht verfolgt.** Was andere für dich ausgelegt haben, steht
   in keinem deiner Auszüge; ein Saldo daraus wäre nur halb richtig.
-- Stattdessen gibt es je Person und Projekt den Haken **„ausgeglichen"**. Er merkt sich
+- Stattdessen gibt es je Person und Budgettopf den Haken **„ausgeglichen"**. Er merkt sich
   den Anteil beim Abhaken. Kommt danach eine Ausgabe dazu, ist genau die Differenz
   wieder offen.
 - Eine Rückzahlung gehört im Ledger in dieselbe Kategorie wie die Ausgabe, positiv. So
@@ -794,8 +794,8 @@ Die schlanke Buchungstabelle nur zum Zuordnen. Die Kategorie ist Anzeige und Fil
 nicht änderbar; dafür gibt es /transactions.
 
 - **Eine Zeile je Aufteilungsteil.** Bei einem aufgeteilten Einkauf lässt sich so nur
-  der Teil zuordnen, der zum Projekt gehört.
-- **Mehrere auf einmal:** Zeilen markieren, Projekt wählen, „Markierte zuordnen".
+  der Teil zuordnen, der zum Budgettopf gehört.
+- **Mehrere auf einmal:** Zeilen markieren, Budgettopf wählen, „Markierte zuordnen".
 - **Teilung** je Buchung: gleich, feste Beträge, Prozent, Gewichte oder nur ich. Die
   Vorschau zeigt die Beträge, bevor gespeichert wird.
 - Alles steht in `config/geteilt_custom.yaml`, geschlüsselt über die Buchung selbst,

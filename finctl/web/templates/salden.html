@@ -3,7 +3,7 @@
 {% macro tag(d) %}{{ d[:10] if d else '' }}{% endmacro %}
 {% block body %}
 <h1>Salden</h1>
-<p class="zweck">Wer schuldet dir in welchem Projekt wie viel?</p>
+<p class="zweck">Wer schuldet dir in welchem Budgettopf wie viel?</p>
 
 <div class="cards">
   <div class="card"><div class="k">Offen gesamt</div>
@@ -16,7 +16,7 @@
 
 {% if zeilen %}
 <div class="wrap"><table>
-  <tr><th>Person / Projekt</th><th class="num">Anteil</th><th>ausgeglichen</th>
+  <tr><th>Person / Budgettopf</th><th class="num">Anteil</th><th>ausgeglichen</th>
       <th class="num">seitdem dazu</th><th class="num">offen</th><th></th></tr>
   {% for z in zeilen %}
   <tr><td><strong>{{ z.name }}</strong></td><td></td><td></td><td></td>
@@ -51,7 +51,7 @@ async function ausgleichen(projekt, person, an, feld){
 
 {% import "_konfig.html" as kf %}
 {{ kf.fuss([
-  ('config/geteilt_custom.yaml', 'Je Person und Projekt der Stand beim Abhaken.'),
+  ('config/geteilt_custom.yaml', 'Je Person und Budgettopf der Stand beim Abhaken.'),
   ('finctl/web/templates/salden.html', 'Die Texte dieser Seite.'),
 ], handbuch='salden') }}
 {% endblock %}

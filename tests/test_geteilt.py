@@ -69,7 +69,7 @@ def test_a_project_without_people_only_collects_costs():
 @pytest.mark.parametrize(("teilung", "meldung"), [
     ({"art": "betrag", "personen": {"anna": 20000}}, "höher als die Buchung"),
     ({"art": "prozent", "personen": {"anna": 80, "ben": 30}}, "mehr als 100"),
-    ({"art": "gleich", "personen": {"carla": 1}}, "Nicht im Projekt"),
+    ({"art": "gleich", "personen": {"carla": 1}}, "Nicht im Budgettopf"),
     ({"art": "gewicht", "personen": {"anna": -1}}, "Negative"),
     ({"art": "raten"}, "Unbekannte Aufteilung"),
 ])
@@ -251,7 +251,7 @@ def test_a_refused_split_answers_in_german_and_writes_nothing(datei):
     antwort = client.post("/api/geteilt/teilung", json={
         "buchung": hash_, "teil": seq, "teilung": {"art": "prozent", "personen": {"x": 10}}})
     assert antwort.status_code == 400
-    assert "Nicht im Projekt" in antwort.json()["error"]
+    assert "Nicht im Budgettopf" in antwort.json()["error"]
     assert datei.read_text(encoding="utf-8") == vorher
 
 

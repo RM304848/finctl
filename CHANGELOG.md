@@ -39,6 +39,7 @@ macht daraus beim Veröffentlichen die neue Version.
   Teilfreistellung – auch bei der Vorabpauschale. Auf Kapitalauszahlungen
   von Policen geht derselbe Abzug wie auf Renten. Was vereinfacht ist, steht
   auf der Hochrechnung.
+- Geteilt: **Budgettöpfe** statt Projekte – derselbe Inhalt, ein passenderer Name.
 - Die Gehalts-Untergrenze steht nur noch unter **Annahmen**, nicht mehr
   zusätzlich auf **Planung**.
 - Die Entnahmerate ist aus den Annahmen verschwunden: Gerechnet wurde mit ihr

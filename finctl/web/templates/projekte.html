@@ -1,12 +1,12 @@
 {% extends "base.html" %}{% block n_projekte %}on{% endblock %}
-{% block title %}Projekte{% endblock %}
+{% block title %}Budgettöpfe{% endblock %}
 {% macro tag(d) %}{{ d[:10] if d else '—' }}{% endmacro %}
 {% block body %}
-<h1>Projekte</h1>
-<p class="zweck">Was hat ein Projekt gekostet, und wer war dabei?</p>
+<h1>Budgettöpfe</h1>
+<p class="zweck">Was hat ein Budgettopf gekostet, und wer war dabei?</p>
 
 <div class="wrap"><table>
-  <tr><th>Projekt</th><th>Zeitraum</th><th class="num">Buchungen</th><th class="num">Kosten</th>
+  <tr><th>Budgettopf</th><th>Zeitraum</th><th class="num">Buchungen</th><th class="num">Kosten</th>
       <th class="num">mein Anteil</th><th class="num">offen bei anderen</th><th>Personen</th><th></th></tr>
   {% for z in zeilen %}{% set p = z.projekt %}
   <tr>
@@ -32,7 +32,7 @@
       </p>
       <p class="zeilen-knoepfe">
         <button type="button" onclick="projektSpeichern(this)">Speichern</button>
-        <button type="button" class="ghost" onclick="projektEntfernen(this, '{{ p.id }}', {{ z.posten|length }})">Projekt entfernen</button>
+        <button type="button" class="ghost" onclick="projektEntfernen(this, '{{ p.id }}', {{ z.posten|length }})">Budgettopf entfernen</button>
         <a class="plain" href="/geteilt/buchungen?projekt={{ p.id }}&von=2000-01-01">Buchungen zuordnen und teilen</a>
         <span class="meldung muted klein"></span></p>
 
@@ -59,7 +59,7 @@
     </div>
   </td></tr>
   {% endfor %}
-  <tr><td colspan="7"><input id="neu-name" placeholder="Neues Projekt, z. B. eine Reise" style="width:100%;max-width:24rem"></td>
+  <tr><td colspan="7"><input id="neu-name" placeholder="Neuer Budgettopf, z. B. eine Reise" style="width:100%;max-width:24rem"></td>
       <td class="aktionen"><button type="button" onclick="projektNeu(this)">Anlegen</button>
         <span class="meldung muted klein"></span></td></tr>
 </table></div>
@@ -98,7 +98,7 @@ async function projektSpeichern(knopf){
   } catch (e) { melden(knopf, e, true); }
 }
 async function projektEntfernen(knopf, id, n){
-  if (!confirm(n ? `Projekt entfernen? ${n} Buchungen verlieren ihre Zuordnung.` : 'Projekt entfernen?')) return;
+  if (!confirm(n ? `Budgettopf entfernen? ${n} Buchungen verlieren ihre Zuordnung.` : 'Budgettopf entfernen?')) return;
   try { await senden('/api/geteilt/projekt/entfernen', {id}); }
   catch (e) { melden(knopf, e, true); return; }
   location.href = '/projekte';
@@ -107,7 +107,7 @@ async function projektEntfernen(knopf, id, n){
 
 {% import "_konfig.html" as kf %}
 {{ kf.fuss([
-  ('config/geteilt_custom.yaml', 'Personen, Projekte, Zuordnungen und Teilungen; von diesen Seiten geschrieben.'),
+  ('config/geteilt_custom.yaml', 'Personen, Budgettöpfe, Zuordnungen und Teilungen; von diesen Seiten geschrieben.'),
   ('finctl/web/templates/projekte.html', 'Die Texte dieser Seite.'),
 ], handbuch='projekte') }}
 {% endblock %}
