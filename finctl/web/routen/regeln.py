@@ -80,6 +80,9 @@ def regeln_seite(request: Request, q: str = "", kategorie: str = "", aus: int | 
 
         grund = {"an": _en.grundschicht_an(), "anzahl": len(_en.grundschicht())}
         grund["wuerde"] = 0 if grund["an"] else _cz.grundschicht_vorschau(c)
+        from finctl.rules import vorschlaege as _vs
+
+        offene_texte = _vs.offene_texte(c)
     finally:
         c.close()
 
@@ -106,6 +109,7 @@ def regeln_seite(request: Request, q: str = "", kategorie: str = "", aus: int | 
         "rows": rows, "formwerte": {e["id"]: rw.formwerte(e) for e in alle},
         "vorlage": vorlage, "categories": cats, "tax_categories": taxes,
         "properties": props, "q": q, "kategorie": kategorie, "grund": grund,
+        "offene_texte": offene_texte,
     })
 
 
@@ -197,3 +201,73 @@ def api_regeln_entfernen(rule_id: str):
     finally:
         c.close()
     return {"ok": True, "queue": result.unmatched}
+
+
+# ------------------------------------------------------- Vorschlaege (Claude)
+
+
+@router.post("/api/regeln/vorschlaege/prompt")
+async def api_vorschlaege_prompt(request: Request):
+    """Der Auftrag zum Kopieren. Die App schickt ihn nirgends hin."""
+    from finctl.rules import regelwerk as rw
+    from finctl.rules import vorschlaege as vs
+
+    body = await request.json()
+    erlaubt = set()
+    c = conn()
+    try:
+        erlaubt = {z["text"] for z in vs.offene_texte(c)}
+        kats = categories(c)
+    finally:
+        c.close()
+    # Nur Texte, die die Seite selbst angeboten hat -- also bereinigte.
+    texte = [str(x) for x in body.get("texte") or [] if str(x) in erlaubt]
+    if not texte:
+        return JSONResponse({"error": "Keinen Text gewählt."}, status_code=400)
+    regeln_je: dict[str, int] = {}
+    for e in rw.laden():
+        mgmt = (e.get("set") or {}).get("mgmt")
+        if mgmt:
+            regeln_je[mgmt] = regeln_je.get(mgmt, 0) + 1
+    return {"prompt": vs.prompt(kats, texte, regeln_je)}
+
+
+@router.post("/api/regeln/vorschlaege/pruefen")
+async def api_vorschlaege_pruefen(request: Request):
+    """Die eingefuegte Antwort lesen und gegen das Hauptbuch halten. Schreibt nichts."""
+    from finctl.rules import vorschlaege as vs
+
+    body = await request.json()
+    zeilen = vs.antwort_lesen(str(body.get("antwort") or ""))
+    if not zeilen:
+        return JSONResponse({"error": "Keine Zeile der Form „Suchtext ; Kategorie“ gefunden."},
+                            status_code=400)
+    c = conn()
+    try:
+        return {"zeilen": vs.pruefen(c, zeilen)}
+    finally:
+        c.close()
+
+
+@router.post("/api/regeln/vorschlaege/uebernehmen")
+async def api_vorschlaege_uebernehmen(request: Request):
+    """Angehakte Vorschlaege als Regeln speichern und sofort neu zuordnen."""
+    from finctl.rules import vorschlaege as vs
+    from finctl.rules.categorize import categorize
+
+    body = await request.json()
+    zeilen = [{"text": str(z.get("text") or "").strip()[:60],
+               "kategorie": str(z.get("kategorie") or "").strip()}
+              for z in body.get("zeilen") or []]
+    c = conn()
+    try:
+        geprueft = vs.pruefen(c, [z for z in zeilen if z["text"]])
+        schlecht = [z["text"] for z in geprueft if not z["bekannt"] or z["zu_kurz"]]
+        if schlecht or not geprueft:
+            return JSONResponse({"error": "Nicht übernommen: " + (", ".join(schlecht)
+                                 or "keine Zeile")}, status_code=400)
+        ids = vs.uebernehmen(geprueft)
+        result = categorize(c, recompute=True)
+    finally:
+        c.close()
+    return {"ok": True, "ids": ids, "queue": result.unmatched}

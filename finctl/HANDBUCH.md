@@ -655,6 +655,8 @@ Welche Regel welche Buchung zuordnet.
   bleiben stehen.
 - **Allgemeine Regeln** liefert die App mit: Supermärkte, Tankstellen, Streaming,
   Steuern. Sie gelten nach allen eigenen und lassen sich einzeln oder ganz abschalten.
+- **Vorschläge über Claude**: Die App kopiert einen Auftrag mit den offenen Texten,
+  ohne Nummern und Beträge; die Antwort wird geprüft, übernommen wird nur Angehaktes.
 
 ### /vertraege
 

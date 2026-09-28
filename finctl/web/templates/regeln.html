@@ -233,6 +233,104 @@ document.addEventListener('DOMContentLoaded', () => {
   if (id && REGELN[id]) oeffne(id);
 });
 </script>
+{# Die App ruft kein Sprachmodell auf: der Auftrag geht ueber die
+   Zwischenablage, und uebernommen wird nur, was angehakt ist
+   (finctl/rules/vorschlaege.py). #}
+<details class="klapp" id="vorschlaege">
+  <summary>Vorschläge über Claude
+    {%- if offene_texte %} <span class="zahl">— {{ offene_texte|length }} offene Texte</span>{% endif %}</summary>
+  {% if not offene_texte %}
+  <div class="note ok">Keine offenen Buchungen — alles ist zugeordnet.</div>
+  {% else %}
+  <h3>1 — Was hinaus darf</h3>
+  <div class="wrap"><table class="detail" id="vs-texte">
+    <tr><th style="width:34px"><input type="checkbox" checked onchange="vsAlle(this)"></th>
+        <th>Text</th><th class="num" style="width:90px">Buchungen</th></tr>
+    {% for z in offene_texte %}
+    <tr><td><input type="checkbox" class="vs-text" checked data-text="{{ z.text|e }}"></td>
+        <td>{{ z.text }}</td><td class="num">{{ z.anzahl }}</td></tr>
+    {% endfor %}
+  </table></div>
+  <p class="zeilen-knoepfe"><button type="button" onclick="vsPrompt(this)">Auftrag kopieren</button></p>
+  <textarea id="vs-prompt" rows="4" readonly hidden style="width:100%"></textarea>
+  <h3>2 — Antwort einfügen</h3>
+  <textarea id="vs-antwort" rows="6" style="width:100%"
+    placeholder="REWE ; lebensmittel/supermarkt"></textarea>
+  <p class="zeilen-knoepfe"><button type="button" class="ghost" onclick="vsPruefen(this)">Prüfen</button></p>
+  <div class="wrap" id="vs-ergebnis" hidden><table class="detail" id="vs-zeilen"></table></div>
+  <p class="zeilen-knoepfe" id="vs-uebernehmen" hidden>
+    <button type="button" onclick="vsUebernehmen(this)">Angehakte übernehmen</button></p>
+  <details class="hilfe">
+    <summary>Was mit den Texten passiert</summary>
+    <p>Die App schickt nichts ins Netz.</p>
+    <p>Du kopierst den Auftrag und fügst ihn selbst in Claude ein.</p>
+    <p>Er enthält nur Kategorien und die angehakten Texte.</p>
+    <p>Beträge und Nummern sind vorher entfernt.</p>
+    <p>Übernommen wird nur, was du anhakst, als gewöhnliche Regel.</p>
+  </details>
+  {% endif %}
+</details>
+<script>
+function vsAlle(kasten){ document.querySelectorAll('.vs-text').forEach(k => { k.checked = kasten.checked; }); }
+async function vsSenden(url, body){
+  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                              body: JSON.stringify(body)});
+  return [r.ok, await r.json()];
+}
+async function vsPrompt(knopf){
+  const texte = [...document.querySelectorAll('.vs-text:checked')].map(k => k.dataset.text);
+  const [ok, j] = await vsSenden('/api/regeln/vorschlaege/prompt', {texte});
+  if (!ok){ meldenNeben(knopf, j.error, true); return; }
+  const feld = document.getElementById('vs-prompt');
+  feld.value = j.prompt; feld.hidden = false;
+  try { await navigator.clipboard.writeText(j.prompt); meldenNeben(knopf, 'kopiert — jetzt in Claude einfügen'); }
+  catch (e) { feld.select(); meldenNeben(knopf, 'markiert — mit Cmd/Strg+C kopieren'); }
+}
+// Die Antwort ist fremder Text: jede Zelle mit textContent, nie als HTML.
+function vsZelle(tr, text, klasse){
+  const td = document.createElement('td');
+  td.textContent = text; if (klasse) td.className = klasse; tr.append(td); return td;
+}
+let vsZeilen = [];
+async function vsPruefen(knopf){
+  const [ok, j] = await vsSenden('/api/regeln/vorschlaege/pruefen',
+                                 {antwort: document.getElementById('vs-antwort').value});
+  if (!ok){ meldenNeben(knopf, j.error, true); return; }
+  vsZeilen = j.zeilen;
+  const tab = document.getElementById('vs-zeilen');
+  tab.replaceChildren();
+  const kopf = document.createElement('tr');
+  ['', 'Suchtext', 'Kategorie', 'fängt offen', 'widerspricht'].forEach(h => {
+    const th = document.createElement('th'); th.textContent = h; kopf.append(th); });
+  tab.append(kopf);
+  vsZeilen.forEach((z, i) => {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    const k = document.createElement('input');
+    k.type = 'checkbox'; k.className = 'vs-nehmen'; k.dataset.i = i;
+    const brauchbar = z.bekannt && !z.zu_kurz;
+    k.disabled = !brauchbar; k.checked = brauchbar && z.offen > 0 && !z.anders;
+    td.append(k); tr.append(td);
+    vsZelle(tr, z.text);
+    vsZelle(tr, z.bekannt ? z.kategorie : z.kategorie + ' — unbekannt', z.bekannt ? '' : 'neg');
+    vsZelle(tr, z.zu_kurz ? 'zu kurz' : String(z.offen), 'num');
+    vsZelle(tr, z.anders ? z.anders + ' zugeordnete' : '—', z.anders ? 'num neg' : 'num muted');
+    tab.append(tr);
+  });
+  document.getElementById('vs-ergebnis').hidden = false;
+  document.getElementById('vs-uebernehmen').hidden = false;
+  meldenNeben(knopf, `${vsZeilen.length} Vorschläge`);
+}
+async function vsUebernehmen(knopf){
+  const zeilen = [...document.querySelectorAll('.vs-nehmen:checked')].map(k => vsZeilen[k.dataset.i]);
+  if (!zeilen.length){ meldenNeben(knopf, 'nichts angehakt', true); return; }
+  const [ok, j] = await vsSenden('/api/regeln/vorschlaege/uebernehmen', {zeilen});
+  if (!ok){ meldenNeben(knopf, j.error, true); return; }
+  meldenNeben(knopf, `${j.ids.length} Regeln angelegt — ${j.queue} noch offen`);
+  setTimeout(() => location.reload(), 1200);
+}
+</script>
+
 {% import "_konfig.html" as kf %}
 {{ kf.fuss([
   ('config/rules_custom.yaml', 'Was auf dieser Seite angelegt, geändert oder gelöscht wurde.'),

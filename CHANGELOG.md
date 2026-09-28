@@ -45,6 +45,12 @@ macht daraus beim Veröffentlichen die neue Version.
   nicht jede Buchung von Hand zuordnen. Eigene Regeln gehen immer vor; unter
   **Regeln** lässt sich die Grundschicht abschalten, und vorher steht dort, wie
   viele offene Buchungen sie zuordnen würde.
+- **Regelvorschläge über Claude** (Regeln → Vorschläge über Claude): Die App
+  stellt die offenen Buchungstexte zusammen – ohne Beträge, IBANs und andere
+  Nummern, einzeln abwählbar – und kopiert einen fertigen Auftrag. Die Antwort
+  von Claude (auch der kostenlosen Version) fügst du ein; die App prüft jede
+  Zeile gegen deine Kategorien und dein Hauptbuch, übernommen wird nur, was
+  du anhakst. Die App selbst schickt nichts ins Netz.
 - Die Gehalts-Untergrenze steht nur noch unter **Annahmen**, nicht mehr
   zusätzlich auf **Planung**.
 - Die Entnahmerate ist aus den Annahmen verschwunden: Gerechnet wurde mit ihr
