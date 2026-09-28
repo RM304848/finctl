@@ -6,7 +6,6 @@ kapital:
   rendite_depot_pa: 0.06
   vorabpauschale:
     basiszins_pa: 0.0253
-    teilfreistellung: 0.30
     steuersatz: 0.26375
 erwerbseinkommen:
   netto_floor_monatlich_cents: 360000

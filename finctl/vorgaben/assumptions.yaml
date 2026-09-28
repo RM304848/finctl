@@ -24,10 +24,11 @@ kapital:
   # Schwelle, keine Bewertung des Vertrags.
   kostenschwelle_pa: 0.013
   vorabpauschale:
-    # Basiszins der Bundesbank, jaehrlich neu. Teilfreistellung 30 % gilt
-    # fuer Aktienfonds; Abgeltungsteuer plus Soli sind 26,375 %.
+    # Basiszins der Bundesbank, jaehrlich neu. Abgeltungsteuer plus Soli
+    # sind 26,375 %, auf Vorabpauschale wie auf Verkaufsgewinne. Die
+    # Teilfreistellung fuer Aktienfonds (30 %) rechnet die Prognose bewusst
+    # nicht: lieber zu viel Steuer als zu wenig.
     basiszins_pa: 0.0253
-    teilfreistellung: 0.30
     steuersatz: 0.26375
 
 erwerbseinkommen:

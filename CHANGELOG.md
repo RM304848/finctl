@@ -32,6 +32,11 @@ macht daraus beim Veröffentlichen die neue Version.
   Wertentwicklung), Bezug ab. Bisher ließen sich nur vorhandene ändern.
 - **Effektivkosten** je Rente oder Police. Liegen sie über deiner Schwelle
   (Annahmen, Vorgabe 1,3 %), steht ein Warnzeichen daneben.
+- **Steuern in der Hochrechnung**, bewusst vorsichtig: Verkäufe aus dem
+  Depot zahlen 26,375 % auf ihren Gewinnanteil (bisher gar nichts), ohne
+  Teilfreistellung – auch bei der Vorabpauschale. Auf Kapitalauszahlungen
+  von Policen geht derselbe Abzug wie auf Renten. Was vereinfacht ist, steht
+  auf der Hochrechnung.
 - Die Gehalts-Untergrenze steht nur noch unter **Annahmen**, nicht mehr
   zusätzlich auf **Planung**.
 - Die Entnahmerate ist aus den Annahmen verschwunden: Gerechnet wurde mit ihr

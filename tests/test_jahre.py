@@ -256,7 +256,32 @@ def test_an_entered_withdrawal_takes_from_the_depot_and_not_from_the_tagesgeld()
     mit = jm.kaskade(10_000_00, 50_000_00, 0, sparrate=0, grenze=35_000_00,
                      depot_abfluss=-20_000_00, **_SAETZE)
     assert mit["tagesgeld"] == ohne["tagesgeld"], "das Tagesgeld bleibt unberuehrt"
-    assert mit["depot"] == ohne["depot"] - 20_000_00
+    # Dazu die Steuer auf den Gewinnanteil des Verkaufs, ebenfalls aus dem Depot.
+    assert mit["verkaufsteuer"] > 0
+    assert mit["depot"] == ohne["depot"] - 20_000_00 - mit["verkaufsteuer"]
+
+
+def test_a_sale_is_taxed_on_its_gain_share_only():
+    """Einstand 60.000, Wert 100.000: 40 % jedes verkauften Euros sind Gewinn."""
+    satz = dict(satz_tagesgeld=0.0, satz_depot=0.0, vorab_satz=0.0, steuer_quote=0.26375)
+    k = jm.kaskade(0, 100_000_00, 0, sparrate=0, grenze=0, depot_abfluss=-10_000_00,
+                   einstand=60_000_00, **satz)
+    assert k["verkaufsteuer"] == round(10_000_00 * 0.4 * 0.26375)
+    assert k["einstand"] == 54_000_00, "der Verkauf nimmt seinen Anteil am Einstand mit"
+    # Ohne Gewinn keine Steuer; ein Kauf legt seinen Betrag zum Einstand.
+    ohne = jm.kaskade(0, 100_000_00, 0, sparrate=0, grenze=0, depot_abfluss=-10_000_00,
+                      **satz)
+    assert ohne["verkaufsteuer"] == 0
+    kauf = jm.kaskade(50_000_00, 100_000_00, 0, sparrate=0, grenze=10_000_00,
+                      einstand=60_000_00, **satz)
+    assert kauf["einstand"] == 100_000_00
+
+
+def test_the_advance_lump_sum_counts_towards_the_cost_basis():
+    """Schon versteuerte Vorabpauschale wird beim Verkauf nicht noch einmal versteuert."""
+    satz = dict(satz_tagesgeld=0.0, satz_depot=0.05, vorab_satz=0.02, steuer_quote=0.26375)
+    k = jm.kaskade(0, 100_000_00, 0, sparrate=0, grenze=0, **satz)
+    assert k["einstand"] == 100_000_00 + 2_000_00
 
 
 def test_the_depot_pays_the_advance_lump_sum_tax_without_selling():
@@ -453,7 +478,12 @@ def test_a_plan_line_on_a_depot_account_takes_from_the_depot(conn, tmp_path):
     auf_giro = jm.project(conn, szenarien=_mit_einer_zeile(tmp_path, "dkb-giro"),
                           **gemeinsam).year(2029)
 
-    assert auf_depot.depot_cents == auf_giro.depot_cents - 20_000_00
+    # Weniger um die 20.000 und die Steuer auf ihren Gewinnanteil.
+    steuer = -sum(p.cents for p in auf_depot.posten["rendite"]
+                  if p.label == "Steuer auf Depotverkauf")
+    assert 0 < steuer < 20_000_00 * 0.26375
+    unterschied = auf_giro.depot_cents - auf_depot.depot_cents
+    assert 20_000_00 + steuer <= unterschied < 20_000_00 + 2 * steuer, (unterschied, steuer)
     # Das Tagesgeld liegt um dieselben 20.000 hoeher -- und um ein paar Euro
     # mehr: das Geld ist dort nicht abgeflossen, also hat es das Jahr ueber
     # mitverzinst. Genau deshalb zaehlt eine Depotzeile nicht in den

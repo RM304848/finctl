@@ -33,7 +33,8 @@ STELLSCHRAUBEN = (
     ("rendite_nominal_pa", "Rendite Tagesgeld", "prozent",
      "Ziele. Tagesgeld bis zur Puffergrenze, nach Steuer gemessen."),
     ("rendite_depot_pa", "Rendite Depot und Policen (vor Steuern)", "prozent",
-     "Ziele. Alles über dem Tagesgeld-Ziel fließt ins Depot."),
+     ("Ziele. Alles über dem Tagesgeld-Ziel fließt ins Depot. "
+      "Steuer 26,375 %, ohne Teilfreistellung.")),
     ("kostenschwelle_pa", "Kostenschwelle für Policen", "prozent",
      "Monatsabschluss: Warnzeichen an Policen mit höheren Effektivkosten."),
     ("gehalt_steigerung_pa", "Gehaltssteigerung p.a.", "prozent",
@@ -47,7 +48,8 @@ STELLSCHRAUBEN = (
     ("lebenserwartung", "Lebenserwartung (Alter)", "jahre",
      "Hochrechnung: bis zu welchem Alter gerechnet wird und das Kapital reichen muss."),
     ("abzug_renten", "Abzug auf Renten (Steuer und KV)", "prozent",
-     "Hochrechnung: was von jeder Monatsrente abgeht."),
+     ("Hochrechnung: was von jeder Rente und Kapitalauszahlung abgeht, "
+      "ohne die Schichten zu unterscheiden.")),
     ("aufbrauchen", "Vermögen aufbrauchen bis dahin", "prozent",
      "Ziel Rentenlücke: 100 % heißt, das Kapital endet bei null."),
 )

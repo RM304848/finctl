@@ -154,12 +154,13 @@ def rendite_depot_pa(path: Path | str = PATH) -> float:
 def vorabpauschale(path: Path | str = PATH) -> tuple[float, float]:
     """(Anteil des Depotwerts, der als Vorabpauschale gilt; Steuer je Euro davon).
 
-    Die Vorabpauschale ist Depotwert mal Basiszins mal 0,7. Versteuert werden
-    davon die 70 %, die die Teilfreistellung uebrig laesst.
+    Die Vorabpauschale ist Depotwert mal Basiszins mal 0,7. Versteuert wird
+    sie -- wie jeder Verkaufsgewinn -- voll mit dem Steuersatz: die
+    Teilfreistellung fuer Aktienfonds rechnet die Prognose bewusst nicht,
+    sie waere die freundlichere Annahme.
     """
     v = get("kapital", "vorabpauschale", path=path)
-    return (float(v["basiszins_pa"]) * 0.7,
-            (1.0 - float(v["teilfreistellung"])) * float(v["steuersatz"]))
+    return float(v["basiszins_pa"]) * 0.7, float(v["steuersatz"])
 
 
 

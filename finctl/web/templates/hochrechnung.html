@@ -5,6 +5,13 @@
   {%- if ruhestand.beginn %} · {% if reicht_bis is none %}<span class="pos">Kapital reicht bis zum Ende</span>
   {%- else %}<span class="neg">Kapital reicht bis {{ reicht_bis }}</span>{% endif %}{% endif %}</span></h1>
 <p class="zweck">Wohin das Geld in den nächsten Jahren fließt — nach Grund und Jahr für Jahr.</p>
+<details class="hilfe">
+  <summary>Was an den Steuern vereinfacht ist</summary>
+  <p>Renten und Kapitalauszahlungen: ein pauschaler Abzug, Schichten nicht unterschieden.</p>
+  <p>Depot: 26,375 % auf Gewinne, ohne Teilfreistellung.</p>
+  <p>Was das Depot bis heute gewonnen hat, bleibt unversteuert.</p>
+  <p>Eine Rechenhilfe, keine Steuer- oder Anlageberatung.</p>
+</details>
 
 <h2 id="fluss">Fluss {{ fluss_jahr }}</h2>
 {# Dieselben Posten wie der Rechenweg, nach GRUND statt nach Block: jede

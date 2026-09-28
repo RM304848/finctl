@@ -239,7 +239,8 @@ def kaskade(tagesgeld: int, depot: int, policen: int, *, sparrate: int,
             grenze: int, satz_tagesgeld: float, satz_depot: float,
             vorab_satz: float, steuer_quote: float, anteil: float = 1.0,
             abfluss_gewichtet: int = 0,
-            depot_abfluss: int = 0, entnahme: bool = False) -> dict[str, int]:
+            depot_abfluss: int = 0, entnahme: bool = False,
+            einstand: int | None = None) -> dict[str, int]:
     """Ein Jahr der Kapitalkaskade. Rein, damit sie ohne Ledger pruefbar ist.
 
     Rendite auf den Anfangsbestand. Bewusst nicht auf den Zufluss des Jahres:
@@ -261,8 +262,13 @@ def kaskade(tagesgeld: int, depot: int, policen: int, *, sparrate: int,
     IM RUHESTAND IST DAS ANDERS (`entnahme`): dort ist die Entnahme aus dem
     Depot der Plan und nichts, was jemand eintragen muss. Ab Rentenbeginn
     fuellt das Depot das Tagesgeld bis zur Grenze wieder auf, solange es
-    reicht. Steuer auf den Verkaufsgewinn ist nicht gerechnet -- nur die
-    Vorabpauschale.
+    reicht.
+
+    JEDER VERKAUF KOSTET STEUER auf seinen Gewinnanteil: Wert minus
+    `einstand` (was eingezahlt und schon als Vorabpauschale versteuert ist),
+    im Verhaeltnis zum Depotwert. Gezahlt wird sie zusaetzlich aus dem Depot.
+    Ohne `einstand` gilt der Anfangsbestand als Einstand: was bis heute
+    gewachsen ist, kennt die Rechnung nicht.
 
     Die Vorabpauschale faellt jedes Jahr an, auch ohne Verkauf, und hoechstens
     auf den tatsaechlichen Wertzuwachs.
@@ -291,21 +297,47 @@ def kaskade(tagesgeld: int, depot: int, policen: int, *, sparrate: int,
     steuer = round(vorab * steuer_quote)
 
     tg = tagesgeld + zins_tagesgeld + sparrate
+    wert = depot + gewinn - steuer
     # Die eingetragene Entnahme wirkt VOR der Kaskade: was heute vom Depot
     # genommen wird, kann heute nicht mehr aus dem Tagesgeld dorthin fliessen.
-    dp = depot + gewinn - steuer + depot_abfluss
+    dp = wert + depot_abfluss
     ins_depot = 0
     if tg > grenze:
         ins_depot = tg - max(grenze, 0)
     elif entnahme and tg < grenze and dp > 0:
         ins_depot = -min(grenze - tg, dp)
-    return {"tagesgeld": tg - ins_depot, "depot": dp + ins_depot,
+    verkauf, verkaufsteuer, einstand_neu = _verkaufsteuer(
+        wert, depot if einstand is None else einstand, vorab, depot_abfluss,
+        ins_depot, steuer_quote)
+    verkaufsteuer = min(verkaufsteuer, max(dp + ins_depot, 0))
+    return {"tagesgeld": tg - ins_depot, "depot": dp + ins_depot - verkaufsteuer,
             "policen": policen + zins_policen,
-            "rendite": zins_tagesgeld + zins_policen + gewinn - steuer,
+            "rendite": zins_tagesgeld + zins_policen + gewinn - steuer - verkaufsteuer,
             "steuer": steuer, "ins_depot": ins_depot,
             "zins_tagesgeld": zins_tagesgeld, "zins_policen": zins_policen,
             "gewinn_depot": gewinn, "basis_tagesgeld": basis_tagesgeld,
-            "tagesgeld_vor_kaskade": tg}
+            "tagesgeld_vor_kaskade": tg, "verkauf": verkauf,
+            "verkaufsteuer": verkaufsteuer, "einstand": einstand_neu}
+
+
+def _verkaufsteuer(wert: int, einstand: int, vorab: int, depot_abfluss: int,
+                   ins_depot: int, steuer_quote: float) -> tuple[int, int, int]:
+    """(verkauft, Steuer darauf, Einstand danach) fuer ein Jahr.
+
+    Der Gewinnanteil ist, was am Depotwert nicht Einstand ist; die schon
+    gezahlte Vorabpauschale zaehlt zum Einstand, sie wird nicht zweimal
+    versteuert. Ein Verkauf nimmt seinen Anteil am Einstand mit, ein Kauf
+    legt seinen Betrag dazu.
+    """
+    einstand = max(einstand, 0) + vorab
+    verkauf = max(-depot_abfluss, 0) + max(-ins_depot, 0)
+    kauf = max(depot_abfluss, 0) + max(ins_depot, 0)
+    if wert <= 0:
+        return verkauf, 0, kauf
+    gewinnanteil = max(0.0, 1.0 - einstand / wert)
+    steuer = round(verkauf * gewinnanteil * steuer_quote)
+    rest = einstand * max(0.0, 1.0 - verkauf / wert)
+    return verkauf, steuer, round(rest) + kauf
 
 
 def _covers(row: Year) -> bool:
@@ -845,9 +877,12 @@ def _rentenposten(quellen: list, year: int, after_month: int, inflation: float,
         if q.art == "kapital":
             if q.konto is None and beginn.year == year and beginn.month > after_month:
                 cents = _renten.nominal_cents(q, year, inflation)
-                out.append(Posten(label=q.name, cents=cents, quelle="vertrag",
+                netto = round(cents * (1 - abzug))
+                out.append(Posten(label=q.name, cents=netto, quelle="vertrag",
                                   verweis=verweis, einmalig=True,
-                                  herleitung=f"Kapital laut Schreiben, {monat(beginn)}"))
+                                  herleitung=(f"Kapital laut Schreiben {eur(cents)}, "
+                                              f"{monat(beginn)} − {round(abzug * 100)} % "
+                                              "Steuer und KV")))
             continue
         n = sum(1 for mm in range(after_month + 1, 13) if date(year, mm, 1) >= beginn)
         if not n:
@@ -864,8 +899,8 @@ def _rentenposten(quellen: list, year: int, after_month: int, inflation: float,
     return out
 
 
-def _policenwechsel(quellen: list, year: int, anteile: dict[str, int]) -> tuple[
-        list[Posten], list[Posten], int, int]:
+def _policenwechsel(quellen: list, year: int, anteile: dict[str, int],
+                    abzug: float = 0.0) -> tuple[list[Posten], list[Posten], int, int]:
     """Policen, die dieses Jahr auszahlen: ihr Anteil verlaesst den Topf.
 
     Als Kapital geht er ins Depot -- eine Umschichtung, kein Geldfluss. Als
@@ -873,8 +908,12 @@ def _policenwechsel(quellen: list, year: int, anteile: dict[str, int]) -> tuple[
     dafuer als Einnahme. Die Police waechst bis dahin mit dem Depotsatz; der
     Betrag des Schreibens steht zum Vergleich daneben.
 
-    Gibt zurueck: Posten fuer den Block `rente` (verrentet), Posten zum
-    Lesen (umgeschichtet), was ins Depot und was aufs Tagesgeld geht.
+    Auf ein ausgezahltes Kapital geht derselbe Abzug wie auf eine Rente --
+    bewusst vorsichtig, ohne die Schichten und Altvertraege zu unterscheiden.
+    Er wird aus dem Tagesgeld bezahlt und steht deshalb im Block `rente`.
+
+    Gibt zurueck: Posten fuer den Block `rente` (verrentet, Abzug), Posten
+    zum Lesen (umgeschichtet), was ins Depot und was aufs Tagesgeld geht.
     """
     verrentet, umgeschichtet, ins_depot, aufs_tagesgeld = [], [], 0, 0
     for q in quellen:
@@ -885,6 +924,12 @@ def _policenwechsel(quellen: list, year: int, anteile: dict[str, int]) -> tuple[
         anteile[q.konto] = 0
         if q.art == "kapital":
             ins_depot += wert
+            if abzug:
+                verrentet.append(Posten(
+                    label=f"{q.name}: Steuer und KV auf die Auszahlung",
+                    cents=-round(wert * abzug), quelle="annahme", verweis=f"rente:{q.id}",
+                    einmalig=True,
+                    herleitung=f"{eur(wert)} × {round(abzug * 100)} %, aus dem Tagesgeld"))
             umgeschichtet.append(Posten(
                 label=f"{q.name} ausgezahlt ins Depot", cents=wert, quelle="regel",
                 verweis=f"rente:{q.id}",
@@ -988,6 +1033,9 @@ def project(conn: sqlite3.Connection, *, base_year: int | None = None,
     if toepfe is None:
         toepfe = {"tagesgeld": opening_cents}
     tg, dp, po = (int(toepfe.get(k, 0)) for k in ("tagesgeld", "depot", "policen"))
+    # Was heute im Depot steht, gilt als Einstand: seine bisherigen Gewinne
+    # kennt die Rechnung nicht. Versteuert wird, was ab heute dazukommt.
+    einstand = dp
     satz_depot = ann.rendite_depot_pa(assumptions)
     vorab_satz, steuer_quote = ann.vorabpauschale(assumptions)
     grenze = max(int(puffer_cents), 0) if puffer_cents is not None else None
@@ -1080,7 +1128,7 @@ def project(conn: sqlite3.Connection, *, base_year: int | None = None,
                 teilzeit, year, nach, _salary(year, base_year, assumptions, median),
                 rente_ab)
         verrentet, posten["policen"], zum_depot, zum_tagesgeld = _policenwechsel(
-            rentenquellen, year, anteile)
+            rentenquellen, year, anteile, rentenabzug)
         posten[RENTE] = _rentenposten(rentenquellen, year, nach, inflation,
                                       rentenabzug) + verrentet
 
@@ -1138,6 +1186,7 @@ def project(conn: sqlite3.Connection, *, base_year: int | None = None,
         anfang = tg + dp + po
         po -= zum_depot + zum_tagesgeld
         dp += zum_depot
+        einstand += zum_depot
         tg += zum_tagesgeld
         k = kaskade(tg, dp, po, sparrate=sum(blocks.values()),
                     depot_abfluss=summe(posten["depotentnahme"]),
@@ -1145,7 +1194,7 @@ def project(conn: sqlite3.Connection, *, base_year: int | None = None,
                     satz_tagesgeld=rate, satz_depot=satz_depot,
                     vorab_satz=vorab_satz, steuer_quote=steuer_quote,
                     anteil=share, abfluss_gewichtet=abfluss,
-                    entnahme=_im_ruhestand(rente_ab, year))
+                    entnahme=_im_ruhestand(rente_ab, year), einstand=einstand)
 
         abzug = (f" − {eur(abfluss)} Einmalzahlungen, anteilig nach Monaten ohne das Geld"
                  if abfluss else "")
@@ -1163,7 +1212,12 @@ def project(conn: sqlite3.Connection, *, base_year: int | None = None,
             Posten(label="Vorabpauschale", cents=-k["steuer"], quelle="regel",
                    verweis="depot",
                    herleitung=(f"{eur(dp)} × {prozent(min(vorab_satz, max(satz_depot, 0.0)))}"
-                               f"{anteil_text} × {prozent(steuer_quote)} Steuer")),
+                               f"{anteil_text} × {prozent(steuer_quote)} Steuer"
+                               ", ohne Teilfreistellung")),
+            Posten(label="Steuer auf Depotverkauf", cents=-k["verkaufsteuer"],
+                   quelle="regel", verweis="depot",
+                   herleitung=(f"{eur(k['verkauf'])} verkauft, davon Gewinnanteil laut "
+                               f"Einstand × {prozent(steuer_quote)}, ohne Teilfreistellung")),
         ]
         posten["rendite"] = [p for p in rendite if p.cents]
         posten["kaskade"] = []
@@ -1183,5 +1237,5 @@ def project(conn: sqlite3.Connection, *, base_year: int | None = None,
             puffer_grenze_cents=grenze or 0, ins_depot_cents=k["ins_depot"],
             steuer_cents=k["steuer"], posten=posten))
         anteile = _anteile_fortschreiben(anteile, po, k["policen"])
-        tg, dp, po = k["tagesgeld"], k["depot"], k["policen"]
+        tg, dp, po, einstand = k["tagesgeld"], k["depot"], k["policen"], k["einstand"]
     return out

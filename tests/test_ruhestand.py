@@ -40,6 +40,21 @@ def test_a_policy_paid_as_capital_moves_its_share_to_the_depot():
     assert anteile == {"police": 0, "andere": 20_000_00}
 
 
+def test_a_capital_payout_pays_the_pension_deduction_from_the_tagesgeld():
+    """Bewusst vorsichtig: derselbe Abzug wie auf eine Rente, ohne Schichten."""
+    anteile = {"police": 50_000_00}
+    q = _rente(id="p", art="kapital", konto="police", ab=date(2045, 6, 1))
+    [abzug], _info, ins_depot, _tg = jm._policenwechsel([q], 2045, anteile, 0.25)
+    assert abzug.cents == -12_500_00 and abzug.einmalig
+    assert ins_depot == 50_000_00, "der Wert geht ganz ins Depot, der Abzug ins Tagesgeld"
+
+
+def test_a_capital_without_a_policy_arrives_after_the_deduction():
+    q = _rente(id="k", art="kapital", ab=date(2045, 6, 1))
+    [p] = jm._rentenposten([q], 2045, 0, 0.0, 0.25)
+    assert p.cents == round(q.cents * 0.75)
+
+
 def test_a_policy_paid_as_pension_leaves_the_capital():
     anteile = {"police": 50_000_00}
     q = _rente(id="p", konto="police", ab=date(2045, 6, 1))
