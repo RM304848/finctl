@@ -1,8 +1,11 @@
 # Finance OS
 
-Ein lokales Finanzwerkzeug: Kontoauszüge einlesen, Ausgaben zuordnen,
-Verträge, Kredite und Immobilien im Blick behalten, die eigene Zukunft
-hochrechnen. Alles läuft auf deinem Rechner; deine Daten verlassen ihn nicht.
+Finance OS liest deine Kontoauszüge ein und ordnet jede Buchung zu – lokal
+auf deinem Rechner, ohne Cloud und ohne Bankzugang. Daraus entsteht jeden
+Monat ein Abschluss: wohin das Geld geht, was Fixkosten sind und was übrig
+bleibt. Und der Blick nach vorn: Kredite, Immobilien, Anschlussfinanzierungen,
+Lebensziele, große Anschaffungen und Urlaube, Rentenlücke – durchgerechnet bis
+zum Lebensende, sodass Entscheidungen auf Zahlen beruhen statt auf Gefühl.
 
 **Installieren:** [docs/installation.md](docs/installation.md) – die fertigen
 Pakete für Mac (`.dmg`) und Windows (`.exe`) stehen unter

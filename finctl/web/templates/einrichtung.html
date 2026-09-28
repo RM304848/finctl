@@ -6,6 +6,19 @@
 es gibt, wer plant und was die App zeigen soll.</p>
 <p class="muted klein">Die App rechnet, sie berät nicht: keine Steuer- oder Anlageberatung.</p>
 
+{# Begruessung beim ersten Start (design_conventions: app-zweck). #}
+{% if not konten %}
+<div class="note willkommen">
+  <p>Finance OS liest deine Kontoauszüge ein und ordnet jede Buchung zu –
+  lokal auf deinem Rechner, ohne Cloud und ohne Bankzugang.</p>
+  <p>Daraus entsteht jeden Monat ein Abschluss: wohin das Geld geht, was
+  Fixkosten sind und was übrig bleibt.</p>
+  <p>Und der Blick nach vorn: Kredite, Immobilien, Anschlussfinanzierungen,
+  Lebensziele, große Anschaffungen und Urlaube, Rentenlücke – durchgerechnet
+  bis zum Lebensende, sodass Entscheidungen auf Zahlen beruhen statt auf Gefühl.</p>
+</div>
+{% endif %}
+
 {# Der Stand kommt aus den Daten, nicht aus einem Haken: ein anklickbarer
    Haken waere eine Behauptung daneben, die falsch werden kann, ohne dass es
    auffaellt. Dieselbe Entscheidung wie auf /monatsabschluss. #}
@@ -25,6 +38,11 @@ es gibt, wer plant und was die App zeigen soll.</p>
   </tr>
   {% endfor %}
 </table></div>
+
+{% if annahmen_unveraendert %}
+<div class="note">Die Annahmen sind noch die mitgelieferten Schätzungen. Jede
+Prognose rechnet damit – geh sie einmal auf <a href="/annahmen">Annahmen</a> durch.</div>
+{% endif %}
 
 {# Die Nummer steht in der Klappleiste und nicht als eigene Ueberschrift
    darueber: zwei Zeilen mit demselben Text lesen sich als Fehler. #}

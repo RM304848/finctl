@@ -632,6 +632,10 @@ regeln:
       hilfe_summe_max: 120
       absatz_woerter_max: 12
       teilvorlagen_praefix: "_"
+      # Die Begruessung (`div.note.willkommen`, Regel app-zweck) hat ihr
+      # eigenes Mass; ihre Absaetze zaehlen nicht als Absaetze.
+      willkommen_woerter_max: 70
+      willkommen_nur: [einrichtung.html]
       # Beide Schreibweisen: die Auszuege drucken mal ss, mal ß.
       #
       # DIE LISTE STEHT IM DATENORDNER, nicht hier: sie besteht aus genau den
@@ -649,6 +653,21 @@ regeln:
       # `Sommer` (Jahreszeit). Dort steht die laengere Form oder nichts.
       verbotene_namen: config/verbotene_namen.yaml
       ausnahmen: []
+
+  - id: app-zweck
+    regel: >
+      Wozu die App da ist, steht in drei Saetzen: oben in README.md und
+      HANDBUCH.md und in der App genau einmal, auf /einrichtung als
+      `div.note.willkommen`, solange es kein Konto gibt. Hoechstens 70 Woerter,
+      Akzent statt Warnfarbe am Rand. Keine andere Seite begruesst.
+    warum: >
+      Wer die App zum ersten Mal oeffnet, landet in der Einrichtung und sieht
+      Fragen nach Ordnern und Konten, ohne zu wissen, wofuer. Wer ein Konto
+      angelegt hat, weiss es -- dann ist der Kasten nur noch im Weg.
+    pruefung:
+      art: datei_enthaelt
+      datei: finctl/web/templates/einrichtung.html
+      muss: ['{% if not konten %}', '<div class="note willkommen">']
 
   - id: jede-erklaerung-steht-einmal
     regel: >

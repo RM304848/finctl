@@ -264,3 +264,25 @@ def test_the_setup_says_what_to_replace_with_ones_own_data():
     for z in zeilen:
         assert _module.seite_an(z["wo"].split("#")[0]), z["wo"]
     assert {"/einrichtung#konten", "/einrichtung#person"} <= {z["wo"] for z in zeilen}
+
+
+# ------------------------------------------------------ Begruessung, Annahmen
+
+def test_a_newcomer_is_told_what_the_app_is_for(monkeypatch):
+    """Solange es kein Konto gibt, sagt die Seite in drei Saetzen, wozu die
+    App da ist; danach ist der Kasten weg (design_conventions: app-zweck)."""
+    monkeypatch.setattr(ein, "konten_zeilen", list)
+    assert 'class="note willkommen"' in client.get("/einrichtung").text
+
+    monkeypatch.setattr(ein, "konten_zeilen", lambda: [{"id": "erfunden"}])
+    assert "willkommen" not in client.get("/einrichtung").text.split("<main>")[-1]
+
+
+def test_untouched_assumptions_are_pointed_out(monkeypatch):
+    """Die Startwerte sind Schaetzungen. Solange keine angepasst ist, weist
+    die Einrichtung darauf hin -- sonst rechnet jede Prognose still damit."""
+    monkeypatch.setattr(ein, "_annahmen_angepasst", lambda: (0, 12))
+    assert "mitgelieferten Schätzungen" in client.get("/einrichtung").text
+
+    monkeypatch.setattr(ein, "_annahmen_angepasst", lambda: (1, 12))
+    assert "mitgelieferten Schätzungen" not in client.get("/einrichtung").text

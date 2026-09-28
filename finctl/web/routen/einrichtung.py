@@ -117,8 +117,8 @@ def _anzahl(n: int, eins: str, mehr: str) -> str:
     return f"{n} {eins if n == 1 else mehr}" if n else "noch keine"
 
 
-def _angepasste_annahmen() -> str:
-    """Wie viele Stellschrauben von den Startwerten abweichen."""
+def _annahmen_angepasst() -> tuple[int, int]:
+    """(abweichend, alle): wie viele Stellschrauben nicht mehr die Startwerte sind."""
     import yaml
 
     from finctl import assumptions as _ann
@@ -135,7 +135,12 @@ def _angepasste_annahmen() -> str:
     schluessel = list(_ann.UEBERSCHREIBBAR.values())
     anders = sum(1 for pfad in schluessel
                  if _ann.get(*pfad, default=None) != startwert(pfad))
-    return f"{anders} von {len(schluessel)} angepasst"
+    return anders, len(schluessel)
+
+
+def _angepasste_annahmen() -> str:
+    anders, alle = _annahmen_angepasst()
+    return f"{anders} von {alle} angepasst"
 
 
 def eigene_angaben() -> list[dict]:
@@ -230,6 +235,10 @@ def einrichtung(request: Request):
         "person": _person.angaben(), "kv_arten": _person.KRANKENVERSICHERUNG,
         "eigene": eigene_angaben(),
         "sicherungen": _sicherungen(),
+        # Die mitgelieferten Annahmen sind Schaetzungen; solange keine davon
+        # angepasst ist, rechnet jede Prognose mit fremden Zahlen.
+        "annahmen_unveraendert": _module.seite_an("/annahmen")
+                                 and _annahmen_angepasst()[0] == 0,
     })
 
 

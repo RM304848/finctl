@@ -1,5 +1,12 @@
 # Handbuch — Betrieb ohne KI
 
+Finance OS liest deine Kontoauszüge ein und ordnet jede Buchung zu – lokal
+auf deinem Rechner, ohne Cloud und ohne Bankzugang. Daraus entsteht jeden
+Monat ein Abschluss: wohin das Geld geht, was Fixkosten sind und was übrig
+bleibt. Und der Blick nach vorn: Kredite, Immobilien, Anschlussfinanzierungen,
+Lebensziele, große Anschaffungen und Urlaube, Rentenlücke – durchgerechnet bis
+zum Lebensende, sodass Entscheidungen auf Zahlen beruhen statt auf Gefühl.
+
 Das Werkzeug läuft vollständig ohne Sprachmodell. KI hat die Regeln *geschrieben*;
 ausgeführt werden sie von gewöhnlichem Python, deterministisch und offline. Zweimal
 laufen lassen ergibt byte-identische Splits — dafür gibt es einen Test.
@@ -16,7 +23,8 @@ Rechenhilfen ohne Gewähr, keine Steuer- oder Anlageberatung.
 
 Vier Befehle, in dieser Reihenfolge. Zusammen unter einer Minute.
 
-**Alles hängt am Datenordner.** Darin liegen `config/`, `data/` und `statements/`.
+**Alles hängt am Datenordner.** Darin liegen `config/` und `data/`, die Auszüge
+in `data/statements/`, je Konto ein Ordner.
 Welcher Ordner das ist, sagt:
 
 ```bash

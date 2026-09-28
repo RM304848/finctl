@@ -13,8 +13,12 @@ inflation_pa: 0.02
 kapital:
   # Nominal, vor Steuer. Konservativ angesetzt: eine Prognose, die zu gut
   # aussieht, verleitet zu Entscheidungen, die sie nicht traegt.
-  rendite_nominal_pa: 0.05
-  rendite_depot_pa: 0.05
+  # Tagesgeld: was eine Bank heute ungefaehr zahlt.
+  rendite_nominal_pa: 0.025
+  # Depot: ein breit gestreuter Aktienfonds, langfristig und vor Kosten --
+  # der Weltindex lag ueber Jahrzehnte eher darueber. Schwankt stark; die
+  # Prognose rechnet mit dem Schnitt, nicht mit dem Weg dorthin.
+  rendite_depot_pa: 0.07
   vorabpauschale:
     # Basiszins der Bundesbank, jaehrlich neu. Teilfreistellung 30 % gilt
     # fuer Aktienfonds; Abgeltungsteuer plus Soli sind 26,375 %.

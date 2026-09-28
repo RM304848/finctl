@@ -330,6 +330,36 @@ def _bedingt(text: str, stelle: int) -> bool:
     return auf > zu
 
 
+def _hinweis_funde(roh: str, name: str, p: dict, funde: list[str],
+                   sichtbar: list[str]) -> set[int]:
+    """Die Hinweiskaesten pruefen; zurueck die Stellen der Begruessungsabsaetze."""
+    willkommen: set[int] = set()
+    for stelle, inneres, heil in _bloecke(roh, r'<div class="note[^"]*"[^>]*>', "div"):
+        if not heil:
+            funde.append("Hinweiskasten ohne schliessendes </div> — nicht messbar")
+            continue
+        n = len(_worte(inneres))
+        # Die Begruessung (Regel app-zweck): eigenes Mass, nur wo erlaubt,
+        # und ihre Absaetze zaehlen nicht einzeln.
+        grenze = p["note_woerter_max"]
+        if kopf := re.match(r'<div class="note willkommen"[^>]*>', roh[stelle:]):
+            if name not in p["willkommen_nur"]:
+                funde.append("Begruessung ausserhalb von " + ", ".join(p["willkommen_nur"]))
+            grenze = p["willkommen_woerter_max"]
+            ende = stelle + kopf.end() + len(inneres)
+            willkommen |= {s for s, _i, _h in _bloecke(roh, r"<p\b[^>]*>", "p")
+                           if stelle < s < ende}
+        if n > grenze:
+            funde.append(f"Hinweis mit {n} Woertern (hoechstens {grenze})")
+        # Ein leerer Kasten ist ein Behaelter fuer eine Meldung, die erst beim
+        # Speichern entsteht -- kein Text, der immer dasteht.
+        if n and not _bedingt(roh, stelle):
+            funde.append(f"Hinweis steht immer da: „{' '.join(_worte(inneres)[:8])}…“ — "
+                         "ein Hinweis beschreibt einen Zustand und wird bedingt gerendert")
+        sichtbar.append(inneres)
+    return willkommen
+
+
 def _zwecktext_funde(pfad: Path, p: dict) -> list[str]:
     roh = _ohne_code(pfad.read_text(encoding="utf-8"))
     teilvorlage = pfad.name.startswith(p["teilvorlagen_praefix"]) or pfad.name == "base.html"
@@ -350,19 +380,7 @@ def _zwecktext_funde(pfad: Path, p: dict) -> list[str]:
             funde.append("Zwecksatz mit Liste oder Umbruch — dann ist es kein Satz")
         sichtbar.append(inneres)
 
-    for stelle, inneres, heil in _bloecke(roh, r'<div class="note[^"]*"[^>]*>', "div"):
-        if not heil:
-            funde.append("Hinweiskasten ohne schliessendes </div> — nicht messbar")
-            continue
-        n = len(_worte(inneres))
-        if n > p["note_woerter_max"]:
-            funde.append(f"Hinweis mit {n} Woertern (hoechstens {p['note_woerter_max']})")
-        # Ein leerer Kasten ist ein Behaelter fuer eine Meldung, die erst beim
-        # Speichern entsteht -- kein Text, der immer dasteht.
-        if n and not _bedingt(roh, stelle):
-            funde.append(f"Hinweis steht immer da: „{' '.join(_worte(inneres)[:8])}…“ — "
-                         "ein Hinweis beschreibt einen Zustand und wird bedingt gerendert")
-        sichtbar.append(inneres)
+    willkommen = _hinweis_funde(roh, pfad.name, p, funde, sichtbar)
 
     hilfe = _bloecke(roh, r'<details class="hilfe"[^>]*>', "details")
     summe = 0
@@ -377,7 +395,7 @@ def _zwecktext_funde(pfad: Path, p: dict) -> list[str]:
 
     zweckstellen = {s for s, _i, _h in zweck}
     for stelle, inneres, _heil in _bloecke(roh, r"<p\b[^>]*>", "p"):
-        if stelle in zweckstellen:
+        if stelle in zweckstellen or stelle in willkommen:
             continue
         n = len(_worte(inneres))
         if n > p["absatz_woerter_max"]:

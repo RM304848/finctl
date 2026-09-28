@@ -6,6 +6,14 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+- Beim ersten Öffnen sagt die Einrichtung in drei Sätzen, wozu die App da
+  ist. Derselbe Text steht oben im Handbuch.
+- Die Einrichtung weist darauf hin, die Annahmen durchzugehen, solange noch
+  keine angepasst ist – sie sind mitgelieferte Schätzungen.
+- Neue Startwerte: Tagesgeld 2,5 %, Depot 7 % im Jahr (vorher je 5 %). Gilt
+  für neue Installationen; eigene Annahmen bleiben, wie sie sind.
+- Handbuch: Die Auszüge liegen in `data/statements/`, je Konto ein Ordner.
+
 ## 0.2.1 – 2026-09-27
 
 - Eine Sicherung lässt sich in der App wiederherstellen: Einrichtung → **Aus

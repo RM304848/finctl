@@ -248,6 +248,10 @@ try {
         border-radius:6px;padding:.6rem .8rem;margin:.5rem 0;color:var(--muted)}
   .ok{border-left-color:var(--good)}
   .bad{border-left-color:var(--bad)}
+  /* Kein Zustand, sondern die Begruessung beim ersten Start: Akzent statt
+     Warnfarbe (docs/design_conventions.yaml, app-zweck). */
+  .note.willkommen{border-left-color:var(--accent);color:var(--ink)}
+  .note.willkommen p{margin:.2rem 0}
   tr.done{opacity:.35}
   .row-actions{display:flex;gap:.4rem;align-items:center}
   /* Bearbeitungstabellen: die Zeile zeigt, der Bereich darunter bearbeitet
