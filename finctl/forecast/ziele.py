@@ -261,7 +261,7 @@ def merge_edits(goals: dict, edits: dict) -> dict:
     stays readable as the document it is.
     """
     if not edits:
-        return goals
+        return _notgroschen_vorgabe(goals)
     out = dict(goals)
     if edits.get("reihenfolge"):
         out["reihenfolge"] = [str(x) for x in edits["reihenfolge"]]
@@ -278,7 +278,35 @@ def merge_edits(goals: dict, edits: dict) -> dict:
         if edit and not edit.get("entfernt"):
             merged.append({**edit, "id": gid, "eigen": True})
     out["ziele"] = merged
-    return out
+    return _notgroschen_vorgabe(out)
+
+
+#: Wie viele Monate der Gehalts-Untergrenze der Notgroschen ohne eigenen
+#: Betrag umfasst.
+NOTGROSCHEN_MONATE = 3
+
+
+def _notgroschen_vorgabe(goals: dict) -> dict:
+    """Ein Notgroschen ohne Betrag bekommt drei Monate Gehalts-Untergrenze.
+
+    Die Startvorlage traegt ihn ohne Betrag: ein fester Betrag waere eine
+    fremde Zahl, und ohne jeden Betrag stuende die Seite leer da. Wer einen
+    eigenen Betrag eintraegt, ueberschreibt die Vorgabe; wer die Untergrenze
+    auf /annahmen aendert, verschiebt sie mit.
+    """
+    ziele = goals.get("ziele") or []
+    if not any(g.get("id") == PUFFER_ZIEL and not g.get("cents") for g in ziele):
+        return goals
+    from finctl import assumptions as _ann
+
+    try:
+        vorgabe = NOTGROSCHEN_MONATE * _ann.salary_floor_cents()
+    except KeyError:
+        return goals
+    notiz = f"{NOTGROSCHEN_MONATE} × Gehalts-Untergrenze aus den Annahmen"
+    return {**goals, "ziele": [
+        {**g, "cents": vorgabe, "notiz": g.get("notiz") or notiz}
+        if g.get("id") == PUFFER_ZIEL and not g.get("cents") else g for g in ziele]}
 
 
 def puffer_cents(goals: dict) -> int | None:

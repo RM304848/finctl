@@ -23,6 +23,13 @@
 
 
 <div id="ziel-liste">
+{% if rentenluecke_fehlt %}
+<div class="card ziel-karte" data-ziel="rentenluecke">
+  <strong>Rentenlücke <span class="pill">gerechnet</span></strong>
+  <div class="note">Die App rechnet sie selbst, sobald dein Geburtsdatum bekannt ist:
+    <a href="/einrichtung#person">Einrichtung → Wer plant</a>.</div>
+</div>
+{% endif %}
 {% for t in targets %}
 <div class="card ziel-karte" data-ziel="{{ t.id }}">
   <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem">

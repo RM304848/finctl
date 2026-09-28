@@ -176,7 +176,10 @@ def ziele(request: Request):
     return TEMPLATES.TemplateResponse(request, "ziele.html",
                                       {"targets": targets, "kreuzung": kreuzung,
                                        "horizont_jahr": horizont_jahr,
-                                       "basis_arten": arten})
+                                       "basis_arten": arten,
+                                       # Die Rentenluecke ist immer ein Ziel;
+                                       # ohne Geburtsdatum sagt die Seite, was fehlt.
+                                       "rentenluecke_fehlt": luecke is None})
 
 
 #: Kennungen, die /api/ziel nicht bearbeitet: keine -- oder die gerechnete

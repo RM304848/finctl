@@ -19,6 +19,10 @@ macht daraus beim Veröffentlichen die neue Version.
 - Neue Startwerte: Tagesgeld 2,5 %, Depot 7 % im Jahr (vorher je 5 %). Gilt
   für neue Installationen; eigene Annahmen bleiben, wie sie sind.
 - Handbuch: Die Auszüge liegen in `data/statements/`, je Konto ein Ordner.
+- **Ziele** sind von Anfang an nicht leer: Der Notgroschen ist vorgegeben,
+  mit drei Monaten Gehalts-Untergrenze, bis du einen eigenen Betrag
+  einträgst. Die Rentenlücke steht immer da; ohne Geburtsdatum sagt sie, was
+  fehlt.
 - Die Gehalts-Untergrenze steht nur noch unter **Annahmen**, nicht mehr
   zusätzlich auf **Planung**.
 - Die Entnahmerate ist aus den Annahmen verschwunden: Gerechnet wurde mit ihr

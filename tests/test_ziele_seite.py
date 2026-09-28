@@ -153,3 +153,14 @@ def test_a_goal_can_be_renamed_without_changing_its_identity():
                                               "notiz": "x"}).status_code == 200
         assert "Pytest Umbenannt" in client.get("/ziele").text
     _gesichert(lauf)
+
+
+def test_the_pension_gap_is_a_goal_even_before_it_can_be_computed(monkeypatch):
+    """Ohne Geburtsdatum laesst sie sich nicht rechnen -- die Seite zeigt sie
+    trotzdem und sagt, was fehlt."""
+    from finctl.forecast import rentenluecke as rl
+
+    monkeypatch.setattr(rl, "rechnen", lambda lauf: None)
+    html = client.get("/ziele").text
+    karte = html.split('data-ziel="rentenluecke"')[1].split("</div>\n</div>")[0]
+    assert "Rentenlücke" in karte and 'href="/einrichtung#person"' in karte

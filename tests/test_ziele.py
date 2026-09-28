@@ -147,3 +147,37 @@ def test_crypto_counts_as_a_depot():
     assert z.liquid_cents(bestand, ("depot",)) == 1500
     assert z.basis_von({"basis": ["depot", "krypto"]}) == ("depot",)
     assert z.liquid_cents(bestand, z.basis_von({"basis": ["depot", "krypto"]})) == 1500
+
+
+# ------------------------------------------------------------ Notgroschen
+
+def test_an_emergency_fund_without_an_amount_is_three_salary_floors(monkeypatch):
+    """Die Startvorlage bringt den Notgroschen ohne Betrag mit; dann gilt das
+    Dreifache der Gehalts-Untergrenze -- und die Seite ist nicht leer."""
+    from finctl import assumptions as ann
+
+    monkeypatch.setattr(ann, "salary_floor_cents", lambda *a, **k: 250_000)
+    ohne = {"ziele": [{"id": z.PUFFER_ZIEL, "name": "Notgroschen"}]}
+    [ziel] = z.merge_edits(ohne, {})["ziele"]
+    assert ziel["cents"] == 3 * 250_000 and "Gehalts-Untergrenze" in ziel["notiz"]
+    assert z.puffer_cents(z.merge_edits(ohne, {})) == 750_000
+
+
+def test_an_own_amount_beats_the_default(monkeypatch):
+    from finctl import assumptions as ann
+
+    monkeypatch.setattr(ann, "salary_floor_cents", lambda *a, **k: 250_000)
+    ohne = {"ziele": [{"id": z.PUFFER_ZIEL, "name": "Notgroschen"}]}
+    eigen = {"ziele": {z.PUFFER_ZIEL: {"cents": 1_000_000}}}
+    [ziel] = z.merge_edits(ohne, eigen)["ziele"]
+    assert ziel["cents"] == 1_000_000 and not ziel.get("notiz")
+
+
+def test_the_starting_template_brings_the_emergency_fund():
+    import yaml
+
+    from finctl.vorgaben import ORDNER
+
+    vorlage = yaml.safe_load((ORDNER / "goals.yaml").read_text(encoding="utf-8"))
+    [ziel] = vorlage["ziele"]
+    assert ziel["id"] == z.PUFFER_ZIEL and "cents" not in ziel

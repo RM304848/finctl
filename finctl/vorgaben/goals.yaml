@@ -19,12 +19,27 @@
 # Liquide". Ohne Angabe zaehlt das gesamte liquide Vermoegen abzueglich
 # dessen, was anderen gehoert.
 #
-#   ziele:
-#     - id: notgroschen
-#       name: Notgroschen
-#       cents: 1000000          # 10.000,00
-#       stichtag: null          # kein Datum = laufend
-#       basis: [tagesgeld, giro]
-#       herleitung: Drei Monatsausgaben, gerundet.
+# Ein Ziel sieht so aus:
+#
+#   - id: auto
+#     name: Neues Auto
+#     cents: 2000000          # 20.000,00
+#     stichtag: 2030-06-30    # kein Datum = laufend
+#     basis: [tagesgeld, giro]
+#     notiz: Angebot vom Haendler, gerundet.
+#
+# Zwei Ziele sind von Anfang an da:
+#
+# * Der NOTGROSCHEN (Kennung `tagesgeld-puffer`) steht hier ohne Betrag.
+#   Dann gilt das Dreifache der Gehalts-Untergrenze aus den Annahmen, bis auf
+#   /ziele ein eigener Betrag eingetragen wird. Er ist zugleich die Grenze,
+#   bis zu der die Hochrechnung aufs Tagesgeld spart; was darueber liegt,
+#   geht ins Depot.
+# * Die RENTENLUECKE steht hier nicht: sie wird gerechnet, nicht eingetragen,
+#   und erscheint auf /ziele, sobald das Geburtsdatum bekannt ist.
 
-ziele: []
+ziele:
+  - id: tagesgeld-puffer
+    name: Notgroschen
+    stichtag: null
+    basis: [tagesgeld, giro]
