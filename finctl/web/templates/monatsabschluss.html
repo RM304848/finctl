@@ -62,18 +62,16 @@
 <style>
   table.staende{table-layout:fixed}
   table.staende col.haken{width:34px}
-  table.staende col.pos{width:14rem}
-  table.staende col.wert{width:9rem}
-  table.staende col.stand{width:12rem}
-  table.staende col.tun{width:11rem}
+  /* Feste Breiten knapp halten: was uebrig bleibt, bekommt die Notiz. */
+  table.staende col.pos{width:12rem}
+  table.staende col.wert,table.staende col.gewinn{width:8rem}
+  table.staende col.stand{width:9rem}
+  table.staende col.tun{width:10rem}
   table.staende td{vertical-align:middle}
   table.staende td.haken{text-align:center;font-size:15px}
   table.staende input,table.staende textarea{width:100%;box-sizing:border-box}
-  table.staende td.stand input{max-width:9rem}
   table.staende input.betrag{text-align:right}
   table.staende input.alt{color:var(--bad)}
-  table.staende label.bezug{display:flex;gap:.4rem;align-items:center;margin-top:.25rem}
-  table.staende label.bezug input{width:6.5rem}
   /* Die Notiz liest sich als Text und wird erst beim Zeigen zum Feld. */
   table.staende .still{border-color:transparent;background:transparent;resize:none;
     overflow:hidden;font:inherit;line-height:1.35}
@@ -93,22 +91,31 @@
     table.staende td.stand{grid-column:2}
     table.staende td.tun{grid-column:3;grid-row:2}
     table.staende td.notiz{grid-column:2 / -1}
+    /* Mit Gewinn: Stand und Gewinn teilen sich die zweite Zeile, die Knoepfe ruecken unter die Notiz. */
+    table.staende.mit-gewinn td.stand{grid-row:2}
+    table.staende.mit-gewinn td.gewinn{grid-column:3;grid-row:2}
+    table.staende.mit-gewinn td.notiz{grid-row:3}
+    table.staende.mit-gewinn td.tun{grid-row:4}
   }
 </style>
 {% set bearbeiten = bestand is not none %}
 {% for g in staende %}
 {% set konten = g.id == 'konten' %}
+{# "davon Gewinn" als eigene Spalte, nur wo ein Depot in der Tabelle steht. #}
+{% set mit_gewinn = g.zeilen|selectattr('depot')|list|length > 0 %}
 <h2 id="{{ g.id }}">{{ g.titel }}
   <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">
     — {{ g.erledigt }} von {{ g.zeilen|length }} aktuell
     {%- if g.id != 'renten' %} · <span class="{{ g.summe|vz }}">{{ g.summe|euro }}</span>{% endif %}
     {%- if g.ohne_wert %} · {{ g.ohne_wert }} ohne Wert{% endif %}</span></h2>
 <p class="muted klein" style="margin:-.3rem 0 .6rem">{{ g.erklaerung }}</p>
-<div class="wrap"><table class="staende">
-  <colgroup><col class="haken"><col class="pos"><col class="wert"><col class="stand">
+<div class="wrap"><table class="staende{{ ' mit-gewinn' if mit_gewinn }}">
+  <colgroup><col class="haken"><col class="pos"><col class="wert">
+    {%- if mit_gewinn %}<col class="gewinn">{% endif %}<col class="stand">
     <col class="notiz"><col class="tun"></colgroup>
   <tr class="kopf"><th></th><th>{{ 'Konto' if konten else 'Position' }}</th>
     <th class="num">{{ ('Saldo ' ~ g.stichtag) if konten and g.stichtag else 'Wert' }}</th>
+    {%- if mit_gewinn %}<th class="num" title="Wie in der Depot-App: Wert minus Kaufpreis. Leer: unbekannt">davon Gewinn</th>{% endif %}
     <th>{{ 'Beleg' if konten else 'Stand' }}</th><th>Notiz</th><th></th></tr>
   {% for z in g.zeilen %}{% set p = z.p %}
   {# Renten werden auf /renten gepflegt; hier steht nur, ob das Schreiben aktuell ist. #}
@@ -129,15 +136,20 @@
     {% if feld %}
     <td class="num"><input class="betrag" data-feld="wert" value="{{ z.cents|betrag }}"
         placeholder="unbekannt" oninput="standGeaendert(this)"
-        onkeydown="standTaste(event)">
-      {%- if z.depot %}<label class="bezug fein muted" title="Wie in der Depot-App: Wert minus Kaufpreis. Leer: unbekannt">davon Gewinn
-        <input class="betrag" data-feld="gewinn" value="{{ z.gewinn|betrag if z.gewinn is not none else '' }}"
-          placeholder="—" oninput="standGeaendert(this)" onkeydown="standTaste(event)"></label>{% endif %}</td>
+        onkeydown="standTaste(event)"></td>
+    {%- if mit_gewinn %}
+    <td class="num gewinn">{% if z.depot %}<input class="betrag" data-feld="gewinn"
+        value="{{ z.gewinn|betrag if z.gewinn is not none else '' }}" placeholder="Gewinn?"
+        aria-label="davon Gewinn" oninput="standGeaendert(this)" onkeydown="standTaste(event)">{% endif %}</td>
+    {%- endif %}
     <td class="stand"><input data-feld="stand" value="{{ z.as_of }}" placeholder="2026-01-01"
         class="{{ 'alt' if not p.erledigt }}" oninput="standGeaendert(this)"
         onkeydown="standTaste(event)"></td>
     {% else %}
     <td class="num {{ z.cents|vz }}">{{ z.cents|euro if z.cents is not none else '—' }}</td>
+    {%- if mit_gewinn %}
+    <td class="num gewinn">{{ z.gewinn|euro if z.depot and z.gewinn is not none }}</td>
+    {%- endif %}
     <td class="stand {{ 'neg' if not p.erledigt }}">{{ p.beleg or p.hinweis }}
       {%- if p.zusatz and g.id != 'renten' %} <span class="muted fein">· {{ p.zusatz }}</span>{% endif %}</td>
     {% endif %}
