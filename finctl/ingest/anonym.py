@@ -54,6 +54,10 @@ _IBAN = re.compile(r"\b[A-Z]{2}\d{2}(?: ?[\dA-Z]{4}){3,7}(?: ?[\dA-Z]{1,3})?\b")
 _ZIFFERN = re.compile(r"(?<![\d.,])\d{7,}(?![\d.,])")
 _DATUM = re.compile(r"^\d{1,4}[./-]\d{1,2}[./-]\d{2,4}$")
 _BETRAG = re.compile(r"^[-+]?\d[\d.]*[.,]\d{1,2}\s*(€|EUR)?-?$")
+#: Ganze Euro ohne Komma (DKB: `2.000`) -- nur in einer Betragsspalte ein
+#: Betrag; anderswo ist eine nackte Zahl eine Referenz und wird ersetzt.
+_GANZER_BETRAG = re.compile(r"^[-+]?\d{1,3}(?:\.?\d{3})*\s*(€|EUR)?-?$")
+_BETRAGSSPALTE = re.compile(r"(?i)betrag|umsatz|amount|soll|haben|saldo")
 #: Eine Beschriftung, hinter der im Vorspann ein Name steht (ING: "Kunde;...").
 _NAMENSFELD = re.compile(r"(?i)^(kunde|kontoinhaber|inhaber|name|kontoname)\b")
 
@@ -160,6 +164,7 @@ def csv_verfremden(text: str, ersatz: Ersatz) -> str:
     zeilen = text.splitlines()
     spalten = next(csv.reader([zeilen[kopf]], delimiter=trenner))
     art = {i for i, s in enumerate(spalten) if ART_SPALTEN.match(s.strip())}
+    betraege = {i for i, s in enumerate(spalten) if _BETRAGSSPALTE.search(s)}
     raus = [_nebenzeile(z, trenner, ersatz) for z in zeilen[:kopf]] + [zeilen[kopf]]
     for zeile in zeilen[kopf + 1:]:
         zellen = next(csv.reader([zeile], delimiter=trenner)) if zeile.strip() else []
@@ -173,7 +178,7 @@ def csv_verfremden(text: str, ersatz: Ersatz) -> str:
                 neu.append(_IBAN.sub(ersatz.iban, wert))
             elif _DATUM.match(wert) or not wert:
                 neu.append(zelle)
-            elif _BETRAG.match(wert):
+            elif _BETRAG.match(wert) or (i in betraege and _GANZER_BETRAG.match(wert)):
                 neu.append(ersatz.betrag(wert))
             elif i in art:
                 neu.append(zelle)

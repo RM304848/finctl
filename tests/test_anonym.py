@@ -41,7 +41,7 @@ def test_names_ibans_and_free_text_are_gone(tmp_path):
                 "Beispiel Arbeitgeber GmbH", "Lohn August"):
         assert weg not in text, weg
     # Was Filter und Erkennung brauchen, bleibt.
-    for bleibt in ("Gebucht", "Vorgemerkt", "Buchungsdatum", "2.000,00", "31.08.26"):
+    for bleibt in ("Gebucht", "Vorgemerkt", "Buchungsdatum", "2.000", "31.08.26"):
         assert bleibt in text, bleibt
     assert zaehlung["iban"] and zaehlung["text"]
 

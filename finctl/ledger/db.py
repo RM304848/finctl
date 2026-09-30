@@ -101,11 +101,12 @@ def parse_de_amount(raw: str) -> int:
     body = body.replace(" ", "").replace(" ", "")
 
     # German convention: '.' groups thousands, ',' is the decimal separator.
-    # A bare '.' with exactly two trailing digits and no comma is ambiguous;
-    # treat it as a decimal point, since no German amount groups to two digits.
+    # Without a comma a single '.' is ambiguous: before exactly three digits
+    # it groups thousands (DKB writes whole euros as `5.000`), otherwise it is
+    # a decimal point, since no amount carries three decimal places.
     if "," in body:
         body = body.replace(".", "").replace(",", ".")
-    elif body.count(".") > 1:
+    elif body.count(".") > 1 or re.fullmatch(r"\d+\.\d{3}", body.lstrip("+-")):
         body = body.replace(".", "")
 
     try:

@@ -21,7 +21,7 @@ BEISPIELE = Path("tests/beispiele/banken")
 ERWARTET = {
     "ing_csv": (3, 30000, 190500, "Stadtwerke Musterstadt", "spalte"),
     "comdirect_csv": (2, 100000, 115550, None, "kopf"),
-    "dkb_csv": (2, 50000, 241234, "Supermarkt Muster", "ende"),
+    "dkb_csv": (2, 51000, 242234, "Supermarkt Muster", "ende"),
     "sparkasse_csv": (2, 0, 3001, "Telefon Muster GmbH", "keiner"),
     "volksbank_csv": (2, 200000, 149260, "Bäckerei Muster", "spalte"),
     "commerzbank_csv": (2, 0, 174000, None, "keiner"),
@@ -64,6 +64,46 @@ def test_an_incoming_payment_at_dkb_names_the_payer_not_the_owner():
     eingang = next(t for t in load_parser("dkb_csv").parse(extract_pages(pfad), pfad).transactions
                    if t.amount_cents > 0)
     assert eingang.counterparty == "Beispiel Arbeitgeber GmbH"
+
+
+def test_the_period_is_the_exported_range_not_the_first_and_last_booking():
+    """Ohne Buchung am Monatsletzten saehe der Monat sonst unvollstaendig aus,
+    und der Stichtag der Prognose bliebe einen Monat zurueck."""
+    pfad = BEISPIELE / "dkb_csv.csv"
+    kopf = load_parser("dkb_csv").parse(extract_pages(pfad), pfad).header
+    assert (kopf.period_start, kopf.period_end) == ("2026-08-01", "2026-08-30")
+
+
+def test_the_export_day_stays_open_for_the_next_export():
+    """Was am Tag des Exports noch gebucht wird, steht in keiner Datei, die an
+    diesem Tag endet. Der Tag geht ganz in den naechsten Export; der Endsaldo
+    ist der vom Vorabend: Kontostand ohne die heutigen Buchungen."""
+    pfad = BEISPIELE / "dkb_csv.csv"
+    ergebnis = load_parser("dkb_csv").parse(extract_pages(pfad), pfad)
+    assert "2026-08-31" not in {t.booking_date for t in ergebnis.transactions}
+    assert ergebnis.header.balance_end_cents == 241234 + 1000
+    assert any("nächsten Export" in w for w in ergebnis.warnings)
+
+
+def test_references_outside_the_purpose_still_reach_the_rules():
+    """Im PDF stehen Mandatsreferenz und Glaeubiger-ID im Buchungstext, und
+    manche Regel erkennt einen Kredit nur daran."""
+    pfad = BEISPIELE / "dkb_csv.csv"
+    einkauf = next(t for t in load_parser("dkb_csv").parse(extract_pages(pfad), pfad).transactions
+                   if t.amount_cents == -8766)
+    assert "KREDIT-4711" in einkauf.raw_text and "DE00ZZZ00000000001" in einkauf.raw_text
+    assert "KREDIT-4711" not in (einkauf.purpose or "")
+
+
+def test_a_balance_dated_after_the_range_is_refused(tmp_path):
+    """Die DKB nennt den Kontostand vom Tag des Exports. Endet der Zeitraum
+    frueher, stuende der Anfangssaldo um alles dazwischen falsch da."""
+    text = (BEISPIELE / "dkb_csv.csv").read_text(encoding="utf-8-sig")
+    pfad = tmp_path / "spaet.csv"
+    pfad.write_text(text.replace("Kontostand vom 31.08.2026", "Kontostand vom 30.09.2026"),
+                    encoding="utf-8")
+    with pytest.raises(ValueError, match="bis heute"):
+        load_parser("dkb_csv").parse(extract_pages(pfad), pfad)
 
 
 def test_the_own_account_is_read_from_the_export():

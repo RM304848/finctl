@@ -29,6 +29,11 @@ from finctl.ledger.db import format_eur, parse_de_amount
         # No comma: a lone dot is a decimal point, since no German amount
         # groups thousands into two digits.
         ("1234.56", 123456),
+        # Ganze Euro ohne Komma, wie der DKB-Export sie schreibt: ein Punkt
+        # vor genau drei Ziffern trennt Tausender, er ist kein Komma.
+        ("2.000", 200000),
+        ("-12.500", -1250000),
+        ("950", 95000),
     ],
 )
 def test_parse(raw, cents):

@@ -6,6 +6,16 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+- **DKB-CSV** ist an einem echten Export geprüft und berichtigt: Ganze
+  Beträge ohne Komma (`2.000`) wurden als 2,00 € gelesen, jetzt als
+  2.000,00 €. Der Zeitraum kommt aus der Zeile „Zeitraum:“.
+- Die DKB nennt den Kontostand vom Tag des Exports. Deshalb: den Export
+  **bis heute** wählen. Die Buchungen von heute bleiben für den nächsten
+  Export, der an diesem Tag beginnt; ein Export, der früher endet, wird mit
+  einer Meldung abgelehnt.
+- Mandatsreferenz und Gläubiger-ID eines CSV-Exports erreichen die Regeln,
+  wie im PDF-Auszug.
+
 ## 0.3.0 – 2026-09-29
 
 - Die Einrichtung sagt oben in drei Sätzen, wozu die App da ist, und

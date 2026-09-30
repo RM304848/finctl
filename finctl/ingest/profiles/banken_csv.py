@@ -42,8 +42,15 @@ PROFILE: tuple[CsvProfil, ...] = (
         betrag="Betrag (€)", gegenpartei=("Zahlungsempfänger*in",),
         gegenpartei_eingang=("Zahlungspflichtige*r",), zweck=("Verwendungszweck",),
         iban="IBAN", buchungstext="Umsatztyp", nur_wenn=("Status", "Gebucht"),
-        saldo="ende", saldo_ende=r'Kontostand vom [\d.]+:?"?;"?' + _DE_BETRAG,
-        konto_kopf=r'^"?Konto"?;"?[^"\n]*?(?P<iban>DE[\d ]{20,26})', quelle=_NACH_DOKU),
+        nur_suchtext=("Gläubiger-ID", "Mandatsreferenz", "Kundenreferenz"),
+        # Der Kontostand ist der vom Tag des Exports, nicht der vom Ende des
+        # Zeitraums: nur ein Export bis heute laesst sich abstimmen. Dieser
+        # Tag ist noch offen; der Auszug endet am Vortag.
+        saldo="ende", saldo_ende=r'Kontostand vom (?P<datum>[\d.]+):?"?;"?' + _DE_BETRAG,
+        letzter_tag_offen=True,
+        zeitraum=r'^"?Zeitraum:?"?;"?(?P<von>[\d.]{10})\s*-\s*(?P<bis>[\d.]{10})',
+        konto_kopf=r'^"?(?:Giro)?[Kk]onto"?;"?[^"\n]*?(?P<iban>DE[\d ]{20,26})',
+        quelle="an einem echten Export geprüft (09/2026)"),
     CsvProfil(
         id="sparkasse_csv", bank="Sparkasse",
         erkennung=("Auftragskonto", "Buchungstag", "Valutadatum", "Buchungstext",

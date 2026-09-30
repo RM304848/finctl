@@ -30,7 +30,7 @@ from __future__ import annotations
 import csv
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -68,11 +68,22 @@ class CsvProfil:
     nur_wenn: tuple[str, str] | None = None
     #: Zeilen, deren Datum so lautet, sind noch nicht gebucht (comdirect: "offen").
     datum_offen: str | None = None
+    #: Spalten, die nur in den Suchtext der Regeln gehen (Mandatsreferenz,
+    #: Glaeubiger-ID): im PDF stehen sie im Buchungstext, und Regeln
+    #: erkennen einen Kredit oft nur an ihnen.
+    nur_suchtext: tuple[str, ...] = ()
+    #: Der Tag des Kontostands ist noch nicht abgeschlossen (DKB: der Stand
+    #: vom Tag des Exports). Seine Buchungen bleiben fuer den naechsten
+    #: Export, der Auszug endet am Vortag.
+    letzter_tag_offen: bool = False
     saldo: str = "keiner"
     saldospalte: str | None = None
     #: Regulaere Ausdruecke fuer Saldozeilen ausserhalb der Tabelle; Gruppe `betrag`.
     saldo_anfang: str | None = None
     saldo_ende: str | None = None
+    #: Regulaerer Ausdruck fuer den exportierten Zeitraum; Gruppen `von`, `bis`
+    #: (TT.MM.JJJJ). Ohne ihn reicht der Auszug von der ersten zur letzten Buchung.
+    zeitraum: str | None = None
     #: Regulaerer Ausdruck fuer die eigene IBAN ausserhalb der Tabelle.
     konto_kopf: str | None = None
     #: Spalte mit der eigenen IBAN in jeder Zeile.
@@ -220,7 +231,8 @@ class CsvBankParser:
                 value_date=(_datum(wert(z, p.wertstellung), p.datumsformat)
                             if wert(z, p.wertstellung) else None),
                 amount_cents=betrag,
-                raw_text=" ".join(t for t in (art, gegen, zweck) if t),
+                raw_text=" ".join(t for t in (art, gegen, zweck, *(
+                    f"{s}: {wert(z, s)}" for s in p.nur_suchtext if wert(z, s))) if t),
                 counterparty=gegen or None,
                 counterparty_iban=(wert(z, p.iban).replace(" ", "") or None) if p.iban else None,
                 purpose=zweck or None,
@@ -229,7 +241,26 @@ class CsvBankParser:
 
         if not txns:
             raise ValueError(f"{p.bank}: keine gebuchten Umsätze in {path.name}")
-        anfang, ende = self._salden(roh, wert, text, txns, warnungen)
+        # Der exportierte Zeitraum, nicht die erste und letzte Buchung: ein
+        # Monat ohne Buchung am Letzten saehe sonst unvollstaendig aus.
+        von, bis = txns[0].booking_date, txns[-1].booking_date
+        if z := _suchen(p.zeitraum, vorspann):
+            von, bis = _datum(z.group("von"), "%d.%m.%Y"), _datum(z.group("bis"), "%d.%m.%Y")
+        anfang, ende = self._salden(roh, wert, text, txns, warnungen, bis if z else None)
+        if p.letzter_tag_offen and z:
+            # Was heute schon gebucht ist, steht im Kontostand und in der
+            # Datei; was heute noch kommt, in keinem. Der Tag geht deshalb
+            # ganz in den naechsten Export, der an diesem Tag beginnt.
+            offen = [t for t in txns if t.booking_date == bis]
+            txns = [t for t in txns if t.booking_date < bis]
+            if not txns:
+                raise ValueError(f"{p.bank}: vor dem {bis} ist nichts gebucht -- "
+                                 "der Export braucht mindestens einen abgeschlossenen Tag")
+            ende -= sum(t.amount_cents for t in offen)
+            bis = (datetime.strptime(bis, "%Y-%m-%d") - timedelta(days=1)).date().isoformat()
+            if offen:
+                warnungen.append(f"{len(offen)} Buchung(en) vom Tag des Exports bleiben für "
+                                 "den nächsten Export, der an diesem Tag beginnt")
         # Die eigene IBAN: aus dem Vorspann, aus einer Spalte je Zeile, oder
         # die erste deutsche IBAN vor der Tabelle.
         treffer = _suchen(p.konto_kopf, vorspann)
@@ -239,11 +270,12 @@ class CsvBankParser:
         return ParseResult(
             header=StatementHeader(
                 account_hint=konto or p.bank,
-                period_start=txns[0].booking_date, period_end=txns[-1].booking_date,
+                period_start=von, period_end=bis,
                 balance_start_cents=anfang, balance_end_cents=ende),
             transactions=txns, warnings=warnungen)
 
-    def _salden(self, roh, wert, text, txns, warnungen) -> tuple[int, int]:
+    def _salden(self, roh, wert, text, txns, warnungen,
+                bis: str | None = None) -> tuple[int, int]:
         p = self.profil
         summe = sum(t.amount_cents for t in txns)
         if p.saldo == "spalte":
@@ -263,6 +295,15 @@ class CsvBankParser:
             e = _suchen(p.saldo_ende, text)
             if not e:
                 raise ValueError(f"{p.bank}: Endsaldo fehlt im Export")
+            # Der Saldo gilt fuer seinen Tag. Liegt der nach dem Zeitraum,
+            # steckt darin, was dazwischen gebucht wurde, und der errechnete
+            # Anfang waere um genau das falsch.
+            stand = e.groupdict().get("datum")
+            if bis and stand and _datum(stand, "%d.%m.%Y") != bis:
+                raise ValueError(
+                    f"{p.bank}: der Kontostand ist vom {stand}, der Zeitraum endet am "
+                    f"{datetime.strptime(bis, '%Y-%m-%d'):%d.%m.%Y}. Den Export bis heute "
+                    "wählen, dann gilt der Kontostand für das Ende des Zeitraums.")
             ende = _betrag(e.group("betrag"), p.dezimal)
             warnungen.append("Anfangssaldo errechnet: geprüft wird er erst am "
                              "Anschluss an den vorigen Auszug")
