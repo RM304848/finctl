@@ -66,12 +66,17 @@
   table.staende col.pos{width:12rem}
   table.staende col.wert,table.staende col.gewinn{width:8rem}
   table.staende col.stand{width:9rem}
-  table.staende col.tun{width:10rem}
+  table.staende col.tun{width:7.5rem}
   table.staende td{vertical-align:middle}
   table.staende td.haken{text-align:center;font-size:15px}
   table.staende input,table.staende textarea{width:100%;box-sizing:border-box}
   table.staende input.betrag{text-align:right}
   table.staende input.alt{color:var(--bad)}
+  /* Knoepfe untereinander, die Meldung darunter: so passt alles in eine schmale Spalte. */
+  table.staende td.tun button{display:block;width:100%}
+  table.staende td.tun button[hidden]{display:none}
+  table.staende td.tun button+button{margin-top:.3rem}
+  table.staende td.tun .meldung{display:block}
   /* Die Notiz liest sich als Text und wird erst beim Zeigen zum Feld. */
   table.staende .still{border-color:transparent;background:transparent;resize:none;
     overflow:hidden;font:inherit;line-height:1.35}
@@ -157,7 +162,7 @@
         maxlength="2000" placeholder="Notiz — woher, wem gehört es?"
         oninput="standGeaendert(this)" onkeydown="standTaste(event)">{{ z.note }}</textarea>
       {%- else %}<span class="muted">{{ z.note }}</span>{% endif %}</td>
-    <td class="tun nobr">{% if g.id == 'renten' %}{% if seite_an("/renten") %}<a class="plain" href="/renten#rente-{{ z.key|e }}">pflegen →</a>{% endif %}
+    <td class="tun">{% if g.id == 'renten' %}{% if seite_an("/renten") %}<a class="plain" href="/renten#rente-{{ z.key|e }}">pflegen →</a>{% endif %}
       {%- elif bearbeiten %}
       <button class="ghost" data-knopf onclick="standAblegen(this)"
         {%- if z.auszug or p.erledigt or z.cents is none %} hidden{% endif %}
