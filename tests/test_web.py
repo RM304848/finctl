@@ -3867,3 +3867,51 @@ def test_the_running_month_is_never_part_of_the_comparison():
     gemeinsam = _a._gemeinsame_monate(monate, dt.date(2026, 10, 1))
     assert gemeinsam["2025"] == ["06", "07", "08", "09", "10", "11", "12"]
     assert gemeinsam["2026"] == [f"{m:02d}" for m in range(1, 10)]
+
+
+def test_every_tile_leads_to_the_list_that_holds_its_number():
+    """Einnahmen, Ausgaben und Saldo fuehren in den Vorjahresvergleich, und dort
+    steht in der Spalte des Jahres dieselbe Zahl (kachel-fuehrt-zur-liste).
+
+    Eine Kachel, die zu zwei Listen fuehrt, traegt zwei Links statt einem.
+    """
+    html = client.get("/monatsabschluss").text
+    reihe = html[html.index('<div class="cards">'):]
+    for karte in re.split(r'(?=<(?:a|div) class="card")', reihe[:reihe.index("\n</div>")])[1:]:
+        assert karte.startswith('<a class="card" href=') or "<a " in karte, karte[:80]
+
+    for zeile in ("einnahmen", "ausgaben", "saldo"):
+        kachel = re.search(rf'<a class="card" href="([^"]*)#{zeile}"><div class="k">'
+                           rf'\w+ (\d{{4}})</div>\s*<div class="v[^"]*">([^<]+)</div>', html)
+        assert kachel, zeile
+        ziel, jahr, wert = kachel.groups()
+        liste = client.get(ziel).text
+        jahre = re.findall(r'<th class="num" style="width:140px">(\d{4})', liste)
+        if jahr not in jahre:
+            assert wert == "0,00 €"
+            continue
+        tr = liste[liste.index(f'<tr id="{zeile}"'):]
+        werte = re.findall(r"<strong>([^<]+)</strong>", tr[:tr.index("</tr>")])
+        assert werte[1 + jahre.index(jahr)] == wert, zeile
+
+
+def test_due_dates_are_listed_with_their_lead_and_go_into_the_calendar():
+    """Bald faellig ab dem Vorlauf; jede Frist als Kalendertermin (fristen)."""
+    import datetime as dt
+
+    from finctl import fristen
+
+    heute = dt.date.today()
+    alle = fristen.alle(heute)
+    html = client.get("/monatsabschluss").text
+    assert 'href="#fristen"' in html and 'id="fristen"' in html
+    for f in alle:
+        assert (f"nur={f.uid}" in html) == f.bald(heute), f.uid
+    if not alle:
+        pytest.skip("keine Fristen")
+    antwort = client.get("/fristen.ics")
+    assert antwort.status_code == 200
+    assert antwort.headers["content-type"].startswith("text/calendar")
+    assert antwort.text.count("BEGIN:VEVENT") == len(alle)
+    assert client.get(f"/fristen.ics?nur={alle[0].uid}").text.count("BEGIN:VEVENT") == 1
+    assert client.get("/fristen.ics?nur=gibt-es-nicht").status_code == 404

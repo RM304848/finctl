@@ -63,12 +63,13 @@ KERN = ("finctl/__init__.py", "finctl/pfade.py", "finctl/overlays.py",
         "finctl/vorgaben/", "finctl/migrate/", "finctl/recurring/")
 
 #: Die Oberflaeche und die Ablaeufe darueber. Darf alles importieren.
-APP = ("finctl/cli.py", "finctl/ops.py", "finctl/monatsabschluss.py", "finctl/starter.py",
-       "finctl/menueleiste.py",
+APP = ("finctl/cli.py", "finctl/ops.py", "finctl/monatsabschluss.py", "finctl/fristen.py",
+       "finctl/starter.py", "finctl/menueleiste.py",
        "finctl/web/")
 
 #: Seiten, die keinem Modul gehoeren.
-APP_SEITEN = ("/", "/monatsabschluss", "/einrichtung", "/handbuch", "/healthz", "/login")
+APP_SEITEN = ("/", "/monatsabschluss", "/fristen.ics", "/einrichtung", "/handbuch", "/healthz",
+              "/login")
 
 MODULE: tuple[Modul, ...] = (
     # ------------------------------------------------------------ Basis

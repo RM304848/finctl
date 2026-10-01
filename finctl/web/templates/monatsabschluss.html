@@ -30,30 +30,38 @@
 {% for g in k.luecken %}<div class="note bad">Lücke auf {{ g.account_id }}: {{ g.after }} → {{ g.before }},
   {{ g.delta_cents|euro }} ungeklärt. Vermutlich fehlt ein Auszug.</div>{% endfor %}
 <div class="cards">
-  <div class="card"><div class="k">Einnahmen {{ k.jahr }}</div>
+  {# Jede Kachel fuehrt zur Liste, aus der ihre Zahl besteht, und dort steht
+     dieselbe Zahl (kachel-fuehrt-zur-liste). #}
+  {% set vorjahr = '/rueckblick?ansicht=vorjahr#' %}
+  <a class="card" href="{{ vorjahr }}einnahmen"><div class="k">Einnahmen {{ k.jahr }}</div>
     <div class="v pos">{{ k.einnahmen|euro }}</div>
     <div class="muted klein">davon Gehalt <span class="{{ k.gehalt|vz }}">{{ k.gehalt|euro }}</span>
-      {% if k.einnahmen %}({{ '%.0f'|format(100.0 * k.gehalt / k.einnahmen) }} %){% endif %}</div></div>
-  <div class="card"><div class="k">Ausgaben {{ k.jahr }}</div>
+      {% if k.einnahmen %}({{ '%.0f'|format(100.0 * k.gehalt / k.einnahmen) }} %){% endif %}</div></a>
+  <a class="card" href="{{ vorjahr }}ausgaben"><div class="k">Ausgaben {{ k.jahr }}</div>
     <div class="v neg">{{ k.ausgaben|euro }}</div>
     <div class="muted klein">
       {% if k.einnahmen %}{{ '%.0f'|format(100.0 * (-k.ausgaben) / k.einnahmen) }} % der Einnahmen{% endif %}
-      {% if k.gehalt %}· {{ '%.0f'|format(100.0 * (-k.ausgaben) / k.gehalt) }} % vom Gehalt{% endif %}</div></div>
-  <div class="card"><div class="k">Saldo {{ k.jahr }}</div>
+      {% if k.gehalt %}· {{ '%.0f'|format(100.0 * (-k.ausgaben) / k.gehalt) }} % vom Gehalt{% endif %}</div></a>
+  <a class="card" href="{{ vorjahr }}saldo"><div class="k">Saldo {{ k.jahr }}</div>
     <div class="v {{ (k.einnahmen + k.ausgaben)|vz }}">{{ (k.einnahmen + k.ausgaben)|euro }}</div>
-    <div class="muted klein">ohne Investments und einmalige Objektkosten</div></div>
+    <div class="muted klein">ohne Investments und einmalige Objektkosten</div></a>
   {% set ob = ohne_objekt %}
-  <div class="card"><div class="k">Cashflow ohne {{ ob.label }}{% if ob.letzter %} · {{ ob.letzter.monat.strftime('%Y-%m') }}{% endif %}</div>
+  <a class="card" href="/konten#ohne-objekt"><div class="k">Cashflow ohne {{ ob.label }}{% if ob.letzter %} · {{ ob.letzter.monat.strftime('%Y-%m') }}{% endif %}</div>
     {% if ob.letzter %}
     <div class="v {{ 'pos' if ob.letzter.cents >= ob.ziel_cents else 'neg' }}">{{ ob.letzter.cents|euro }}</div>
     {% else %}<div class="v muted">—</div>{% endif %}
-    <div class="muted klein">Prognose Ø <span class="{{ (ob.schnitt_prognose_cents or 0)|vz }}">{{ (ob.schnitt_prognose_cents or 0)|euro }}</span> ·
-      <a class="plain" href="/konten#ohne-objekt">Verlauf →</a></div></div>
-  {# Eine Kachel fuer beide Reiter: fuenf Kacheln fuellen eine Reihe. #}
+    <div class="muted klein">Prognose Ø <span class="{{ (ob.schnitt_prognose_cents or 0)|vz }}">{{ (ob.schnitt_prognose_cents or 0)|euro }}</span></div></a>
+  {# Zwei Listen, zwei Links: die Kachel selbst fuehrt nirgends hin. #}
   <div class="card"><div class="k">Transaktionen offen</div>
     <div class="v">{{ k.review + k.flagged }}</div>
     <div class="muted klein"><a class="plain" href="/transactions?ansicht=offen">{{ k.review }} zuordnen →</a>
       · <a class="plain" href="/transactions?ansicht=aufteilen">{{ k.flagged }} aufteilen →</a></div></div>
+  {% if fristen_an %}
+  <a class="card" href="#fristen"><div class="k">Bald fällig</div>
+    <div class="v {{ 'neg' if fristen_bald }}">{{ fristen_bald|length }}</div>
+    <div class="muted klein">{% if fristen_bald %}zuerst {{ fristen_bald[0].datum }}
+      {%- elif naechste_frist %}nächste ab {{ naechste_frist.ab }}{% else %}nichts in Sicht{% endif %}</div></a>
+  {% endif %}
 </div>
 
 {# Je Position eine Zeile: ob sie aktuell ist, ihr Wert, die Notiz. Belegt
@@ -293,6 +301,47 @@ async function verbindlichkeitStreichen(kennung, name){
 {% endif %}
 {% endfor %}
 
+{% if fristen_an %}
+<h2 id="fristen">Bald fällig
+  <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">
+    — {{ fristen_bald|length }} von {{ fristen_zahl }}
+    {%- if fristen_zahl %} · <a class="plain" href="/fristen.ics" download
+      title="Je Frist ein Termin am Tag, ab dem sie bald fällig ist">alle in den Kalender</a>{% endif %}</span></h2>
+{% if fristen_bald %}
+<style>
+  table.fristen td.haken{width:34px;text-align:center;font-size:15px}
+  @media (max-width:700px){
+    table.fristen,table.fristen tbody{display:block}
+    table.fristen tr.kopf,table.fristen td.ab{display:none}
+    table.fristen tr{display:grid;grid-template-columns:28px 1fr auto;
+      column-gap:.4rem;border-bottom:1px solid var(--line);padding:.35rem .6rem .35rem 0}
+    table.fristen td{border:0;padding:.15rem 0}
+    table.fristen td.datum,table.fristen td.posten{grid-column:2}
+    table.fristen td.kal,table.fristen td.num{grid-column:3}
+    table.fristen td.datum,table.fristen td.kal{grid-row:1}
+    table.fristen td.tun{grid-column:2 / -1}
+  }
+</style>
+<div class="wrap"><table class="fristen">
+  <tr class="kopf"><th style="width:34px"></th><th style="width:7rem">Frist</th><th>Position</th>
+    <th class="num">Betrag</th><th>Zu tun</th><th style="width:7rem">bald ab</th><th></th></tr>
+  {% for f in fristen_bald %}
+  <tr>
+    <td class="haken"><span class="neg">○</span></td>
+    <td class="datum nobr">{{ f.datum }}</td>
+    <td class="posten"><a class="plain" href="{{ f.ziel }}">{{ f.name }}</a></td>
+    <td class="num {{ f.cents|vz }}">{{ f.cents|euro if f.cents is not none else '—' }}</td>
+    <td class="tun muted">{{ f.tun }}</td>
+    <td class="ab nobr muted">{{ f.ab }}</td>
+    <td class="kal nobr"><a class="plain" href="/fristen.ics?nur={{ f.uid|urlencode }}" download>Kalender</a></td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<div class="note">Nichts bald fällig.
+  {%- if naechste_frist %} Als Nächstes: {{ naechste_frist.name }}, bald fällig ab {{ naechste_frist.ab }}.{% endif %}</div>
+{% endif %}
+{% endif %}
 
 <h2>Ablauf</h2>
 <p class="muted klein" style="margin:-.3rem 0 .6rem">

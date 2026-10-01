@@ -42,6 +42,10 @@
     });
     // Erst nach dem naechsten Bild scrollen: die wiederhergestellten Tabellen
     // aendern die Seitenhoehe, und vorher zeigt dieselbe Zahl woandershin.
+    // Wer ueber einen Link mit Anker kommt, will den Anker sehen, nicht die
+    // Stelle vom letzten Besuch. Beim Neuladen bleibt die Stelle.
+    const neuGeladen = performance.getEntriesByType('navigation')[0]?.type === 'reload';
+    if (location.hash && !neuGeladen) return;
     const y = parseInt(sessionStorage.getItem(raum + ':y') || '', 10);
     if (!isNaN(y) && y > 0) requestAnimationFrame(() => window.scrollTo(0, y));
   });

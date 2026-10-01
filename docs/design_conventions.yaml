@@ -429,6 +429,32 @@ regeln:
       datei: finctl/web/templates/base.html
       muss: ['repeat(auto-fit,minmax(160px,1fr))']
 
+  - id: kachel-fuehrt-zur-liste
+    regel: >
+      Eine Kachel mit einer Zahl ist ein Link (`a.card`) zu der Liste, aus
+      der die Zahl besteht, und dort steht dieselbe Zahl. Fuehrt eine Kachel
+      zu zwei Listen, bleibt sie ein `div.card` mit zwei Links darin. Passt
+      keine bestehende Liste zur Rechnung der Kachel, bekommt die Liste eine
+      Zeile mit dieser Rechnung -- nicht der Link eine andere Zahl.
+    warum: >
+      Im Monatsabschluss fuehrten zwei von fuenf Kacheln irgendwohin;
+      Einnahmen, Ausgaben und Saldo waren Zahlen ohne Herkunft. Ein Link auf
+      /transactions haette eine andere Summe gezeigt: die Kacheln rechnen
+      netto je Oberkategorie, die Liste Buchung fuer Buchung.
+
+  - id: fristen
+    regel: >
+      Was einen Termin hat, an dem man handeln muss, steht ab seinem Vorlauf
+      (`VORLAUF` in finctl/fristen.py) unter "Bald fällig" im
+      Monatsabschluss, mit dem Tag, ab dem es bald ist. In den Kalender geht
+      es als .ics-Datei: ein ganztaegiger Termin an diesem Tag, die
+      eigentliche Frist im Titel. Kein Link zu einem Kalenderdienst.
+    warum: >
+      Jahresbeitraege, Vorratsenden und Zinsbindungen standen in Vertraegen
+      und Krediten, aber nirgends als Termin. Ein Termin am Fristtag selbst
+      kommt zu spaet, um noch zu entscheiden; ein Link zu Google Kalender
+      schickte Namen und Betraege beim Klick aus dem Haus.
+
   - id: flussdiagramm
     regel: >
       Ein Flussdiagramm zeichnet `_fluss.html` aus der Geometrie von

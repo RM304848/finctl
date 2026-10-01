@@ -8,7 +8,7 @@ import sqlite3
 from itertools import pairwise
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 
 from finctl.web.basis import (
     CAPITAL_PREFIXES,
@@ -236,6 +236,27 @@ def _gemeinsame_monate(monate: dict[str, set[str]], heute) -> dict[str, list[str
             for v, j in pairwise(sorted(monate))}
 
 
+def _seiten(groups: list[dict], jahre: list[str],
+            gemeinsam: dict[str, list[str]]) -> dict[str, dict]:
+    """Einnahmen, Ausgaben und Saldo je Jahr, wie die Kacheln im Monatsabschluss.
+
+    Netto je OBERKATEGORIE, das Vorzeichen entscheidet die Seite -- dieselbe
+    Rechnung wie `_kacheln`, damit die Kachel und die Zeile, zu der sie
+    fuehrt, dieselbe Zahl zeigen. Das Delta rechnet dieselbe Seite ueber
+    dieselben Monate beider Jahre: eine Oberkategorie kann in einem Teil des
+    Jahres netto rein und im ganzen netto raus sein.
+    """
+    def seite(jahr: str, vorzeichen: int, monate=None) -> int:
+        werte = (sum(c for (j, m), c in g["je_monat"].items()
+                     if j == jahr and (monate is None or m in monate)) for g in groups)
+        return sum(w for w in werte if not vorzeichen or w * vorzeichen > 0)
+
+    return {name: {j: {"cents": seite(j, v), "delta": (
+                seite(j, v, gemeinsam[j]) - seite(jahre[i - 1], v, gemeinsam[j]) if i else None)}
+                   for i, j in enumerate(jahre)}
+            for name, v in (("einnahmen", 1), ("ausgaben", -1), ("saldo", 0))}
+
+
 def _vergleich(basis: str) -> dict:
     """Jede Position in jedem Jahr, und was sich gegen das Vorjahr geaendert hat.
 
@@ -281,6 +302,7 @@ def _vergleich(basis: str) -> dict:
         key=lambda z: z["jahre"][neuestes]["delta"])
     return {
         "groups": ordered, "jahre": jahre, "basis": basis,
+        "seiten": _seiten(list(groups.values()), jahre, gemeinsam),
         "neuestes": neuestes, "vorjahr": jahre[-2] if len(jahre) > 1 else "",
         "monate_je_jahr": {j: len(monate[j]) for j in jahre},
         "gemeinsam": {j: len(m) for j, m in gemeinsam.items()},
@@ -560,6 +582,9 @@ def monatsabschluss(request: Request):
 
         bestand = bestaende_daten()
 
+    from finctl import fristen as _fr
+
+    fristen = _fr.alle(heute)
     gruppen = [
         ("abos", "Geteilte Abos",
          ("Erscheint ab dem Einsammel-Monat und verschwindet, sobald die "
@@ -573,6 +598,10 @@ def monatsabschluss(request: Request):
         "staende": _staende(posten, bestand, auszug, jahr, _MONATE[heute.month],
                             _MONATE[12 if heute.month == 1 else heute.month - 1]),
         "kacheln": kacheln, "ohne_objekt": ohne_objekt, "bestand": bestand,
+        "fristen_bald": [f for f in fristen if f.bald(heute)],
+        "naechste_frist": next((f for f in fristen if f.ab > heute), None),
+        "fristen_zahl": len(fristen),
+        "fristen_an": _module.seite_an("/vertraege", "/kredite"),
         "periode": periode, "jahr": jahr, "heute": heute,
         "monat_name": _MONATE[heute.month],
         "offen": sum(1 for p in posten if not p.erledigt),
@@ -582,6 +611,20 @@ def monatsabschluss(request: Request):
         "einrichtung_offen": _einrichtung.offen(),
         "gesamt": len(posten),
     })
+
+
+@router.get("/fristen.ics")
+def fristen_ics(nur: str = ""):
+    """Die Fristen als Kalenderdatei: alle, oder mit `nur` eine einzelne."""
+    from finctl import fristen as _fr
+
+    heute = _dtm.date.today()
+    fristen = [f for f in _fr.alle(heute) if not nur or f.uid == nur]
+    if not fristen:
+        return Response("Keine solche Frist.", status_code=404, media_type="text/plain")
+    name = f"Frist_{nur}.ics" if nur else f"Fristen_{heute.isoformat()}.ics"
+    return Response(_fr.ics(fristen, heute), media_type="text/calendar; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 _STAENDE_TEXT = {

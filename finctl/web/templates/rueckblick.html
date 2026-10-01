@@ -46,6 +46,15 @@
   <tr><th>Position</th>
     {% for j in jahre %}<th class="num" style="width:140px">{{ j }}
       {%- if monate_je_jahr[j] < 12 %}<br><span class="muted fein" style="font-weight:400">{{ monate_je_jahr[j] }} Mon.</span>{% endif %}</th>{% endfor %}</tr>
+  {# Dieselbe Rechnung wie die Kacheln im Monatsabschluss, die hierher fuehren. #}
+  {% for id, name in [('einnahmen', 'Einnahmen'), ('ausgaben', 'Ausgaben'), ('saldo', 'Saldo')] %}
+  <tr id="{{ id }}"{% if loop.first %} style="border-top:2px solid var(--line)"{% endif %}>
+    <td><strong>{{ name }}</strong></td>
+    {% for j in jahre %}{% set w = seiten[id][j] %}
+    <td class="num {{ w.cents|vz }}"><strong>{{ w.cents|euro }}</strong>{{ delta(w.delta) }}</td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
   {% for parent_id, g in groups.items() %}
   <tr style="border-top:2px solid var(--line)">
     <td><strong>{{ g.name }}</strong></td>
