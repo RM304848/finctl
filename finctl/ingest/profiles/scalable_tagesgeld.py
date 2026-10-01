@@ -12,8 +12,7 @@ The cleanest layout of the five: full dates on both columns, explicit signs,
 and an unambiguous currency suffix.
 
 This is the savings account, so it matters for two reasons beyond cash flow:
-it is where the buffer (including the 17.000 held for the owner's sister)
-actually sits, and it books Zinsen, Kapitalertragsteuer and Solidaritäts-
+it is where the buffer actually sits, and it books Zinsen, Kapitalertragsteuer and Solidaritäts-
 zuschlag as separate lines -- which is exactly what Anlage KAP needs.
 """
 
