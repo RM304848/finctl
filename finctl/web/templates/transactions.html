@@ -5,7 +5,6 @@
 {% import "_summe.html" as sm %}
 {% import "_reiter.html" as rt %}
 <h1>Transaktionen {{ sm.kopf(summe, gezeigt) }}</h1>
-<p class="zweck">Jede Buchung, filterbar — was noch offen ist, was aufzuteilen ist, und wo eine falsche Zuordnung korrigiert wird.</p>
 {{ rt.reiter(reiter, f.ansicht) }}
 {% if f.ansicht == 'aufteilen' and rows %}
 <div class="note">Eine Regel hat diese Buchungen bewusst offen gelassen, weil eine Zahlung
@@ -51,6 +50,7 @@
 <form method="get" class="card">
   {% for name in ['ansicht', 'account', 'source'] %}{% if f[name] %}
   <input type="hidden" name="{{ name }}" value="{{ f[name] }}">{% endif %}{% endfor %}
+  {{ auswahl(request, none, 'Zeitraum', zeit_optionen, {'start': f.start, 'end': f.end}) }}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem">
     <label>von<br><input name="start" value="{{ f.start }}" placeholder="2026-01-01" style="width:100%"></label>
     <label>bis<br><input name="end" value="{{ f.end }}" placeholder="2026-12-31" style="width:100%"></label>

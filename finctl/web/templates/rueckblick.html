@@ -6,7 +6,6 @@
   {%- if ansicht == 'vorjahr' %}{% if jahre %} — {{ jahre|first }} bis {{ neuestes }}{% endif %}
   {%- elif ansicht == 'fluss' %} — {{ year }}{% if bis %} bis {{ bis }}{% endif %}
   {%- else %} — {{ 'Saldo' if alle else '' }} {{ monthly|euro }} / Monat{% endif %}</span></h1>
-<p class="zweck">Wohin das Geld gegangen ist — was sich gegenüber dem Vorjahr geändert hat und was jeden Monat ohne Entscheidung abgeht.</p>
 {{ rt.reiter(reiter, ansicht) }}
 {% from "_auswahl.html" import auswahl %}
 {% set basis_optionen = [('', 'nur laufend'), ('alles', 'inkl. Kapital')] %}

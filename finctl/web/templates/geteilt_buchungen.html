@@ -7,6 +7,8 @@
 <p class="zweck">Welche Ausgaben gehören zu welchem Budgettopf, und wer trägt welchen Teil?</p>
 
 <form method="get" class="card">
+  {% from "_auswahl.html" import auswahl %}
+  {{ auswahl(request, none, 'Zeitraum', zeit_optionen, {'von': f.von, 'bis': f.bis}) }}
   <div class="zeilen-form">
     <label>von<input name="von" value="{{ f.von }}" placeholder="2026-01-01"></label>
     <label>bis<input name="bis" value="{{ f.bis }}" placeholder="2026-12-31"></label>

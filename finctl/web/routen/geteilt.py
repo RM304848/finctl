@@ -13,7 +13,7 @@ import sqlite3
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from finctl.web.basis import TEMPLATES, categories, conn
+from finctl.web.basis import TEMPLATES, categories, conn, zeitraeume
 
 router = APIRouter()
 
@@ -108,6 +108,13 @@ def salden(request: Request, alle: int = 0):
         "offen_gesamt": sum(z["offen"] for z in zeilen)})
 
 
+def _im_zeitraum(rows: list[dict], von: str, bis: str) -> list[dict]:
+    """Die Zeilen von `von` bis `bis` einschliesslich; leer heisst offen."""
+    return [r for r in rows
+            if (not von or r["booking_date"][:10] >= von)
+            and (not bis or r["booking_date"][:10] <= bis)]
+
+
 @router.get("/geteilt/buchungen", response_class=HTMLResponse)
 def geteilt_buchungen(request: Request, von: str = "", bis: str = "", konto: str = "",
                       kategorie: list[str] = Query(default=[]), q: str = "",
@@ -119,8 +126,10 @@ def geteilt_buchungen(request: Request, von: str = "", bis: str = "", konto: str
     heute = _dtm.date.today()
     von = von or (heute - _dtm.timedelta(days=90)).isoformat()
     daten = _g.laden(_g.PFAD)
-    where, args = ["t.booking_date >= ?"], [von]
-    for bedingung, wert in (("t.booking_date <= ?", bis), ("t.account_id = ?", konto),
+    # Ohne Zeitraum geholt: jeder Zeitraum daneben zaehlt mit den uebrigen
+    # Filtern, auch denen, die erst hier in Python greifen (Projekt, ohne).
+    where, args = ["1=1"], []
+    for bedingung, wert in (("t.account_id = ?", konto),
                             ("t.raw_text LIKE ?", f"%{q}%" if q else "")):
         if wert:
             where.append(bedingung)
@@ -141,6 +150,7 @@ def geteilt_buchungen(request: Request, von: str = "", bis: str = "", konto: str
         namen = _kategorienamen(c)
         konten = [r["id"] for r in c.execute(
             "SELECT id FROM accounts WHERE ingest_mode = 'parsed' ORDER BY id")]
+        erster = c.execute("SELECT MIN(booking_date) FROM transactions").fetchone()[0] or ""
     finally:
         c.close()
     for r in rows:
@@ -151,10 +161,14 @@ def geteilt_buchungen(request: Request, von: str = "", bis: str = "", konto: str
         rows = [r for r in rows if not r["projekt"]]
     if projekt:
         rows = [r for r in rows if r["projekt"] == projekt]
+    zeit_optionen = [({"von": a, "bis": b}, text, len(_im_zeitraum(rows, a, b)))
+                     for text, a, b in zeitraeume(heute, erster)]
+    rows = _im_zeitraum(rows, von, bis)
     gesamt = len(rows)
     return TEMPLATES.TemplateResponse(request, "geteilt_buchungen.html", {
         "rows": rows[:limit], "gesamt": gesamt, "projekte": daten.projekte,
         "personen": daten.personen, "kategorienamen": namen, "konten": konten,
+        "zeit_optionen": zeit_optionen,
         "f": {"von": von, "bis": bis, "konto": konto, "kategorie": gewaehlt, "q": q,
               "projekt": projekt, "ohne": ohne, "alle_richtungen": alle_richtungen}})
 

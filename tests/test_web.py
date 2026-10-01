@@ -3976,3 +3976,53 @@ def test_a_chip_that_would_find_nothing_is_not_a_link():
     assert {c["text"] for c in _chips(html, "Quelle")[1:]} == quellen
     assert "zurücksetzen" in html
     assert "zurücksetzen" not in client.get("/transactions").text
+
+
+def test_the_periods_are_calendar_bounds_and_last_month_crosses_the_year():
+    import datetime as dt
+
+    from finctl.web.basis import zeitraeume
+
+    z = {text: (von, bis) for text, von, bis in zeitraeume(dt.date(2027, 1, 15), "2020-01-01")}
+    assert z["alle"] == ("2020-01-01", "")
+    assert z["dieser Monat"] == ("2027-01-01", "")
+    assert z["letzter Monat"] == ("2026-12-01", "2026-12-31")
+    assert z["90 Tage"] == ("2026-10-17", "")
+    assert z["dieses Jahr"] == ("2027-01-01", "")
+    assert z["letztes Jahr"] == ("2026-01-01", "2026-12-31")
+
+
+def test_a_period_fills_from_and_to_and_counts_with_the_other_filters():
+    """Ein Zeitraum setzt von UND bis, laesst das Konto stehen, und seine Zahl
+    ist die Trefferzahl der Seite, zu der er fuehrt."""
+    html = client.get("/transactions").text
+    konto = next(c for c in _chips(html, "Konto")[1:] if c["href"])
+    html = client.get(konto["href"]).text
+    chips = _chips(html, "Zeitraum")
+    assert chips[0]["text"] == "alle" and chips[0]["on"]
+    assert chips[0]["zahl"] == _treffer(html)
+    for c in chips[1:]:
+        if not c["href"]:
+            continue
+        assert "account=" in c["href"] and "start=" in c["href"], c["href"]
+        ziel = client.get(c["href"]).text
+        assert _treffer(ziel) == c["zahl"], c["href"]
+        assert next(x for x in _chips(ziel, "Zeitraum") if x["on"])["text"] == c["text"]
+    # Von Hand eingegeben, ohne passenden Zeitraum: keiner ist gewaehlt.
+    eigen = client.get("/transactions?start=2001-02-03").text
+    assert not any(c["on"] for c in _chips(eigen, "Zeitraum"))
+
+
+def test_assigning_bookings_offers_the_same_periods_with_ninety_days_preset():
+    import re
+
+    def gezeigt(html: str) -> int:
+        m = re.search(r'class="muted zusatz">— (\d+)(?: von (\d+))?', html)
+        return int(m[2] or m[1])
+
+    html = client.get("/geteilt/buchungen").text
+    chips = _chips(html, "Zeitraum")
+    assert next(c for c in chips if c["on"])["text"] == "90 Tage"
+    for c in chips:
+        if c["href"]:
+            assert gezeigt(client.get(c["href"]).text) == c["zahl"], c["href"]

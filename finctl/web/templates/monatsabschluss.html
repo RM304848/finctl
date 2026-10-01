@@ -10,7 +10,6 @@
    neben den Daten liegt und falsch werden kann, ohne dass es auffaellt --
    abgehakt und trotzdem veraltet ist genau der Zustand, den diese Seite
    verhindern soll. Jede Zeile liest deshalb ihren eigenen Beleg. #}
-<p class="zweck">Was am Monatsanfang zu tun ist — abgehakt von den Daten selbst, nicht von dir.</p>
 
 {# Der erste Start endet hier, nicht auf einer Assistentenseite: Eine
    Umleitung steht beim zweiten Mal im Weg, ein Hinweis verschwindet von
@@ -121,7 +120,6 @@
     — {{ g.erledigt }} von {{ g.zeilen|length }} aktuell
     {%- if g.id != 'renten' %} · <span class="{{ g.summe|vz }}">{{ g.summe|euro }}</span>{% endif %}
     {%- if g.ohne_wert %} · {{ g.ohne_wert }} ohne Wert{% endif %}</span></h2>
-<p class="muted klein" style="margin:-.3rem 0 .6rem">{{ g.erklaerung }}</p>
 <div class="wrap"><table class="staende{{ ' mit-gewinn' if mit_gewinn }}">
   <colgroup><col class="haken"><col class="pos"><col class="wert">
     {%- if mit_gewinn %}<col class="gewinn">{% endif %}<col class="stand">
@@ -136,16 +134,13 @@
   {# Eine Rente kann wie ihre Police heissen: eigener Praefix fuer die id. #}
   <tr id="pos-{{ 'rente-' if g.id == 'renten' }}{{ z.key|e }}" data-key="{{ z.key|e }}"{% if z.api %} data-api="{{ z.api }}"{% endif %}
       data-cents="{{ z.cents if z.cents is not none }}">
-    <td class="haken">{% if p.erledigt %}<span class="pos" title="aktuell">✓</span>
-      {%- else %}<span class="neg" title="veraltet">○</span>{% endif %}</td>
+    <td class="haken">{% if p.erledigt %}<span class="pos" title="{{ g.erklaerung }}">✓</span>
+      {%- else %}<span class="neg" title="Veraltet. {{ g.erklaerung }}">○</span>{% endif %}</td>
     {# Konten als Kennung (konten-als-kennung), der Anzeigename als Titel. #}
     <td>{% if konten %}<span title="{{ p.name }}">{{ z.key }}</span>{% else %}{{ p.name }}{% endif %}
       {%- if g.id == 'renten' %}<br><span class="muted fein">{{ p.zusatz }}</span>
       {%- if z.ab %}<br><span class="muted fein">Bezug ab {{ z.ab }}</span>{% endif %}
-      {%- if z.kosten_hoch %} <span class="neg" title="Effektivkosten über deiner Schwelle">⚠</span>{% endif %}{% endif %}
-      {%- if z.eigen %} <span class="pill eigen" title="Hier geändert. In {{ 'renten.yaml' if g.id == 'renten' else 'balances.yaml' }}:
-        {{ z.base_cents|euro if z.base_cents is not none else 'kein Wert' }}
-        {%- if z.base_note %} · {{ z.base_note }}{% endif %}">eigen</span>{% endif %}</td>
+      {%- if z.kosten_hoch %} <span class="neg" title="Effektivkosten über deiner Schwelle">⚠</span>{% endif %}{% endif %}</td>
     {% if feld %}
     <td class="num"><input class="betrag" data-feld="wert" value="{{ z.cents|betrag }}"
         placeholder="unbekannt" oninput="standGeaendert(this)"
@@ -280,13 +275,12 @@ async function verbindlichkeitStreichen(kennung, name){
 }
 </script>
 
-{% for schluessel, titel, erklaerung in gruppen %}
+{% for schluessel, titel in gruppen %}
 {% set zeilen = posten|selectattr('gruppe', 'equalto', schluessel)|list %}
 {% if zeilen %}
 <h2>{{ titel }}
   <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">
     — {{ zeilen|length }} offen</span></h2>
-<p class="muted klein" style="margin:-.3rem 0 .6rem">{{ erklaerung }}</p>
 <div class="wrap"><table>
   <tr><th style="width:34px"></th><th>Position</th><th>Was fehlt</th></tr>
   {% for p in zeilen %}
@@ -344,8 +338,6 @@ async function verbindlichkeitStreichen(kennung, name){
 {% endif %}
 
 <h2>Ablauf</h2>
-<p class="muted klein" style="margin:-.3rem 0 .6rem">
-  Die Seiten in der Reihenfolge, in der sie Sinn ergeben.</p>
 <div class="wrap"><table>
   {# Eine echte Kopfzeile, sonst erklaert der Sortierer die erste Datenzeile
      dazu und haengt ihr Sortierpfeile an. #}

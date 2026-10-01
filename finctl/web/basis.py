@@ -121,6 +121,24 @@ def adresse(request, pfad: str | None = None, **setzen) -> str:
     return pfad + (f"?{QueryParams(params)}" if params else "")
 
 
+def zeitraeume(heute: _dtm.date, alle_von: str = "") -> list[tuple[str, str, str]]:
+    """Die Zeitraeume neben von/bis, als (Text, von, bis) in ISO.
+
+    Kalendergrenzen statt "die letzten 30 Tage", weil die Frage meist "was
+    war im September" lautet. Die eine rollende Spanne sind 90 Tage, die
+    Vorgabe von Buchungen zuordnen. `alle_von` ist dort der erste Buchungstag,
+    weil ein leeres "von" schon die Vorgabe meint.
+    """
+    monat = heute.replace(day=1)
+    vormonat = (monat - _dtm.timedelta(days=1)).replace(day=1)
+    return [("alle", alle_von, ""),
+            ("dieser Monat", monat.isoformat(), ""),
+            ("letzter Monat", vormonat.isoformat(), (monat - _dtm.timedelta(days=1)).isoformat()),
+            ("90 Tage", (heute - _dtm.timedelta(days=90)).isoformat(), ""),
+            ("dieses Jahr", f"{heute.year}-01-01", ""),
+            ("letztes Jahr", f"{heute.year - 1}-01-01", f"{heute.year - 1}-12-31")]
+
+
 def umleiten(request, pfad: str, anker: str = "", **setzen) -> RedirectResponse:
     """Eine zusammengelegte Seite auf ihren neuen Ort, samt ihrer Parameter.
 

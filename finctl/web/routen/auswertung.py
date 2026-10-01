@@ -585,14 +585,7 @@ def monatsabschluss(request: Request):
     from finctl import fristen as _fr
 
     fristen = _fr.alle(heute)
-    gruppen = [
-        ("abos", "Geteilte Abos",
-         ("Erscheint ab dem Einsammel-Monat und verschwindet, sobald die "
-          "Rückzahlungen im Import stehen.")),
-        ("planung", "Planung",
-         ("Begonnene Planzeilen mit passenden Buchungen, aber ohne Zuordnung. "
-          "Einmal zuordnen, dann zählt genau diese Reihe.")),
-    ]
+    gruppen = [("abos", "Geteilte Abos"), ("planung", "Planung")]
     return TEMPLATES.TemplateResponse(request, "monatsabschluss.html", {
         "posten": posten, "schritte": schritte, "gruppen": gruppen,
         "staende": _staende(posten, bestand, auszug, jahr, _MONATE[heute.month],
@@ -628,11 +621,10 @@ def fristen_ics(nur: str = ""):
 
 
 _STAENDE_TEXT = {
-    "konten": "Aus dem Auszug — aktuell, wenn er den {vormonat} abdeckt.",
-    "vermoegen": "Getippt — aktuell, wenn der Stand aus dem {monat} ist.",
-    "jaehrlich": "Getippt nach der Standmitteilung — aktuell, wenn sie aus {jahr} ist.",
-    "renten": ("Laut Renteninformation und Standmitteilung — aktuell, wenn aus {jahr}. "
-               "Gepflegt unter Renten."),
+    "konten": "Aktuell, wenn der Auszug den {vormonat} abdeckt.",
+    "vermoegen": "Aktuell, wenn der Stand aus dem {monat} ist.",
+    "jaehrlich": "Aktuell, wenn die Standmitteilung aus {jahr} ist.",
+    "renten": "Aktuell, wenn die Renteninformation aus {jahr} ist. Gepflegt unter Renten.",
 }
 
 
@@ -673,7 +665,6 @@ def _staende(posten: list, bestand: dict | None, auszug: dict, jahr: str,
                 "depot": _TOPF.get(str(p.art or "").lower()) == "depot",
                 "gewinn": b.get("gewinn_cents"),
                 "eigen": bool(b.get("overridden") or b.get("note_eigen")),
-                "base_cents": b.get("base_cents"), "base_note": b.get("base_note", ""),
             })
         if not zeilen:
             continue
@@ -706,8 +697,7 @@ def _rentenzeilen(posten: list) -> list[dict]:
         zeilen.append({"p": p, "key": q.id, "kind": q.art, "cents": q.cents,
                        "as_of": q.stand.isoformat() if q.stand else "",
                        "auszug": False, "notiz": True, "note": q.notiz or q.herleitung,
-                       "eigen": q.eigen, "base_cents": q.basis_cents,
-                       "base_note": q.herleitung, "api": "/api/rente",
+                       "eigen": q.eigen, "api": "/api/rente",
                        "ab": q.ab.strftime("%Y-%m") if q.ab else "",
                        "ab_vorgabe": rentenbeginn.strftime("%Y-%m") if rentenbeginn else "",
                        "kosten": q.kosten_pa, "schwelle": schwelle,

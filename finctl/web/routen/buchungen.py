@@ -7,6 +7,8 @@ ist am Terminal muehsam und im Browser angenehm.
 
 from __future__ import annotations
 
+import datetime as _dtm
+
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
@@ -20,6 +22,7 @@ from finctl.web.basis import (
     euro,
     tax_categories,
     umleiten,
+    zeitraeume,
 )
 
 router = APIRouter()
@@ -355,6 +358,18 @@ def _zaehlen(c, filter_: dict[str, tuple[str, list]], ohne: str,
         WHERE {sql} GROUP BY 1""", args).fetchall())
 
 
+def _zeit_optionen(c, filter_: dict[str, tuple[str, list]]) -> list[tuple]:
+    """Je Zeitraum die Buchungen, die er mit den uebrigen Filtern liesse."""
+    ohne = {k: v for k, v in filter_.items() if k not in ("start", "end")}
+    out = []
+    for text, von, bis in zeitraeume(_dtm.date.today()):
+        spanne = {k: (b, [w]) for k, b, w in (("start", "t.booking_date >= ?", von),
+                                               ("end", "t.booking_date <= ?", bis)) if w}
+        n = sum(_zaehlen(c, {**ohne, **spanne}, "", "1").values())
+        out.append(({"start": von, "end": bis}, text, n))
+    return out
+
+
 @router.get("/transactions", response_class=HTMLResponse)
 def transactions(request: Request, account: str = "", start: str = "", end: str = "",
                  category: list[str] = Query(default=[]), tax: list[str] = Query(default=[]),
@@ -387,6 +402,7 @@ def transactions(request: Request, account: str = "", start: str = "", end: str 
         # dort ueberhaupt vorkommt (auswahlzeile).
         zahlen = {k: sum(_zaehlen(c, {**filter_, "ansicht": (bed, [])}, "", "1").values())
                   for k, (_, bed) in ANSICHTEN.items()}
+        zeit_optionen = _zeit_optionen(c, filter_)
         je_konto = _zaehlen(c, filter_, "account")
         je_quelle = _zaehlen(c, filter_, "source", "COALESCE(s.source, '')")
         quellen = [r[0] for r in c.execute(
@@ -470,6 +486,7 @@ def transactions(request: Request, account: str = "", start: str = "", end: str 
                           + [(a, a, je_konto.get(a, 0)) for a in accounts],
         "quelle_optionen": [("", "alle", sum(je_quelle.values()))]
                            + [(x, x, je_quelle.get(x, 0)) for x in quellen],
+        "zeit_optionen": zeit_optionen,
         "f": {"account": account, "start": start, "end": end, "category": chosen,
               "tax": chosen_tax, "ansicht": ansicht,
               "source": source, "q": q},

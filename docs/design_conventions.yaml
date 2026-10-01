@@ -532,7 +532,9 @@ regeln:
       beim Wechseln laedt. Keine Seite baut die Zeile selbst. Was zwei Werte
       einander gegenueberstellt (Jahr gegen Jahr), zeigt beide nebeneinander,
       statt sie waehlen zu lassen. Braucht eine Wahl mehrere Felder zusammen,
-      ist sie ein Formular. Filtert die Wahl eine Liste, traegt jede Option
+      ist sie ein Formular -- ausser dem Zeitraum: neben von/bis steht die
+      Zeile "Zeitraum" aus `zeitraeume()` in basis.py, jede Option setzt beide
+      Felder, die Felder bleiben fuer alles andere. Filtert die Wahl eine Liste, traegt jede Option
       die Zahl, die sie uebrig liesse -- gezaehlt mit allen ANDEREN Filtern
       --, und eine Option, die nichts uebrig liesse, ist blass und kein Link.
       Angeboten wird nur, was in den Daten vorkommt.
@@ -544,7 +546,9 @@ regeln:
       "Anzeigen"-Knopf -- dreimal dieselbe Frage, dreimal anders gestellt.
       Auf Transaktionen boten Konto und Quelle jeden Wert als Auswahlliste an,
       auch "token", das es nicht gab; ob eine Wahl etwas findet, zeigte erst
-      die leere Tabelle danach.
+      die leere Tabelle danach. Einen Monat anzusehen hiess, zwei Daten von
+      Hand zu tippen, und auf Buchungen zuordnen kam man aus der Vorgabe von
+      90 Tagen nur mit einem erfundenen Startdatum heraus.
     pruefung:
       art: nur_in
       muster: ['class="auswahl"', 'style="[^"]*text-decoration:underline']
@@ -666,9 +670,11 @@ regeln:
 
   - id: ein-zwecksatz-je-seite
     regel: >
-      Eine Seite traegt genau einen festen Satz: die FRAGE, die sie
+      Eine Seite traegt hoechstens einen festen Satz: die FRAGE, die sie
       beantwortet, generisch, ohne Zahl und ohne Namen, hoechstens 25 Woerter,
-      als `p.zweck` direkt unter der h1. Alles Weitere steht am Feld, das es
+      als `p.zweck` direkt unter der h1. Seiten, die man jeden Tag oeffnet
+      (Monatsabschluss, Rueckblick, Transaktionen), tragen keinen, und kein
+      Abschnitt traegt eine Unterzeile unter seiner h2. Alles Weitere steht am Feld, das es
       erklaert (Beschriftung, Spaltenkopf, title=, hoechstens zwoelf Woerter),
       in einem aufklappbaren `details.hilfe` (hoechstens 60 Woerter je Bereich,
       120 je Seite), als bedingt gerenderter Hinweis, der nur erscheint, wenn
@@ -682,7 +688,7 @@ regeln:
       siebenhundert Woerter, /kredite nannte drei Vertraege und eine Bank beim
       Namen, derselbe Absatz stand dreimal in der App. Wer eine Seite zum
       ersten Mal oeffnet, liest den ersten Satz; wer sie kennt, liest auch den
-      nicht mehr.
+      nicht mehr -- auf den taeglichen Seiten stand er nur noch im Weg.
     pruefung:
       art: zwecktext
       zweck_woerter_max: 25

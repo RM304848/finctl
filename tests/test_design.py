@@ -383,8 +383,8 @@ def _zwecktext_funde(pfad: Path, p: dict) -> list[str]:
     if teilvorlage:
         if zweck:
             funde.append("Teilvorlage traegt einen Zwecksatz — der gehoert auf die Seite")
-    elif len(zweck) != 1:
-        funde.append(f"{len(zweck)} Zwecksaetze (`p.zweck`), genau einer gehoert unter die h1")
+    elif len(zweck) > 1:
+        funde.append(f"{len(zweck)} Zwecksaetze (`p.zweck`), hoechstens einer gehoert unter die h1")
     for _stelle, inneres, _heil in zweck:
         n = len(_worte(inneres))
         if n > p["zweck_woerter_max"]:
