@@ -68,7 +68,7 @@ PROFILE: tuple[CsvProfil, ...] = (
         gegenpartei=("Name Zahlungsbeteiligter",), zweck=("Verwendungszweck",),
         iban="IBAN Zahlungsbeteiligter", buchungstext="Buchungstext",
         saldo="spalte", saldospalte="Saldo nach Buchung", konto_spalte="IBAN Auftragskonto",
-        quelle=_NACH_DOKU + " (Atruvia-Export)"),
+        quelle="an einem echten Export geprüft (Atruvia-Export einer Sparda-Bank, 10/2026)"),
     CsvProfil(
         id="commerzbank_csv", bank="Commerzbank",
         erkennung=("Buchungstag", "Wertstellung", "Umsatzart", "Buchungstext", "Betrag",

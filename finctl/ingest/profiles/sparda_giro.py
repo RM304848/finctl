@@ -70,6 +70,10 @@ class SpardaGiroParser:
     version = VERSION
 
     def matches(self, text: str, path: Path) -> bool:
+        # Der CSV-Export nennt die Bank auch, gehoert aber dem Atruvia-Profil
+        # `volksbank_csv` (finctl/ingest/profiles/banken_csv.py) -- wie bei der DKB.
+        if path.suffix.lower() == ".csv":
+            return False
         return "Sparda" in text.replace(" ", "") or "GENODEF1S01" in text
 
     def parse(self, pages: list[str], path: Path) -> ParseResult:

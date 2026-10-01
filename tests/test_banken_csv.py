@@ -122,3 +122,47 @@ def test_a_gap_in_the_running_balance_is_reported(tmp_path):
     ergebnis = load_parser("ing_csv").parse(extract_pages(pfad), pfad)
     assert any("Saldo springt" in w for w in ergebnis.warnings)
     assert not reconcile(ergebnis).ok
+
+
+#: Der Atruvia-Export, wie ihn eine Sparda-Bank schreibt: dieselben Spalten wie
+#: bei Volks- und Raiffeisenbanken, UTF-8 mit BOM, Saldo ohne Tausenderpunkt.
+#: Erfunden; der Aufbau folgt einem echten Export.
+_SPARDA_CSV = (
+    "﻿Bezeichnung Auftragskonto;IBAN Auftragskonto;BIC Auftragskonto;"
+    "Bankname Auftragskonto;Buchungstag;Valutadatum;Name Zahlungsbeteiligter;"
+    "IBAN Zahlungsbeteiligter;BIC (SWIFT-Code) Zahlungsbeteiligter;Buchungstext;"
+    "Verwendungszweck;Betrag;Waehrung;Saldo nach Buchung;Bemerkung;"
+    "Gekennzeichneter Umsatz;Glaeubiger ID;Mandatsreferenz\r\n"
+    "Girokonto;DE89370400440532013000;GENODEF1XXX;Sparda-Bank Muster eG;"
+    "30.09.2026;30.09.2026;Kreditrate;;;Darlehenstilgung;"
+    "IBAN DE02100100100006820101RECHN.ZINS         150,00  TILG./ENTG.        "
+    "350,00  TILGUNG PER    30.09.2026;-500,00;EUR;600,00;;;;\r\n"
+    "Girokonto;DE89370400440532013000;GENODEF1XXX;Sparda-Bank Muster eG;"
+    "01.09.2026;01.09.2026;Erika Mustermann;;;Dauerauftragsgutschr;Deckung;"
+    "500,00;EUR;1100,00;;;;\r\n"
+)
+
+
+def test_a_sparda_export_is_read_as_atruvia_csv_not_as_a_sparda_pdf(tmp_path):
+    """Der PDF-Parser der Sparda erkannte die CSV am Banknamen und scheiterte
+    dann an den fehlenden Kontostandzeilen -- wie bei der DKB gehoert der
+    Export dem CSV-Profil, die PDFs bleiben beim PDF-Parser."""
+    from finctl.rules.categorize import declared_split
+
+    pfad = tmp_path / "Umsaetze_Sparda.csv"
+    pfad.write_text(_SPARDA_CSV, encoding="utf-8")
+    seiten = extract_pages(pfad)
+    assert not load_parser("sparda_giro").matches(seiten[0], pfad)
+    erkannt = detect(seiten, pfad)
+    assert erkannt is not None and erkannt.profile_id == "volksbank_csv"
+
+    ergebnis = erkannt.parse(seiten, pfad)
+    kopf = ergebnis.header
+    assert (kopf.balance_start_cents, kopf.balance_end_cents) == (60000, 60000)
+    assert kopf.account_hint == "DE89370400440532013000"
+    assert reconcile(ergebnis).ok
+    rate = next(t for t in ergebnis.transactions if t.amount_cents < 0)
+    # Dieselben Worte, an denen die Regeln haengen, und die Aufteilung der
+    # Rate, die nur die Sparda druckt.
+    assert "Darlehenstilgung" in rate.raw_text and "Kreditrate" in rate.raw_text
+    assert declared_split(rate.raw_text) == (15000, 35000)
