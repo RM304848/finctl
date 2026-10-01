@@ -2044,23 +2044,66 @@ def test_the_chart_is_anchored_and_adds_up_every_account():
     """
     html = client.get("/konten").text
     assert 'id="verlauf"' in html
-    assert '<option value="ALLE">Giro + Tagesgeld zusammen</option>' in html
-    # Die Summe braucht die Kontoart: ein Depot ist kein verfuegbares Geld.
-    assert '"account_type"' in html
-    assert "const LIQUIDE = ['giro', 'tagesgeld'];" in html
+    assert "konto=zusammen#verlauf" in html, "die Summe aller Konten ist eine Wahl"
+    zusammen = client.get("/konten?konto=zusammen").text
+    assert "<figcaption>Giro + Tagesgeld zusammen</figcaption>" in zusammen
+
+
+def _konto_ansicht(kid, typ, tief, grenze, deckel=None, unter=False):
+    """Ein erfundenes Konto, wie ops.household_accounts es liefert -- zwei Monate."""
+    return {"id": kid, "account_type": typ, "dispo_threshold_cents": grenze,
+            "ceiling_cents": deckel, "worst_trough_cents": tief,
+            "rows": [{"month": m, "trough_cents": tief, "closing_cents": tief + 50_000,
+                      "breaches_dispo": unter} for m in ("2026-01-01", "2026-02-01")]}
+
+
+def _tips(html):
+    import html as _html
+    import json
+    import re
+
+    return json.loads(_html.unescape(re.search(r'data-tips="([^"]*)"', html).group(1)))
+
+
+def test_the_sum_counts_only_money_available_today_but_every_floor():
+    """Ein Depot ist kein verfuegbares Geld -- seine Untergrenze muss trotzdem gedeckt sein."""
+    from finctl.web.routen import konten as _k
+
+    views = [_konto_ansicht("a", "giro", 100_000, 10_000),
+             _konto_ansicht("b", "tagesgeld", 200_000, 20_000),
+             _konto_ansicht("c", "broker", 900_000, 30_000)]
+    html = str(_k._diagramm_zusammen(views))
+    monat, zeilen = _tips(html)[0]
+    assert monat == "2026-01"
+    werte = {name: wert for name, wert, _ in zeilen}
+    assert werte == {"Giro + Tagesgeld": "3.000,00 €", "alle Untergrenzen": "600,00 €"}
 
 
 def test_the_chart_legend_draws_what_the_chart_draws():
     """Die Legende zeigte "nach Gehalt" als vollen Strich, gezeichnet war er
     gestrichelt -- und nannte einen Deckel, den das Konto nicht hatte. Die
     gestrichelte Linie las sich dann als Deckel."""
-    html = client.get("/konten").text
-    assert '<span class="strich gehalt-linie"></span> nach Gehalt' in html
-    assert ".strich.gehalt-linie{height:0;border-top:2px dashed var(--muted)}" in html
-    assert 'stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 3"' in html
-    # Der Deckel steht nur in der Legende, wenn er auch gezeichnet wird.
-    assert 'id="legende-deckel"' in html
-    assert "document.getElementById('legende-deckel').hidden = !mitDeckel;" in html
+    from finctl.web.routen import konten as _k
+
+    ohne = str(_k._diagramm_konto(_konto_ansicht("a", "giro", 100_000, 10_000)))
+    assert "Deckel" not in ohne and "unter Grenze" not in ohne
+    assert "stroke-dasharray" not in ohne
+    mit = str(_k._diagramm_konto(
+        _konto_ansicht("a", "giro", 5_000, 10_000, deckel=500_000, unter=True)))
+    assert "Deckel 5.000,00 €" in mit
+    assert "unter Grenze" in mit
+    assert mit.count("style=\"stroke:var(--warn)\"") == 1, "der Deckel ist gezeichnet"
+
+
+def test_the_chart_opens_on_the_account_with_the_lowest_point():
+    """Die Seite soll mit dem Problem aufmachen, nicht mit dem alphabetisch ersten Konto."""
+    from finctl.web.routen import konten as _k
+
+    views = [_konto_ansicht("a", "giro", 100_000, 0), _konto_ansicht("b", "giro", -5_000, 0)]
+    assert _k._verlauf(views, "")[0] == "b"
+    assert _k._verlauf(views, "a")[0] == "a"
+    assert _k._verlauf(views, "gibt-es-nicht")[0] == "b"
+    assert _k._verlauf(views, _k.ZUSAMMEN)[0] == _k.ZUSAMMEN
 
 
 def test_the_trough_stays_on_screen_on_a_phone():

@@ -63,7 +63,7 @@ def test_every_check_has_an_implementation():
     bekannt = {"vorlagen_verbieten", "punktdezimalen", "reihenfolge", "datei_enthaelt",
                "ueberschriften", "kein_cdn", "fliesstext", "konfig_fuss", "navigation",
                "zwecktext", "textdubletten", "kommentare", "seitenrhythmus",
-               "kontrast", "themengleich"}
+               "kontrast", "themengleich", "nur_in"}
     for r in REGELN:
         art = (r.get("pruefung") or {}).get("art")
         assert art is None or art in bekannt, f"{r['id']}: unbekannte Pruefung {art}"
@@ -100,6 +100,19 @@ def test_an_exception_that_is_fixed_is_removed_from_the_list(regel):
         text = _ohne_kommentare((VORLAGEN / name).read_text(encoding="utf-8"))
         assert any(re.search(m, text) for m in p["muster"]), (
             f"{regel['id']}: {name} ist behoben -- aus `ausnahmen` und `offen` streichen")
+
+
+@pytest.mark.parametrize("regel", _mit("nur_in"), ids=_ids)
+def test_something_is_done_in_one_place_only(regel):
+    """Anders als `ausnahmen` keine Altlast: die genannten Dateien SIND der eine Ort."""
+    p = regel["pruefung"]
+    funde = []
+    for vorlage in sorted(VORLAGEN.glob("*.html")):
+        if vorlage.name in p["dateien"]:
+            continue
+        text = _ohne_kommentare(vorlage.read_text(encoding="utf-8"))
+        funde += [f"{vorlage.name}: {m}" for m in p["muster"] if re.search(m, text)]
+    assert not funde, f"{regel['id']}: {funde}"
 
 
 @pytest.mark.parametrize("regel", _mit("punktdezimalen"), ids=_ids)

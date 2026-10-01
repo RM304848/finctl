@@ -447,6 +447,29 @@ regeln:
       datei: finctl/web/templates/_fluss.html
       muss: ['class="fluss-liste"', "@media (max-width:700px)"]
 
+  - id: diagramme
+    regel: >
+      Jedes andere Diagramm zeichnet `finctl/web/diagramm.py` (`linien`,
+      `saeulen`) auf dem Server; keine Vorlage und kein Skript zeichnet
+      selbst. Jedes traegt die Tabelle mit denselben Werten darunter, ab zwei
+      Eintraegen eine Legende, und der Tooltip ergaenzt nur. Linien 2 Pixel,
+      Gitter und Achsen Haarlinien, nichts gestrichelt: eine Grenze ist eine
+      volle Linie in ihrer Farbe. Text traegt nie die Farbe einer Serie. Achsen
+      zeigen ganze Euro und Monate als `26-09`. Die Wahl, WAS gezeigt wird
+      (Konto, Zeitraum), ist eine Auswahlzeile darueber, nie ein Feld im
+      Diagramm.
+    warum: >
+      /konten zeichnete zwei Diagramme auf zwei Arten, eines als Vorlage, eines
+      als Skript: gestrichelte Linien, deren Legende nicht passte, 10 Pixel
+      Achsenschrift, seitliches Scrollen auf dem Telefon und Tooltips, die erst
+      nach einer Sekunde und nie per Tastatur erscheinen. Health OS zeigt mit
+      demselben Modul, dass ein Weg fuer alle Diagramme genuegt.
+      tests/test_diagramm.py prueft das Modul.
+    pruefung:
+      art: nur_in
+      muster: ['<svg', 'stroke-dasharray', 'createElementNS']
+      dateien: [_fluss.html]
+
   - id: klappbare-abschnitte
     regel: >
       Aufklappbares ist `details.klapp` mit `summary`; Seiten damit binden
@@ -580,7 +603,7 @@ regeln:
       keine Kennzahl.
 
   - id: kein-cdn
-    regel: Keine Bibliothek aus dem Netz. Diagramme sind handgezeichnetes SVG.
+    regel: Keine Bibliothek aus dem Netz. Diagramme sind SVG aus finctl/web/diagramm.py.
     warum: Das Werkzeug muss ohne Netz laufen; ein CDN ist genau die Abhaengigkeit, die das bricht.
     pruefung:
       art: kein_cdn

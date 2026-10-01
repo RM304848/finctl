@@ -1,0 +1,64 @@
+<script>
+/* Tooltips der Diagramme aus finctl/web/diagramm.py. Namen und Werte kommen als
+   Daten und gehen nur ueber textContent ins DOM, nie als HTML. Was der Tooltip
+   zeigt, steht auch in der Tabelle unter dem Diagramm. */
+(function(){
+  function tipFuer(fig){
+    let t = fig.querySelector('.tip');
+    if (!t) { t = document.createElement('div'); t.className = 'tip'; t.setAttribute('role', 'status'); fig.appendChild(t); }
+    return t;
+  }
+  function fuellen(t, kopf, zeilen){
+    t.replaceChildren();
+    const k = document.createElement('div'); k.className = 'kopf'; k.textContent = kopf; t.appendChild(k);
+    for (const [name, wert, farbe] of zeilen) {
+      const z = document.createElement('div'); z.className = 'zeile';
+      const l = document.createElement('span');
+      if (farbe) { const s = document.createElement('i'); s.style.borderTopColor = 'var(' + farbe + ')'; l.appendChild(s); }
+      l.appendChild(document.createTextNode(name));
+      const w = document.createElement('b'); w.textContent = wert;
+      z.append(l, w); t.appendChild(z);
+    }
+  }
+  function setzen(fig, t, x, y){
+    const r = fig.getBoundingClientRect();
+    t.style.display = 'block';
+    t.style.left = Math.max(4, Math.min(x - r.left + 14, r.width - t.offsetWidth - 4)) + 'px';
+    t.style.top = Math.max(4, y - r.top - t.offsetHeight - 10) + 'px';
+  }
+  function verbergen(fig){
+    const t = fig.querySelector('.tip'); if (t) t.style.display = 'none';
+    const c = fig.querySelector('.kreuz'); if (c) c.style.opacity = 0;
+  }
+  document.querySelectorAll('figure.chart').forEach(fig => {
+    const svg = fig.querySelector('svg[data-tips]');
+    if (!svg) return;
+    const tips = JSON.parse(svg.dataset.tips);
+    const xs = svg.dataset.xs ? JSON.parse(svg.dataset.xs) : null;
+    const t = tipFuer(fig);
+    if (xs) {                                   // Fadenkreuz: findet den Monat, nicht die Linie
+      const kreuz = svg.querySelector('.kreuz');
+      svg.addEventListener('pointermove', e => {
+        const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+        const x = p.matrixTransform(svg.getScreenCTM().inverse()).x;
+        let best = 0;
+        for (let i = 1; i < xs.length; i++) if (Math.abs(xs[i] - x) < Math.abs(xs[best] - x)) best = i;
+        kreuz.setAttribute('x1', xs[best]); kreuz.setAttribute('x2', xs[best]); kreuz.style.opacity = 1;
+        fuellen(t, tips[best][0], tips[best][1]); setzen(fig, t, e.clientX, e.clientY);
+      });
+      svg.addEventListener('pointerleave', () => verbergen(fig));
+    }
+    svg.querySelectorAll('.treffer[data-i]').forEach(el => {   // Saeulen: die Saeule ist das Ziel
+      const i = +el.dataset.i;
+      const an = e => {
+        fuellen(t, tips[i][0], tips[i][1]);
+        const r = el.getBoundingClientRect();
+        setzen(fig, t, e.clientX || r.left + r.width / 2, e.clientY || r.top);
+      };
+      el.addEventListener('pointermove', an); el.addEventListener('focus', an);
+      el.addEventListener('pointerleave', () => verbergen(fig));
+      el.addEventListener('blur', () => verbergen(fig));
+    });
+  });
+})();
+</script>

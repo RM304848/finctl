@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from finctl import konten as _kn
 from finctl.ledger import db as ledger
+from finctl.web import diagramm as _dg
 from finctl.web.basis import (
     CONFIG_DIR,
     NOTIZ_MAX,
@@ -20,11 +21,101 @@ from finctl.web.verkauf import _verkaeufe_aus_plan
 
 router = APIRouter()
 
+#: Geld, das am selben Tag verfuegbar ist. Ein Depot zaehlt in der Summe aller
+#: Konten nicht mit: was dort liegt, muss erst verkauft werden.
+LIQUIDE = ("giro", "tagesgeld")
+#: Die Wahl "alle Konten zusammen" im Verlauf.
+ZUSAMMEN = "zusammen"
+
+
+def _monat(text: str) -> _dtm.date:
+    return _dtm.date.fromisoformat(text[:7] + "-01")
+
+
+def _diagramm_ohne_objekt(ob: dict):
+    """Gemessen und vorausgerechnet in einem Bild: der Bruch zwischen beiden bleibt sichtbar."""
+    ziel = ob["ziel_cents"]
+    monate = ob["monate"]
+    balken = [_dg.Balken(m.cents, "--muted" if not m.gemessen
+                         else ("--bad" if m.cents < ziel else "--accent"),
+                         "gemessen" if m.gemessen else "vorausgerechnet") for m in monate]
+    legende = [("gemessen", "--accent"), ("vorausgerechnet", "--muted")]
+    if any(b.farbe == "--bad" for b in balken):
+        legende.append(("gemessen, unter Ziel", "--bad"))
+    return _dg.saeulen(
+        f"Cashflow ohne {ob['label']}", [m.monat for m in monate], "Cashflow", balken,
+        legende=legende, grenzen=[_dg.Grenze("Ziel", ziel, "--ink")] if ziel else [],
+        zusatz=[_dg.Linie("Gemeinschaftskonto", "--muted",
+                          [m.gemeinschaftskonto_cents for m in monate])],
+        untertitel="je Monat, in €")
+
+
+def _diagramm_konto(v: dict):
+    """Tiefpunkt und Endstand eines Kontos gegen seine Grenzen."""
+    rows = v.get("rows") or []
+    titel = f"Verlauf {v['id']}"
+    if v.get("error") or not rows:
+        return _dg.leer(titel, "Keine Daten für dieses Konto.")
+    grenzen = [_dg.Grenze("Untergrenze", v.get("dispo_threshold_cents") or 0, "--bad",
+                          flaeche=True)]
+    if v.get("ceiling_cents"):
+        grenzen.append(_dg.Grenze("Deckel", v["ceiling_cents"], "--warn"))
+    unter = frozenset(i for i, r in enumerate(rows) if r["breaches_dispo"])
+    return _dg.linien(
+        titel, [_monat(r["month"]) for r in rows],
+        [_dg.Linie("nach Kosten", "--accent", [r["trough_cents"] for r in rows],
+                   art="beides", auffaellig=unter),
+         _dg.Linie("nach Gehalt", "--muted", [r["closing_cents"] for r in rows])],
+        grenzen=grenzen, mit_null=True, auffaellig_name="unter Grenze",
+        untertitel="Tiefpunkt im Monat und Stand am Monatsende, in €")
+
+
+def _diagramm_zusammen(views: list[dict]):
+    """Reicht das liquide Geld fuer alle Untergrenzen?
+
+    Die Linie ist die Summe der Tiefpunkte aller Giro- und Tagesgeldkonten; die
+    Grenze die Summe der Untergrenzen ALLER Konten -- gedeckt sein muessen auch
+    die uebrigen.
+    """
+    mit = [v for v in views if not v.get("error") and v.get("rows")]
+    grenze = sum(v.get("dispo_threshold_cents") or 0 for v in mit)
+    summen: dict[str, int] = {}
+    for v in mit:
+        if v.get("account_type") in LIQUIDE:
+            for r in v["rows"]:
+                summen[r["month"]] = summen.get(r["month"], 0) + r["trough_cents"]
+    monate = sorted(summen)
+    werte = [summen[m] for m in monate]
+    return _dg.linien(
+        "Giro + Tagesgeld zusammen", [_monat(m) for m in monate],
+        [_dg.Linie("Giro + Tagesgeld", "--accent", werte, art="beides",
+                   auffaellig=frozenset(i for i, w in enumerate(werte) if w < grenze))],
+        grenzen=[_dg.Grenze("alle Untergrenzen", grenze, "--bad", flaeche=True)],
+        kappen=True, auffaellig_name="unter den Untergrenzen",
+        untertitel="Summe der Tiefpunkte, in €")
+
+
+def _verlauf(views: list[dict], konto: str) -> tuple[str, object]:
+    """Das gewaehlte Konto und sein Diagramm.
+
+    Ohne Wahl das Konto mit dem tiefsten Punkt: die Seite soll mit dem Problem
+    aufmachen, nicht mit dem alphabetisch ersten Konto.
+    """
+    ids = [v["id"] for v in views]
+    if konto not in ids and konto != ZUSAMMEN:
+        mit_tief = [v for v in views
+                    if not v.get("error") and v.get("worst_trough_cents") is not None]
+        tiefstes = min(mit_tief, key=lambda v: v["worst_trough_cents"], default=None)
+        konto = tiefstes["id"] if tiefstes else (ids[0] if ids else ZUSAMMEN)
+    if konto == ZUSAMMEN:
+        return konto, _diagramm_zusammen(views)
+    return konto, _diagramm_konto(next(v for v in views if v["id"] == konto))
+
 
 @router.get("/konten", response_class=HTMLResponse)
 # 12 als Literal, weil `ops` hier bewusst erst in den Funktionen importiert
 # wird. Die Begruendung fuer die beiden Horizonte steht bei ops.HORIZON_LONG.
-def konten(request: Request, months: int = 12):
+def konten(request: Request, months: int = 12, konto: str = ""):
     """Will any account dip below its floor, and in which month.
 
     The household view says whether there is enough money in total. It cannot
@@ -73,28 +164,19 @@ def konten(request: Request, months: int = 12):
     order = {"operating": 0, "consumption": 1, "budget": 2,
              "servicing": 3, "savings": 4}
     views.sort(key=lambda v: (order.get(v.get("role"), 9), v["id"]))
-    # Fuer das Diagramm reicht der Verlauf. Das Monatsdetail mitzuschicken
-    # verdreifachte die Seite auf 60 Monate, ohne dass eine einzige Linie
-    # anders aussieht -- gezeichnet werden Tiefpunkt und Endstand.
-    # Dazu die Regel je Konto: der Bearbeitungsbereich der Tabelle gibt es nur
-    # einmal und wird beim Oeffnen aus diesen Werten gefuellt.
-    kurven = [{"id": v["id"], "display_name": v["display_name"],
-               "error": v.get("error"),
-               # Fuer die kumulierte Ansicht: nur Giro und Tagesgeld sind
-               # Geld, das morgen zur Verfuegung steht.
-               "account_type": v.get("account_type"),
-               "dispo_threshold_cents": v.get("dispo_threshold_cents"),
-               "ceiling_cents": v.get("ceiling_cents"),
-               "worst_trough_cents": v.get("worst_trough_cents"),
-               "regel": v.get("regel") or {},
-               "regel_eigen": v.get("regel_eigen") or [],
-               "breach_months": v.get("breach_months") or [],
-               "over_ceiling_months": v.get("over_ceiling_months") or [],
-               "idle_cents": v.get("idle_cents") or 0,
-               "rows": [{k: r[k] for k in ("month", "trough_cents",
-                                           "closing_cents", "breaches_dispo")}
-                        for r in v.get("rows", [])]}
-              for v in views]
+    # Die Regel je Konto: den Bearbeitungsbereich der Tabelle gibt es nur
+    # einmal, und er wird beim Oeffnen aus diesen Werten gefuellt. Die Monate
+    # gehen nicht mit -- das Diagramm zeichnet der Server.
+    konten_daten = [{"id": v["id"],
+                     "dispo_threshold_cents": v.get("dispo_threshold_cents"),
+                     "ceiling_cents": v.get("ceiling_cents"),
+                     "regel": v.get("regel") or {},
+                     "regel_eigen": v.get("regel_eigen") or [],
+                     "breach_months": v.get("breach_months") or [],
+                     "over_ceiling_months": v.get("over_ceiling_months") or [],
+                     "idle_cents": v.get("idle_cents") or 0}
+                    for v in views]
+    konto, verlauf = _verlauf(views, konto)
     # Das Fenster des laufenden Medians steht in forecast.yaml und wird hier
     # gelesen statt in den Text geschrieben -- sonst stimmt der Hinweis nach
     # der ersten Aenderung nicht mehr.
@@ -118,7 +200,9 @@ def konten(request: Request, months: int = 12):
     return TEMPLATES.TemplateResponse(request, "konten.html", {
         "verkauf_hinweis": verkauf_hinweis, "ohne_objekt": ohne_objekt,
         "rollen_namen": rollen_namen, "rollen_text": ROLLEN_TEXT,
-        "views": views, "kurven": kurven, "gemessen_bis": gemessen_bis,
+        "views": views, "konten_daten": konten_daten, "gemessen_bis": gemessen_bis,
+        "konto": konto, "zusammen": ZUSAMMEN, "verlauf": verlauf,
+        "ohne_objekt_diagramm": _diagramm_ohne_objekt(ohne_objekt),
         "median_monate": median_monate,
         # Das Endjahr wird gerechnet, nicht getippt: im Text stand "2026 +
         # horizon_long // 12", und die 2026 darin waere im Januar falsch
