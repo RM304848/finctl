@@ -26,7 +26,9 @@ PROFILE: tuple[CsvProfil, ...] = (
         datum="Buchung", wertstellung="Wertstellungsdatum", betrag="Betrag",
         gegenpartei=("Auftraggeber/Empfänger",), zweck=("Verwendungszweck",),
         buchungstext="Buchungstext", saldo="spalte", saldospalte="Saldo",
-        konto_kopf=r"^IBAN;(?P<iban>DE[\d ]{20,26})", quelle=_NACH_DOKU),
+        konto_kopf=r"^IBAN;(?P<iban>DE[\d ]{20,26})",
+        zeitraum=r"^Zeitraum;(?P<von>\d{2}\.\d{2}\.\d{4})\s*-\s*(?P<bis>\d{2}\.\d{2}\.\d{4})",
+        quelle=_NACH_DOKU),
     CsvProfil(
         id="comdirect_csv", bank="comdirect",
         erkennung=("Buchungstag", "Wertstellung (Valuta)", "Vorgang", "Umsatz in EUR"),

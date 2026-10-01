@@ -113,6 +113,26 @@ def test_the_own_account_is_read_from_the_export():
         assert kopf.account_hint == "DE89370400440532013000", pid
 
 
+def test_a_statement_reaches_as_far_as_the_bank_says_not_its_last_booking():
+    """Ein ganzer Monat endet am Monatsende, auch wenn zuletzt am 28. gebucht wurde.
+
+    Sonst meldete der Monatsabschluss einen vollstaendigen Auszug als fehlend.
+    """
+    ing = BEISPIELE / "ing_csv.csv"
+    kopf = load_parser("ing_csv").parse(extract_pages(ing), ing).header
+    assert (kopf.period_start, kopf.period_end) == ("2026-08-01", "2026-08-31")
+
+
+def test_a_period_that_does_not_hold_the_bookings_is_ignored(tmp_path):
+    text = (BEISPIELE / "ing_csv.csv").read_bytes().decode("cp1252")
+    pfad = tmp_path / "falsch.csv"
+    pfad.write_bytes(text.replace("Zeitraum;01.08.2026 - 31.08.2026",
+                                  "Zeitraum;01.08.2026 - 20.08.2026").encode("cp1252"))
+    ergebnis = load_parser("ing_csv").parse(extract_pages(pfad), pfad)
+    assert ergebnis.header.period_end == "2026-08-28"
+    assert any("Zeitraum im Kopf" in w for w in ergebnis.warnings)
+
+
 def test_a_gap_in_the_running_balance_is_reported(tmp_path):
     text = (BEISPIELE / "ing_csv.csv").read_bytes().decode("cp1252")
     text = text.replace("15.08.2026;15.08.2026;Stadtwerke Musterstadt;Lastschrift;"

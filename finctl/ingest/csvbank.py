@@ -244,8 +244,8 @@ class CsvBankParser:
         # Der exportierte Zeitraum, nicht die erste und letzte Buchung: ein
         # Monat ohne Buchung am Letzten saehe sonst unvollstaendig aus.
         von, bis = txns[0].booking_date, txns[-1].booking_date
-        if z := _suchen(p.zeitraum, vorspann):
-            von, bis = _datum(z.group("von"), "%d.%m.%Y"), _datum(z.group("bis"), "%d.%m.%Y")
+        if z := self._zeitraum(vorspann, txns, warnungen):
+            von, bis = z
         anfang, ende = self._salden(roh, wert, text, txns, warnungen, bis if z else None)
         if p.letzter_tag_offen and z:
             # Was heute schon gebucht ist, steht im Kontostand und in der
@@ -273,6 +273,25 @@ class CsvBankParser:
                 period_start=von, period_end=bis,
                 balance_start_cents=anfang, balance_end_cents=ende),
             transactions=txns, warnings=warnungen)
+
+    def _zeitraum(self, vorspann: str, txns, warnungen) -> tuple[str, str] | None:
+        """Der Zeitraum, den die Bank im Vorspann nennt -- None ohne ihn.
+
+        Die Buchungsdaten allein sagen nicht, ob ein Monat vollstaendig ist:
+        ein ganzer September, dessen letzte Buchung am 28. lag, reichte bis
+        zum 28., und der Monatsabschluss meldete ihn als fehlend. Ein genannter
+        Zeitraum gilt nur, wenn er alle Buchungen umschliesst.
+        """
+        treffer = _suchen(self.profil.zeitraum, vorspann)
+        if not treffer:
+            return None
+        von = _datum(treffer.group("von"), "%d.%m.%Y")
+        bis = _datum(treffer.group("bis"), "%d.%m.%Y")
+        if von <= txns[0].booking_date and txns[-1].booking_date <= bis:
+            return von, bis
+        warnungen.append(f"Zeitraum im Kopf ({von} bis {bis}) passt nicht zu den "
+                         f"Buchungen; es gelten die Buchungsdaten.")
+        return None
 
     def _salden(self, roh, wert, text, txns, warnungen,
                 bis: str | None = None) -> tuple[int, int]:

@@ -159,10 +159,12 @@ def _de(cents: int) -> str:
     return f"{vor}{euro:,}".replace(",", ".") + f",{cent:02d}"
 
 
-def _ing(konto: str, name: str, zeilen: list[tuple], saldo: int) -> tuple[str, int]:
+def _ing(konto: str, name: str, zeilen: list[tuple], saldo: int,
+         zeitraum: tuple[date, date]) -> tuple[str, int]:
+    von, bis = (d.strftime("%d.%m.%Y") for d in zeitraum)
     kopf = ["Umsatzanzeige;Datei erstellt am: 01.01.2000 08:00", "",
             f"IBAN;{IBAN[konto]}", f"Kontoname;{name}", "Bank;Beispielbank",
-            f"Kunde;{ICH}", "",
+            f"Kunde;{ICH}", f"Zeitraum;{von} - {bis}", "",
             ("Buchung;Wertstellungsdatum;Auftraggeber/Empfänger;"
              "Buchungstext;Verwendungszweck;Saldo;Währung;Betrag;Währung")]
     rumpf = []
@@ -188,6 +190,12 @@ def _volksbank(konto: str, zeilen: list[tuple], saldo: int) -> tuple[str, int]:
     return "\n".join([kopf, *rumpf]) + "\n", saldo
 
 
+def _zeitraum(monat: date, heute: date) -> tuple[date, date]:
+    """Was die Bank als Zeitraum druckt: der ganze Monat, der laufende bis gestern."""
+    ende = _tag(monat, 31)
+    return monat, min(ende, date.fromordinal(heute.toordinal() - 1))
+
+
 def auszuege(ordner: Path, heute: date) -> None:
     """Je Konto und Monat ein Auszug, vom ersten der 24 Monate bis gestern."""
     saldo = dict(ANFANG)
@@ -207,7 +215,8 @@ def auszuege(ordner: Path, heute: date) -> None:
             if not datiert:
                 continue
             if konto in ("giro", "tagesgeld"):
-                text, saldo[konto] = _ing(konto, konto.capitalize(), datiert, saldo[konto])
+                text, saldo[konto] = _ing(konto, konto.capitalize(), datiert, saldo[konto],
+                                         _zeitraum(monat, heute))
             else:
                 text, saldo[konto] = _volksbank(konto, datiert, saldo[konto])
             ziel = ordner / ORDNER.get(konto, konto)
