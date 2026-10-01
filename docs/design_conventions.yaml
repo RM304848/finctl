@@ -532,13 +532,19 @@ regeln:
       beim Wechseln laedt. Keine Seite baut die Zeile selbst. Was zwei Werte
       einander gegenueberstellt (Jahr gegen Jahr), zeigt beide nebeneinander,
       statt sie waehlen zu lassen. Braucht eine Wahl mehrere Felder zusammen,
-      ist sie ein Formular.
+      ist sie ein Formular. Filtert die Wahl eine Liste, traegt jede Option
+      die Zahl, die sie uebrig liesse -- gezaehlt mit allen ANDEREN Filtern
+      --, und eine Option, die nichts uebrig liesse, ist blass und kein Link.
+      Angeboten wird nur, was in den Daten vorkommt.
     warum: >
       Drei Seiten markierten die Wahl mit fett und unterstrichen, als
       Inline-Stil. Danach stand dieselbe Zeile sechsmal von Hand in zwei
       Vorlagen, Kredite waehlte das Jahr als Formular, und der Rueckblick bot
       auf zwei Reitern Pillen, auf dem dritten Auswahllisten mit
       "Anzeigen"-Knopf -- dreimal dieselbe Frage, dreimal anders gestellt.
+      Auf Transaktionen boten Konto und Quelle jeden Wert als Auswahlliste an,
+      auch "token", das es nicht gab; ob eine Wahl etwas findet, zeigte erst
+      die leere Tabelle danach.
     pruefung:
       art: nur_in
       muster: ['class="auswahl"', 'style="[^"]*text-decoration:underline']

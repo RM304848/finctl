@@ -3915,3 +3915,64 @@ def test_due_dates_are_listed_with_their_lead_and_go_into_the_calendar():
     assert antwort.text.count("BEGIN:VEVENT") == len(alle)
     assert client.get(f"/fristen.ics?nur={alle[0].uid}").text.count("BEGIN:VEVENT") == 1
     assert client.get("/fristen.ics?nur=gibt-es-nicht").status_code == 404
+
+
+def _treffer(html: str) -> int:
+    return int(re.search(r"— (\d+) Treffer", html).group(1))
+
+
+_CHIP = re.compile(r'<a href="(?P<href>[^"]*)" class="(?P<on>on)?"[^>]*>(?P<text>[^<]*)'
+                   r'<span class="zahl">(?P<zahl>\d+)</span>'
+                   r'|<span class="leer"[^>]*>(?P<leer>[^<]*)'
+                   r'<span class="zahl">(?P<null>\d+)</span>')
+
+
+def _chips(html: str, name: str) -> list[dict]:
+    """Die Optionen einer Auswahlzeile: Adresse (None, wenn kein Link), Text, Zahl, gewaehlt."""
+    nav = re.search(rf'<nav class="auswahl" aria-label="{name}">(.*?)</nav>', html, re.S).group(1)
+    return [{"href": m["href"] and m["href"].replace("&amp;", "&"),
+             "text": (m["text"] or m["leer"]).strip(),
+             "zahl": int(m["zahl"] or m["null"]), "on": bool(m["on"])}
+            for m in _CHIP.finditer(nav)]
+
+
+def test_each_filter_chip_says_how_many_it_would_leave():
+    """Die Zahl am Chip ist die Trefferzahl der Seite, zu der er fuehrt --
+    gezaehlt mit den uebrigen Filtern, ohne seinen eigenen (auswahlzeile)."""
+    import datetime as dt
+
+    html = client.get(f"/transactions?start={dt.date.today().year - 1}-01-01").text
+    for name in ("Konto", "Quelle"):
+        chips = _chips(html, name)
+        assert len(chips) >= 2, name
+        assert chips[0]["zahl"] == _treffer(html), "alle = was ohne diese Wahl gefunden wird"
+        for c in chips[1:]:
+            if c["href"]:
+                assert _treffer(client.get(c["href"]).text) == c["zahl"], c["href"]
+    # Mit gewaehltem Konto zaehlt die Kontozeile weiter alle Konten, die
+    # Quellenzeile nur noch dieses.
+    konto = next(c for c in _chips(html, "Konto")[1:] if c["href"])
+    gewaehlt = client.get(konto["href"]).text
+    assert [c["zahl"] for c in _chips(gewaehlt, "Konto")] == [
+        c["zahl"] for c in _chips(html, "Konto")]
+    assert next(c for c in _chips(gewaehlt, "Konto") if c["on"])["zahl"] == konto["zahl"]
+    assert _chips(gewaehlt, "Quelle")[0]["zahl"] == konto["zahl"]
+
+
+def test_a_chip_that_would_find_nothing_is_not_a_link():
+    """Und angeboten wird nur, was im Hauptbuch vorkommt."""
+    import sqlite3
+
+    html = client.get("/transactions?q=gibt-es-garantiert-nicht-xyz").text
+    for name in ("Konto", "Quelle"):
+        chips = _chips(html, name)
+        assert chips and all(c["zahl"] == 0 and not c["href"] for c in chips if not c["on"]), name
+    conn = sqlite3.connect(DB)
+    try:
+        quellen = {r[0] for r in conn.execute(
+            "SELECT DISTINCT source FROM splits WHERE seq = 0 AND source IS NOT NULL")}
+    finally:
+        conn.close()
+    assert {c["text"] for c in _chips(html, "Quelle")[1:]} == quellen
+    assert "zurücksetzen" in html
+    assert "zurücksetzen" not in client.get("/transactions").text

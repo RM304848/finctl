@@ -1,21 +1,27 @@
-{# Die eine Auswahlzeile der App (docs/design_conventions.yaml, auswahlzeile):
-   jede Option ist eine Adresse, die die uebrigen Parameter stehen laesst. Ein
-   leerer Wert nimmt den Parameter heraus; eine Option ist (Wert, Text) oder
-   ein Text, der beides ist. Ab mehr als acht Optionen eine Auswahlliste, die
-   beim Wechseln laedt. #}
+{# Die eine Auswahlzeile der App (auswahlzeile): jede Option ist eine Adresse,
+   die die uebrigen Parameter stehen laesst; ein leerer Wert nimmt den
+   Parameter heraus. Option: Text, (Wert, Text) oder (Wert, Text, Anzahl).
+   Was nichts uebrig liesse, ist kein Link. Ab mehr als acht Optionen eine
+   Auswahlliste. #}
 {% macro auswahl(request, parameter, name, optionen, aktiv, anker="") -%}
 {%- set nach = '#' ~ anker if anker else '' %}
 <nav class="auswahl" aria-label="{{ name }}"><span class="k">{{ name }}</span>
   {%- if optionen|length > 8 %}
   <select data-no-combo aria-label="{{ name }}" onchange="location.href = this.value">
-    {%- for o in optionen %}{% set wert, text = (o, o) if o is string else o %}
-    <option value="{{ adresse(request, **{parameter: wert}) }}{{ nach }}" {{ 'selected' if wert == aktiv }}>{{ text }}</option>
+    {%- for o in optionen %}{% set wert, text, zahl = (([o, o] if o is string else o|list) + [none])[:3] %}
+    <option value="{{ adresse(request, **{parameter: wert}) }}{{ nach }}" {{ 'selected' if wert == aktiv }}
+      {{- ' disabled' if zahl == 0 and wert != aktiv }}>{{ text }}{% if zahl is not none %} ({{ zahl }}){% endif %}</option>
     {%- endfor %}
   </select>
   {%- else %}
-  {%- for o in optionen %}{% set wert, text = (o, o) if o is string else o %}
+  {%- for o in optionen %}{% set wert, text, zahl = (([o, o] if o is string else o|list) + [none])[:3] %}
+  {%- if zahl == 0 and wert != aktiv %}
+  <span class="leer" aria-disabled="true">{{ text }} <span class="zahl">0</span></span>
+  {%- else %}
   <a href="{{ adresse(request, **{parameter: wert}) }}{{ nach }}" class="{{ 'on' if wert == aktiv }}"
-     {{- ' aria-current="true"' if wert == aktiv }}>{{ text }}</a>
+     {{- ' aria-current="true"' if wert == aktiv }}>{{ text }}
+     {%- if zahl is not none %} <span class="zahl">{{ zahl }}</span>{% endif %}</a>
+  {%- endif %}
   {%- endfor %}
   {%- endif %}
 </nav>

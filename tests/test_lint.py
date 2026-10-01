@@ -64,7 +64,6 @@ ZU_VERZWEIGT = {
     "finctl/ingest/profiles/sparda_giro.py::parse": 13,
     "finctl/rules/categorize.py::categorize": 15,
     "finctl/web/handbuch.py::als_html": 19,
-    "finctl/web/routen/buchungen.py::transactions": 14,
     "finctl/web/routen/kategorien.py::api_category": 18,
     "finctl/web/routen/planung.py::api_szenario_zeile": 24,
     "finctl/web/routen/planung.py::planung": 11,

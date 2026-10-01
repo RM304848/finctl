@@ -43,13 +43,15 @@
 </details>
 {% endif %}
 
+{# Jede Wahl sagt vorher, wie viel sie uebrig liesse. #}
+{% from "_auswahl.html" import auswahl %}
+{{ auswahl(request, 'account', 'Konto', konto_optionen, f.account) }}
+{{ auswahl(request, 'source', 'Quelle', quelle_optionen, f.source) }}
+
 <form method="get" class="card">
-  {% if f.ansicht %}<input type="hidden" name="ansicht" value="{{ f.ansicht }}">{% endif %}
+  {% for name in ['ansicht', 'account', 'source'] %}{% if f[name] %}
+  <input type="hidden" name="{{ name }}" value="{{ f[name] }}">{% endif %}{% endfor %}
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem">
-    <label>Konto<br>
-      <select name="account" style="width:100%"><option value="">alle</option>
-      {% for a in accounts %}<option value="{{ a }}" {{ 'selected' if f.account==a }}>{{ a }}</option>{% endfor %}
-      </select></label>
     <label>von<br><input name="start" value="{{ f.start }}" placeholder="2026-01-01" style="width:100%"></label>
     <label>bis<br><input name="end" value="{{ f.end }}" placeholder="2026-12-31" style="width:100%"></label>
     {# Ein Feld fuer beide Ebenen: die Suche findet Ast wie Blatt. Mehrfachwahl,
@@ -63,15 +65,12 @@
       <div id="taxchips" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.25rem"></div>
       <input id="taxadd" style="width:100%" placeholder="alle — tippen zum Hinzufügen"
              autocomplete="off" data-no-combo></label>
-    <label>Quelle<br>
-      <select name="source" style="width:100%"><option value="">alle</option>
-      {% for s in ['rule','manual','default','token'] %}
-        <option value="{{ s }}" {{ 'selected' if f.source==s }}>{{ s }}</option>{% endfor %}
-      </select></label>
     <label>Suche<br><input name="q" value="{{ f.q }}" placeholder="Text…" style="width:100%"></label>
   </div>
   <p style="margin:.7rem 0 0"><button>Filtern</button>
-     <a class="plain" href="/transactions{{ '?ansicht=' ~ f.ansicht if f.ansicht }}" style="margin-left:.6rem">zurücksetzen</a></p>
+     {%- if f.account or f.start or f.end or f.category or f.tax or f.source or f.q or request.query_params.get('block') %}
+     <a class="plain" href="/transactions{{ '?ansicht=' ~ f.ansicht if f.ansicht }}" style="margin-left:.6rem">zurücksetzen</a>
+     {%- endif %}</p>
 </form>
 
 {# Auf dem Telefon ist jede Buchung ein Block: Datum, Konto, Betrag oben,

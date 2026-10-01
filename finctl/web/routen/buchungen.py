@@ -269,19 +269,15 @@ def _baumfilter(werte: list[str], spalte: str) -> tuple[str, list[str]]:
     return "(" + " OR ".join(klauseln) + ")", args
 
 
-@router.get("/transactions", response_class=HTMLResponse)
-def transactions(request: Request, account: str = "", start: str = "", end: str = "",
-                 category: list[str] = Query(default=[]), tax: list[str] = Query(default=[]),
-                 source: str = "", q: str = "",
-                 block: list[str] = Query(default=[]), ansicht: str = "",
-                 limit: int = 200):
-    """Browse and correct every transaction, however it was labelled.
+def _filter(*, account: str, start: str, end: str, category: list[str], tax: list[str],
+            source: str, q: str, block: list[str]) -> dict[str, tuple[str, list]]:
+    """Je gesetztem Filter seine Bedingung und ihre Werte.
 
-    The review queue only surfaces what is UNlabelled. A wrong label -- from a
-    rule that matched too broadly, or a mistake made by hand -- is invisible
-    there, and those are exactly the ones worth finding.
+    Getrennt statt in einer Liste, damit jede Auswahl der Seite mit allen
+    ANDEREN Filtern zaehlen kann: die Zahl am Konto gilt fuer den Zeitraum
+    und die Suche, die schon stehen, aber nicht fuer das gewaehlte Konto.
     """
-    where, args = ["1=1"], []
+    out: dict[str, tuple[str, list]] = {}
     # Ein BLOCK der Abstimmzeile, mit deren eigener Definition gefiltert.
     #
     # Nicht mit einer Kategorieliste nachgebaut: die Bloecke sind geordnet und
@@ -304,32 +300,28 @@ def transactions(request: Request, account: str = "", start: str = "", end: str 
         # gefiltert faende man den einen und verloere den anderen, und die
         # Kreditzeile zeigte 7.651 statt der 13.727, auf die man geklickt
         # hat.
-        where.append(f"""EXISTS (
+        out["block"] = (f"""EXISTS (
             SELECT 1 FROM splits s2
             LEFT JOIN mgmt_categories m ON m.id = s2.mgmt_category_id
             WHERE s2.transaction_id = t.id
               AND COALESCE(s2.mgmt_category_id, '') NOT LIKE 'transfer/%'
               AND ({_ag._case_expression().replace('s.', 's2.')})
-                  IN ({', '.join('?' * len(bloecke))}))""")
-        args += bloecke
+                  IN ({', '.join('?' * len(bloecke))}))""", bloecke)
     # Die schlichten Gleichheitsfilter stehen als Tabelle beieinander, weil
     # sie sich nur in Spalte und Wert unterscheiden. Einzeln ausgeschrieben
-    # waeren es dreimal dieselben drei Zeilen.
-    for bedingung, wert in (("t.account_id = ?", account),
-                            ("t.booking_date >= ?", start),
-                            ("t.booking_date <= ?", end)):
+    # waeren es fuenfmal dieselben drei Zeilen.
+    for name, bedingung, wert in (("account", "t.account_id = ?", account),
+                                  ("start", "t.booking_date >= ?", start),
+                                  ("end", "t.booking_date <= ?", end),
+                                  ("source", "COALESCE(s.source,'') = ?", source),
+                                  ("q", "t.raw_text LIKE ?", f"%{q}%" if q else "")):
         if wert:
-            where.append(bedingung)
-            args.append(wert)
+            out[name] = (bedingung, [wert])
     # Several categories are ORed together: "what did Lebensmittel, Gastronomie
     # and Konsum cost me" is one question, and answering it by running three
     # filters and adding up by hand is not an answer.
-    chosen = [x for x in category if x]
-    if chosen:
-        klausel, cat_args = _baumfilter(chosen, "s.mgmt_category_id")
-        where.append(klausel)
-        args += cat_args
-
+    if category:
+        out["category"] = _baumfilter(category, "s.mgmt_category_id")
     # Same shape on the tax axis, so a figure on the Steuer page can hand you
     # the splits behind it. "__none__" finds what carries no tax position at
     # all, which is the set that silently misses every export.
@@ -338,35 +330,67 @@ def transactions(request: Request, account: str = "", start: str = "", end: str 
     # loan payment is two splits with two different tax positions -- Zinsen on
     # Anlage V and Tilgung not deductible -- and filtering on seq 0 would find
     # the interest and hide the principal, or the reverse.
-    chosen_tax = [x for x in tax if x]
-    if chosen_tax:
-        klausel, tax_args = _baumfilter(chosen_tax, "x.tax_category_id")
-        where.append("EXISTS (SELECT 1 FROM splits x WHERE x.transaction_id = t.id "
-                     f"AND {klausel})")
-        args += tax_args
-    for bedingung, wert in (("COALESCE(s.source,'') = ?", source),
-                            ("t.raw_text LIKE ?", f"%{q}%" if q else "")):
-        if wert:
-            where.append(bedingung)
-            args.append(wert)
+    if tax:
+        klausel, tax_args = _baumfilter(tax, "x.tax_category_id")
+        teile = f"SELECT 1 FROM splits x WHERE x.transaction_id = t.id AND {klausel}"
+        out["tax"] = (f"EXISTS ({teile})", tax_args)
+    return out
 
-    # Die Reiter zaehlen mit den uebrigen Filtern: wer ein Konto gewaehlt hat,
-    # will wissen, wie viel auf DIESEM Konto offen ist.
-    ohne_ansicht = list(where)
+
+def _wo(filter_: dict[str, tuple[str, list]], ohne: str = "") -> tuple[str, list]:
+    """Die WHERE-Bedingung aller Filter ausser `ohne`, mit ihren Werten."""
+    teile = [v for k, v in filter_.items() if k != ohne]
+    return (" AND ".join(["1=1", *(b for b, _ in teile)]),
+            [a for _, werte in teile for a in werte])
+
+
+def _zaehlen(c, filter_: dict[str, tuple[str, list]], ohne: str,
+             gruppe: str = "t.account_id") -> dict[str, int]:
+    """Buchungen je Wert von `gruppe`, gefiltert mit allem ausser `ohne`."""
+    sql, args = _wo(filter_, ohne)
+    return dict(c.execute(f"""
+        SELECT {gruppe}, COUNT(DISTINCT t.id) FROM transactions t
+        LEFT JOIN splits s ON s.transaction_id = t.id AND s.seq = 0
+        LEFT JOIN mgmt_categories m ON m.id = s.mgmt_category_id
+        WHERE {sql} GROUP BY 1""", args).fetchall())
+
+
+@router.get("/transactions", response_class=HTMLResponse)
+def transactions(request: Request, account: str = "", start: str = "", end: str = "",
+                 category: list[str] = Query(default=[]), tax: list[str] = Query(default=[]),
+                 source: str = "", q: str = "",
+                 block: list[str] = Query(default=[]), ansicht: str = "",
+                 limit: int = 200):
+    """Browse and correct every transaction, however it was labelled.
+
+    The review queue only surfaces what is UNlabelled. A wrong label -- from a
+    rule that matched too broadly, or a mistake made by hand -- is invisible
+    there, and those are exactly the ones worth finding.
+    """
+    chosen = [x for x in category if x]
+    chosen_tax = [x for x in tax if x]
+    filter_ = _filter(account=account, start=start, end=end, category=chosen,
+                      tax=chosen_tax, source=source, q=q, block=block)
     ansicht = ansicht if ansicht in ANSICHTEN else ""
-    where += [ANSICHTEN[ansicht][1]] if ansicht else []
+    if ansicht:
+        filter_["ansicht"] = (ANSICHTEN[ansicht][1], [])
+    sql, args = _wo(filter_)
+    where = [sql]
     # Offenes nach Betrag: zuerst, was am meisten ausmacht. Alles andere nach
     # Datum, weil man dort eine Buchung sucht, die man kennt.
     ordnung = "ABS(t.amount_cents) DESC, t.id DESC" if ansicht else "t.booking_date DESC, t.id DESC"
 
     c = conn()
     try:
-        zahlen = {k: c.execute(f"""
-            SELECT COUNT(DISTINCT t.id) FROM transactions t
-            LEFT JOIN splits s ON s.transaction_id = t.id AND s.seq = 0
-            LEFT JOIN mgmt_categories m ON m.id = s.mgmt_category_id
-            WHERE {' AND '.join([*ohne_ansicht, bed])}""", args).fetchone()[0]
-            for k, (_, bed) in ANSICHTEN.items()}
+        # Jede Wahl zaehlt mit den uebrigen Filtern: wer ein Konto gewaehlt hat,
+        # will wissen, wie viel auf DIESEM Konto offen ist -- und welche Quelle
+        # dort ueberhaupt vorkommt (auswahlzeile).
+        zahlen = {k: sum(_zaehlen(c, {**filter_, "ansicht": (bed, [])}, "", "1").values())
+                  for k, (_, bed) in ANSICHTEN.items()}
+        je_konto = _zaehlen(c, filter_, "account")
+        je_quelle = _zaehlen(c, filter_, "source", "COALESCE(s.source, '')")
+        quellen = [r[0] for r in c.execute(
+            "SELECT DISTINCT source FROM splits WHERE seq = 0 AND source IS NOT NULL ORDER BY 1")]
         reiter = [{"id": "", "label": "Alle", "href": adresse(request, ansicht="")}] + [
             {"id": k, "label": name, "zahl": zahlen[k], "href": adresse(request, ansicht=k)}
             for k, (name, _) in ANSICHTEN.items()]
@@ -442,6 +466,10 @@ def transactions(request: Request, account: str = "", start: str = "", end: str 
         "accounts": accounts, "parents": parents, "children": children,
         "filterable": filterable, "tax_filterable": tax_filterable,
         "conflicts": conflicts, "cat_label": cat_label, "reiter": reiter,
+        "konto_optionen": [("", "alle", sum(je_konto.values()))]
+                          + [(a, a, je_konto.get(a, 0)) for a in accounts],
+        "quelle_optionen": [("", "alle", sum(je_quelle.values()))]
+                           + [(x, x, je_quelle.get(x, 0)) for x in quellen],
         "f": {"account": account, "start": start, "end": end, "category": chosen,
               "tax": chosen_tax, "ansicht": ansicht,
               "source": source, "q": q},
