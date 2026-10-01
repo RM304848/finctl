@@ -1,0 +1,22 @@
+{# Die eine Auswahlzeile der App (docs/design_conventions.yaml, auswahlzeile):
+   jede Option ist eine Adresse, die die uebrigen Parameter stehen laesst. Ein
+   leerer Wert nimmt den Parameter heraus; eine Option ist (Wert, Text) oder
+   ein Text, der beides ist. Ab mehr als acht Optionen eine Auswahlliste, die
+   beim Wechseln laedt. #}
+{% macro auswahl(request, parameter, name, optionen, aktiv, anker="") -%}
+{%- set nach = '#' ~ anker if anker else '' %}
+<nav class="auswahl" aria-label="{{ name }}"><span class="k">{{ name }}</span>
+  {%- if optionen|length > 8 %}
+  <select data-no-combo aria-label="{{ name }}" onchange="location.href = this.value">
+    {%- for o in optionen %}{% set wert, text = (o, o) if o is string else o %}
+    <option value="{{ adresse(request, **{parameter: wert}) }}{{ nach }}" {{ 'selected' if wert == aktiv }}>{{ text }}</option>
+    {%- endfor %}
+  </select>
+  {%- else %}
+  {%- for o in optionen %}{% set wert, text = (o, o) if o is string else o %}
+  <a href="{{ adresse(request, **{parameter: wert}) }}{{ nach }}" class="{{ 'on' if wert == aktiv }}"
+     {{- ' aria-current="true"' if wert == aktiv }}>{{ text }}</a>
+  {%- endfor %}
+  {%- endif %}
+</nav>
+{%- endmacro %}

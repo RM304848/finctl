@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import contextlib
+import datetime as _dtm
 import sqlite3
+from itertools import pairwise
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
@@ -35,11 +37,11 @@ RUECKBLICK = {"fluss": "Fluss", "alle": "Alle Kategorien", "fixkosten": "Fixkost
 
 
 @router.get("/rueckblick", response_class=HTMLResponse)
-def rueckblick(request: Request, ansicht: str = "fluss", year: str = "", vs: str = "",
+def rueckblick(request: Request, ansicht: str = "fluss", year: str = "",
                basis: str = "laufend", konto: str = "all"):
     ansicht = ansicht if ansicht in RUECKBLICK else "fluss"
     if ansicht == "vorjahr":
-        daten = _vergleich(year, vs, basis)
+        daten = _vergleich(basis)
     elif ansicht == "fluss":
         daten = _fluss(year, konto, basis)
     else:
@@ -177,100 +179,113 @@ def monitor(request: Request, umfang: str = "fixkosten"):
                     ansicht="alle" if umfang == "alle" else "fixkosten")
 
 
-def _vergleich(year: str, vs: str, basis: str) -> dict:
-    """Kategorie and Subkategorie, this year against last.
+def _je_monat(c: sqlite3.Connection, basis: str) -> dict[tuple[str, str], dict]:
+    """Je Position (Ober-, Subkategorie) die Summen je (Jahr, Monat) und die Buchungen je Jahr."""
+    basis_sql, basis_args = basis_clause(basis)
+    zeilen: dict[tuple[str, str], dict] = {}
+    for r in c.execute(f"""
+            SELECT COALESCE(p.id, cat.id, '__none__')   AS parent_id,
+                   COALESCE(p.name, cat.name, 'Unklar') AS parent_name,
+                   COALESCE(cat.id, '__none__')         AS cat_id,
+                   COALESCE(cat.name, 'ohne Kategorie') AS cat_name,
+                   substr(t.booking_date,1,4) AS jahr, substr(t.booking_date,6,2) AS monat,
+                   COUNT(*) AS n, SUM(s.amount_cents) AS cents
+            FROM        splits s
+            JOIN        transactions t ON t.id = s.transaction_id
+            LEFT JOIN   mgmt_categories cat ON cat.id = s.mgmt_category_id
+            LEFT JOIN   mgmt_categories p   ON p.id = cat.parent_id
+            WHERE       COALESCE(cat.kind,'') <> 'transfer' AND ({basis_sql})
+            -- Die Ausdruecke, nicht die Aliase: mgmt_categories hat selbst eine
+            -- Spalte parent_id, `GROUP BY parent_id` waere mehrdeutig.
+            GROUP BY    COALESCE(p.id, cat.id, '__none__'), COALESCE(cat.id, '__none__'),
+                        substr(t.booking_date,1,4), substr(t.booking_date,6,2)
+            """, basis_args):
+        z = zeilen.setdefault((r["parent_id"], r["cat_id"]), {
+            "parent_id": r["parent_id"], "parent": r["parent_name"],
+            "cat_id": r["cat_id"], "name": r["cat_name"], "je_monat": {}, "n": {}})
+        z["je_monat"][(r["jahr"], r["monat"])] = r["cents"]
+        z["n"][r["jahr"]] = z["n"].get(r["jahr"], 0) + r["n"]
+    return zeilen
 
-    The overview answers "where does it go". This answers "what changed",
-    which is the only one of the two that suggests an action: a number on its
-    own is just a fact, while the same number 40% higher than last year is a
-    question.
 
-    Compared over the SAME MONTHS of both years. Nine months of 2026 against
-    twelve of 2025 would report a saving on every single line, which is worse
-    than no comparison at all.
+def _jahre_rechnen(z: dict, jahre: list[str], gemeinsam: dict[str, list[str]]) -> dict:
+    """Je Jahr die Summe und die Veraenderung gegen das Vorjahr ueber dieselben Monate."""
+    def summe(jahr: str, monate=None) -> int:
+        return sum(c for (j, m), c in z["je_monat"].items()
+                   if j == jahr and (monate is None or m in monate))
+
+    werte = {}
+    for i, jahr in enumerate(jahre):
+        delta = None
+        if i:
+            monate = gemeinsam[jahr]
+            delta = summe(jahr, monate) - summe(jahre[i - 1], monate)
+        werte[jahr] = {"cents": summe(jahr), "delta": delta, "n": z["n"].get(jahr, 0)}
+    return {**z, "jahre": werte}
+
+
+def _gemeinsame_monate(monate: dict[str, set[str]], heute) -> dict[str, list[str]]:
+    """Je Jahr ab dem zweiten: die Monate, die es mit dem Vorjahr vergleicht.
+
+    Nur Monate, in denen beide Jahre buchen, und nie der laufende
+    (schnitt-ueber-abgeschlossene-monate): ein Tag Oktober gegen einen ganzen
+    Oktober waere eine Ersparnis, die es nicht gibt.
     """
-    from datetime import date as _d
+    laufend = f"{heute:%Y-%m}"
+    return {j: sorted(m for m in monate[j] & monate[v] if f"{j}-{m}" < laufend)
+            for v, j in pairwise(sorted(monate))}
 
+
+def _vergleich(basis: str) -> dict:
+    """Jede Position in jedem Jahr, und was sich gegen das Vorjahr geaendert hat.
+
+    Eine Zahl allein ist ein Fakt; dieselbe Zahl 40 % hoeher als im Vorjahr ist
+    eine Frage. Alle Jahre stehen nebeneinander, statt zwei auswaehlen zu
+    muessen.
+
+    Verglichen wird ueber DIESELBEN MONATE beider Jahre -- die Monate, in
+    denen beide Jahre Buchungen haben. Neun Monate gegen zwoelf meldeten in
+    jeder Zeile eine Ersparnis, und das ist schlimmer als kein Vergleich.
+    """
     c = conn()
     try:
-        years = [r["y"] for r in c.execute(
-            "SELECT DISTINCT substr(booking_date,1,4) AS y FROM transactions ORDER BY y DESC")]
-        # Ein Jahr, das es nicht gibt -- "all" aus dem Fixkosten-Reiter --,
-        # faellt auf das neueste zurueck statt auf eine leere Tabelle.
-        year = year if year in years else (years[0] if years else str(_d.today().year))
-        vs = vs or (years[1] if len(years) > 1 else "")
-
-        # The month the current year's data actually stops at, applied to both
-        # sides so the windows are comparable.
-        last_month = c.execute(
-            "SELECT MAX(substr(booking_date,6,2)) FROM transactions "
-            "WHERE substr(booking_date,1,4) = ?", (year,)).fetchone()[0] or "12"
-        basis_sql, basis_args = basis_clause(basis)
-
-        def totals(y: str) -> dict[str, dict]:
-            if not y:
-                return {}
-            return {
-                (r["parent_id"], r["cat_id"]): dict(r) for r in c.execute(f"""
-                SELECT COALESCE(p.id, cat.id, '__none__')   AS parent_id,
-                       COALESCE(p.name, cat.name, 'Unklar') AS parent_name,
-                       COALESCE(cat.id, '__none__')         AS cat_id,
-                       COALESCE(cat.name, 'ohne Kategorie') AS cat_name,
-                       COUNT(*) AS n, SUM(s.amount_cents) AS cents
-                FROM        splits s
-                JOIN        transactions t ON t.id = s.transaction_id
-                LEFT JOIN   mgmt_categories cat ON cat.id = s.mgmt_category_id
-                LEFT JOIN   mgmt_categories p   ON p.id = cat.parent_id
-                WHERE       COALESCE(cat.kind,'') <> 'transfer'
-                  AND       substr(t.booking_date,1,4) = ?
-                  AND       substr(t.booking_date,6,2) <= ?
-                  AND       ({basis_sql})
-                -- The expressions, not the aliases: mgmt_categories has its own
-                -- parent_id column, so `GROUP BY parent_id` is ambiguous.
-                GROUP BY    COALESCE(p.id, cat.id, '__none__'),
-                            COALESCE(cat.id, '__none__')
-                """, (y, last_month, *basis_args))}
-
-        now, before = totals(year), totals(vs)
+        monate: dict[str, set[str]] = {}
+        for jahr, monat in c.execute("SELECT DISTINCT substr(booking_date,1,4), "
+                                     "substr(booking_date,6,2) FROM transactions"):
+            monate.setdefault(jahr, set()).add(monat)
+        roh = _je_monat(c, basis)
     finally:
         c.close()
+    jahre = sorted(monate)
+    gemeinsam = _gemeinsame_monate(monate, _dtm.date.today())
 
-    # One row per subcategory that appears in either year. A line that stopped
-    # is as interesting as one that grew -- more so, if it was a subscription.
-    rows = []
-    for key in set(now) | set(before):
-        a = now.get(key) or {}
-        b = before.get(key) or {}
-        meta = a or b
-        rows.append({
-            "parent_id": key[0], "parent": meta["parent_name"],
-            "cat_id": key[1], "name": meta["cat_name"],
-            "now": a.get("cents", 0), "before": b.get("cents", 0),
-            "n": a.get("n", 0),
-            "delta": a.get("cents", 0) - b.get("cents", 0),
-        })
-
+    zeilen = [_jahre_rechnen(z, jahre, gemeinsam) for z in roh.values()]
+    neuestes = jahre[-1] if jahre else ""
     groups: dict[str, dict] = {}
-    for r in sorted(rows, key=lambda r: r["now"]):
-        g = groups.setdefault(r["parent_id"], {
-            "name": r["parent"], "rows": [], "now": 0, "before": 0})
-        g["rows"].append(r)
-        g["now"] += r["now"]
-        g["before"] += r["before"]
+    for z in zeilen:
+        g = groups.setdefault(z["parent_id"], {"parent_id": z["parent_id"], "cat_id": "",
+                                               "name": z["parent"], "rows": [],
+                                               "je_monat": {}, "n": {}})
+        g["rows"].append(z)
+        for k, cents in z["je_monat"].items():
+            g["je_monat"][k] = g["je_monat"].get(k, 0) + cents
     for g in groups.values():
-        g["delta"] = g["now"] - g["before"]
-    ordered = dict(sorted(groups.items(), key=lambda kv: kv[1]["now"]))
+        g.update(_jahre_rechnen(g, jahre, gemeinsam))
+        g["rows"].sort(key=lambda z: z["jahre"][neuestes]["cents"])
+    ordered = dict(sorted(groups.items(), key=lambda kv: kv[1]["jahre"][neuestes]["cents"]))
 
-    # What actually moved. Costs only -- an extra 3.000 of rent received is not
-    # something to optimise, and mixing directions makes the list unreadable.
-    movers = sorted(
-        [r for r in rows if r["before"] < 0 or r["now"] < 0],
-        key=lambda r: r["delta"])
+    # Was sich bewegt hat, im neuesten Jahr. Nur Kosten -- 3.000 mehr erhaltene
+    # Miete ist nichts, was man optimiert, und gemischte Richtungen liest niemand.
+    movers = sorted((z for z in zeilen if len(jahre) > 1 and (
+        z["jahre"][neuestes]["cents"] < 0 or z["jahre"][jahre[-2]]["cents"] < 0)),
+        key=lambda z: z["jahre"][neuestes]["delta"])
     return {
-        "groups": ordered, "year": year, "vs": vs, "years": years,
-        "last_month": last_month, "basis": basis,
-        "worse": [r for r in movers if r["delta"] < -1000][:12],
-        "better": [r for r in reversed(movers) if r["delta"] > 1000][:12],
+        "groups": ordered, "jahre": jahre, "basis": basis,
+        "neuestes": neuestes, "vorjahr": jahre[-2] if len(jahre) > 1 else "",
+        "monate_je_jahr": {j: len(monate[j]) for j in jahre},
+        "gemeinsam": {j: len(m) for j, m in gemeinsam.items()},
+        "worse": [z for z in movers if z["jahre"][neuestes]["delta"] < -1000][:12],
+        "better": [z for z in reversed(movers) if z["jahre"][neuestes]["delta"] > 1000][:12],
     }
 
 

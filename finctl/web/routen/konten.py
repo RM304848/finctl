@@ -201,7 +201,9 @@ def konten(request: Request, months: int = 12, konto: str = ""):
         "verkauf_hinweis": verkauf_hinweis, "ohne_objekt": ohne_objekt,
         "rollen_namen": rollen_namen, "rollen_text": ROLLEN_TEXT,
         "views": views, "konten_daten": konten_daten, "gemessen_bis": gemessen_bis,
-        "konto": konto, "zusammen": ZUSAMMEN, "verlauf": verlauf,
+        "konto": konto, "verlauf": verlauf,
+        "konto_optionen": [(ZUSAMMEN, "Giro + Tagesgeld zusammen")]
+        + [(v["id"], v["id"]) for v in views],
         "ohne_objekt_diagramm": _diagramm_ohne_objekt(ohne_objekt),
         "median_monate": median_monate,
         # Das Endjahr wird gerechnet, nicht getippt: im Text stand "2026 +

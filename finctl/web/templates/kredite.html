@@ -4,15 +4,10 @@
 <h1>Kredite</h1>
 <p class="zweck">Was jede Rate tilgt, was sie verzinst und wann der Kredit abbezahlt ist.</p>
 
-{# Ein Vierteljahrhundert Laufzeit sind zu viele Pillen: ab mehr als acht
-   Optionen ist die Wahl eine Liste (docs/design_conventions.yaml, auswahlzeile). #}
-<form method="get" action="/kredite" class="auswahl"><label class="k" for="kr-jahr">Jahr</label>
-  <select id="kr-jahr" name="jahr" data-no-combo onchange="this.form.submit()">
-    <option value="">gesamt</option>
-    {% for y in years %}<option value="{{ y }}" {{ 'selected' if jahr == y|string }}>{{ y }}</option>{% endfor %}
-  </select>
-  <noscript><button class="ghost">Anzeigen</button></noscript>
-</form>
+{# Ein Vierteljahrhundert Laufzeit sind zu viele Pillen: die Auswahlzeile
+   wird ab mehr als acht Optionen von selbst eine Liste. #}
+{% from "_auswahl.html" import auswahl %}
+{{ auswahl(request, 'jahr', 'Jahr', [('', 'gesamt')] + years|map('string')|list, jahr or '') }}
 
 {# Ein Kredit ist ein Abschnitt, kein Kapitel. Vier Objekte mit je drei
    Tabellen sind eine Seite, durch die man scrollt statt sie zu lesen --

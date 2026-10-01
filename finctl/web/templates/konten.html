@@ -39,10 +39,10 @@
 </style>
 <h1>Konten</h1>
 <p class="zweck">Der Tiefpunkt jedes Kontos im Monat, Monat für Monat — und ob er unter die Untergrenze fällt.</p>
-<nav class="auswahl" aria-label="Horizont"><span class="k">Horizont</span>
-  <a href="{{ adresse(request, months=horizon_default) }}" class="{{ 'on' if months <= horizon_default }}">{{ horizon_default }} Monate</a>
-  <a href="{{ adresse(request, months=horizon_long) }}" class="{{ 'on' if months > horizon_default }}">{{ horizon_long }} Monate</a>
-</nav>
+{% from "_auswahl.html" import auswahl %}
+{{ auswahl(request, 'months', 'Horizont',
+           [(horizon_default, horizon_default ~ ' Monate'), (horizon_long, horizon_long ~ ' Monate')],
+           horizon_default if months <= horizon_default else horizon_long) }}
 {% for vk in verkauf_hinweis %}
 <div class="note">Verkauf <strong>{{ vk.name }}</strong> ab {{ vk.ab.strftime('%Y-%m') }} aus der
   Klammer <a class="plain" href="/planung#klammer-{{ vk.klammer_id }}">{{ vk.klammer }}</a> ist
@@ -91,10 +91,8 @@
 {# Ein Diagramm, kein Diagramm pro Konto: die Wahl ist eine Adresse, wie jede
    Auswahlzeile, und der Verlauf springt nach dem Laden wieder hierher. #}
 <h2 id="verlauf">Verlauf</h2>
-<nav class="auswahl" aria-label="Konto"><span class="k">Konto</span>
-  <a href="{{ adresse(request, konto=zusammen) }}#verlauf" class="{{ 'on' if konto == zusammen }}">Giro + Tagesgeld zusammen</a>
-  {% for v in views %}<a href="{{ adresse(request, konto=v.id) }}#verlauf" class="{{ 'on' if konto == v.id }}">{{ v.id }}</a>{% endfor %}
-</nav>
+{{ auswahl(request, 'konto', 'Konto',
+           konto_optionen, konto, anker='verlauf') }}
 {{ verlauf }}
 
 {# Die Strategie zuerst: Tiefpunkte beantworten "geht eines ins Minus", nicht

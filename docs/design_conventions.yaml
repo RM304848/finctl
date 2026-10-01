@@ -499,20 +499,24 @@ regeln:
 
   - id: auswahlzeile
     regel: >
-      Eine kurze Wahl ohne Formular -- Jahr, Konto, Horizont -- ist eine
-      `nav.auswahl` mit Pillen; die gewaehlte traegt `on` und steht gefuellt
-      im Akzent. Kein Fettdruck und keine Unterstreichung per style. Ab mehr
-      als acht Optionen ist die Wahl eine Auswahlliste in derselben Zeile, die
-      beim Wechseln laedt. Braucht eine Wahl mehrere Felder zusammen, ist sie
-      ein Formular.
+      Eine kurze Wahl ohne Formular -- Jahr, Konto, Horizont, Basis -- ist
+      `auswahl()` aus _auswahl.html: eine Zeile Pillen, jede eine Adresse, die
+      die uebrigen Parameter stehen laesst; die gewaehlte gefuellt im Akzent.
+      Ab mehr als acht Optionen macht das Makro daraus eine Auswahlliste, die
+      beim Wechseln laedt. Keine Seite baut die Zeile selbst. Was zwei Werte
+      einander gegenueberstellt (Jahr gegen Jahr), zeigt beide nebeneinander,
+      statt sie waehlen zu lassen. Braucht eine Wahl mehrere Felder zusammen,
+      ist sie ein Formular.
     warum: >
       Drei Seiten markierten die Wahl mit fett und unterstrichen, als
-      Inline-Stil: eine gewaehlte Option sah aus wie ein besuchter Link, und
-      jede Seite trennte die Optionen anders.
+      Inline-Stil. Danach stand dieselbe Zeile sechsmal von Hand in zwei
+      Vorlagen, Kredite waehlte das Jahr als Formular, und der Rueckblick bot
+      auf zwei Reitern Pillen, auf dem dritten Auswahllisten mit
+      "Anzeigen"-Knopf -- dreimal dieselbe Frage, dreimal anders gestellt.
     pruefung:
-      art: vorlagen_verbieten
-      muster: ['style="[^"]*text-decoration:underline']
-      ausnahmen: []
+      art: nur_in
+      muster: ['class="auswahl"', 'style="[^"]*text-decoration:underline']
+      dateien: [_auswahl.html]
 
   - id: tabellen
     regel: >

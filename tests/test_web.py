@@ -3814,3 +3814,43 @@ def test_the_depot_gain_is_saved_and_cleared_like_a_note():
     assert eintrag == {"cents": 100_000_00, "gewinn_cents": 25_000_00}
     assert _bestand_eintrag(dict(eintrag), {"gewinn_cents": ""}) == {"cents": 100_000_00}
     assert _bestand_eintrag({}, {"as_of": "2026-01-01"}) is None, "ohne Betrag nichts"
+
+
+def test_a_partial_year_is_compared_over_the_same_months_only():
+    """Neun Monate gegen zwoelf meldeten in jeder Zeile eine Ersparnis."""
+    from finctl.web.routen import auswertung as _a
+
+    z = {"n": {"2025": 12, "2026": 2},
+         "je_monat": {("2025", "01"): -100_00, ("2025", "02"): -100_00, ("2025", "12"): -900_00,
+                      ("2026", "01"): -150_00, ("2026", "02"): -100_00}}
+    werte = _a._jahre_rechnen(z, ["2025", "2026"], {"2026": ["01", "02"]})["jahre"]
+    assert werte["2025"] == {"cents": -1100_00, "delta": None, "n": 12}
+    # Der Dezember 2025 zaehlt nicht: 2026 hat ihn noch nicht.
+    assert werte["2026"] == {"cents": -250_00, "delta": -50_00, "n": 2}
+
+
+def test_the_year_comparison_shows_every_year_without_asking_for_two():
+    """Zwei Auswahllisten und ein Anzeigen-Knopf fragten, was eine Tabelle zeigen kann."""
+    import re
+
+    html = client.get("/rueckblick?ansicht=vorjahr").text
+    tabelle = html[html.index("Kategorie und Subkategorie"):]
+    kopf = re.search(r"<tr><th>Position</th>(.*?)</tr>", tabelle, re.S).group(1)
+    jahre = re.findall(r'<th class="num"[^>]*>(\d{4})', kopf)
+    assert jahre and jahre == sorted(jahre), "jedes Jahr eine Spalte, aelteste zuerst"
+    assert '<select name="year"' not in html and '<select name="vs"' not in html
+    assert 'aria-label="Basis"' in html
+
+
+def test_the_running_month_is_never_part_of_the_comparison():
+    """Ein Tag Oktober gegen einen ganzen Oktober waere eine Ersparnis, die es nicht gibt."""
+    import datetime as dt
+
+    from finctl.web.routen import auswertung as _a
+
+    monate = {"2024": {"06", "07", "08", "09", "10", "11", "12"},
+              "2025": {f"{m:02d}" for m in range(1, 13)},
+              "2026": {f"{m:02d}" for m in range(1, 11)}}
+    gemeinsam = _a._gemeinsame_monate(monate, dt.date(2026, 10, 1))
+    assert gemeinsam["2025"] == ["06", "07", "08", "09", "10", "11", "12"]
+    assert gemeinsam["2026"] == [f"{m:02d}" for m in range(1, 10)]
