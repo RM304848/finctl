@@ -107,17 +107,19 @@ def konten(conn: sqlite3.Connection, heute: date, periode: str,
         if deckt:
             p.beleg = f"Auszug bis {bis.isoformat()}"
         else:
-            p.hinweis = (f"{vor:%Y-%m} fehlt" if bis
+            # Der Beleg bleibt stehen, auch wenn ein Monat fehlt: wie weit der
+            # Auszug reicht, ist genau das, was man zum Nachholen wissen muss.
+            p.hinweis = (f"Auszug bis {bis.isoformat()} · {vor:%Y-%m} fehlt" if bis
                          else "noch kein Auszug eingelesen")
         b = live.get(row["id"])
         if b and b.get("as_of"):
             a = b["as_of"]
             a = a if isinstance(a, date) else date.fromisoformat(str(a))
             # NUR WENN ER NEUER IST ALS DER AUSZUG. Ein Livestand zum selben
-            # Tag wiederholt nur den Auszugsschluss -- bei zwei Konten standen
-            # etwa 50,00 und 500,00 zweimal da, einmal belegt und einmal
-            # getippt. Mit Betrag, weil der Zusatz sonst nicht sagt, WARUM er
-            # dasteht: etwa 1.000 Verkaufserloes seit dem Auszug.
+            # Tag wiederholt nur den Auszugsschluss -- derselbe Saldo stand
+            # sonst zweimal da, einmal belegt und einmal getippt. Mit Betrag,
+            # weil der Zusatz sonst nicht sagt, WARUM er dasteht, etwa ein
+            # Verkaufserloes, der nach dem Auszug eingegangen ist.
             if bis is None or a > bis:
                 from finctl.ledger.db import format_eur
 

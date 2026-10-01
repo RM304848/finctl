@@ -159,15 +159,21 @@ def test_review_page_is_not_bloated():
     Buchungstext laenger wird -- was er tat, als PayPal ein Konto wurde und
     Absenderadressen mitbrachte. Die Aussage war nie "die Seite ist klein",
     sondern "die Kategorienliste steht einmal da".
+
+    Gemessen wird deshalb das Markup der Zeilen selbst. Die ganze Seite durch
+    die Zeilenzahl zu teilen legte den festen Teil (Stil, Kopf, Skripte) auf
+    die Zeilen um: je kuerzer die Warteschlange, desto "schwerer" jede Zeile.
     """
+    import re
+
     seite = client.get("/transactions?ansicht=offen").text
-    zeilen = seite.count('<tr id="row-')
+    zeilen = re.findall(r'<tr id="row-.*?</tr>', seite, re.S)
     if not zeilen:
         # Eine abgearbeitete Warteschlange ist der Normalfall, kein Fehler --
         # nur laesst sich an null Zeilen nichts ueber ihre Groesse sagen.
         pytest.skip("Review-Warteschlange ist leer")
     assert seite.count("const CATS") == 1, "Kategorienliste je Zeile wiederholt"
-    assert len(seite) / zeilen < 3_000
+    assert sum(map(len, zeilen)) / len(zeilen) < 3_000
 
 
 def test_unknown_transaction_is_404():
@@ -2474,6 +2480,13 @@ def test_a_parsed_account_is_judged_by_the_last_complete_month():
         # Ein Monat weiter, ohne neue Auszuege: jetzt fehlt der September.
         spaeter = ma.konten(c, date(2026, 10, 5), "2026-10")
         assert any(not p.erledigt for p in spaeter)
+
+        # Was fehlt, ersetzt den Beleg nicht: wie weit der Auszug reicht, steht
+        # weiter da (auszug-ist-nicht-editierbar), daneben der fehlende Monat.
+        viel_spaeter = ma.konten(c, date(2030, 2, 5), "2030-02")
+        for p in viel_spaeter:
+            if p.stand:
+                assert p.hinweis == f"Auszug bis {p.stand.isoformat()} · 2030-01 fehlt", p.name
     finally:
         c.close()
 
