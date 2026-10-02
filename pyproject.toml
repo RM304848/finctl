@@ -19,6 +19,7 @@ dependencies = [
     "jinja2>=3.1",
     "python-multipart>=0.0.9",   # FastAPI form posts
     "filelock>=3.13",            # Sperre beim Schreiben, auch auf Windows
+    "pyobjc-framework-Cocoa>=10; sys_platform == 'darwin'",  # Symbol in der Menueleiste
 ]
 
 [project.optional-dependencies]

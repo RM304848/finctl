@@ -16,7 +16,9 @@ WAS ER ANDERS MACHT ALS `serve`:
   Browser geoeffnet -- ein zweiter Doppelklick startet keinen zweiten Server.
   Antwortet dort etwas anderes, nimmt er einen freien Port.
 * Er laesst sich aus der App heraus beenden (Knopf "Beenden"): Auf dem Mac
-  gibt es kein Fenster, das man schliessen koennte.
+  gibt es kein Fenster, das man schliessen koennte. Dafuer steht die App dort
+  in der Menueleiste (`menueleiste.py`): oeffnen, beenden.
+  `FINCTL_KEINE_MENUELEISTE=1` laesst das Symbol weg.
 * Solange es kein Konto gibt, oeffnet er die Einrichtung statt des
   Monatsabschlusses. Wer die App zum ersten Mal oeffnet, soll dort landen,
   wo es losgeht -- und nicht vor einer leeren Uebersicht. Eine Umleitung
@@ -32,6 +34,8 @@ import threading
 import time
 import urllib.request
 import webbrowser
+
+from finctl import menueleiste
 
 PORT = 8777
 HOST = "127.0.0.1"
@@ -129,11 +133,16 @@ def main() -> None:
         server.should_exit = True
 
     basis.BEENDEN = beenden
-    print(f"Finance OS laeuft: {adresse}\n"
-          "Beenden: in der App oben rechts -- oder dieses Fenster schliessen.")
     threading.Thread(target=_browser_wenn_bereit, args=(server, erste_seite),
                      daemon=True).start()
-    server.run()
+    if menueleiste.verfuegbar() and not os.environ.get("FINCTL_KEINE_MENUELEISTE"):
+        print(f"Finance OS laeuft: {adresse}\n"
+              "Beenden: in der App oben rechts oder in der Menueleiste.")
+        menueleiste.laufen(server, adresse)
+    else:
+        print(f"Finance OS laeuft: {adresse}\n"
+              "Beenden: in der App oben rechts -- oder dieses Fenster schliessen.")
+        server.run()
 
 
 if __name__ == "__main__":

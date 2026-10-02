@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from finctl import starter
+from finctl import menueleiste, starter
 from finctl.web.server import app
 
 WURZEL = Path(__file__).resolve().parent.parent
@@ -108,6 +108,10 @@ def test_the_app_sets_itself_up_starts_and_quits(tmp_path):
         with urllib.request.urlopen(anfrage, timeout=5) as a:
             assert json.loads(a.read()) == {"ok": True}
         assert lauf.wait(timeout=20) == 0
+        # Auf dem Mac lief das ueber das Symbol in der Menueleiste -- und
+        # endete trotzdem sauber, mit Python, das seine Ausgabe noch schrieb.
+        if menueleiste.verfuegbar():
+            assert "in der Menueleiste" in lauf.stdout.read()
     finally:
         if lauf.poll() is None:
             lauf.kill()
@@ -120,3 +124,36 @@ def test_the_first_start_opens_the_setup_and_later_ones_the_overview(monkeypatch
     assert starter.startseite() == "einrichtung"
     monkeypatch.setattr(konten, "laden", lambda *a, **k: [{"id": "giro"}])
     assert starter.startseite() == ""
+
+
+def test_without_appkit_there_is_no_menu_bar(monkeypatch):
+    """Windows oder ein Python ohne pyobjc: der Starter laeuft wie vorher."""
+    monkeypatch.setitem(sys.modules, "AppKit", None)
+    assert menueleiste.verfuegbar() is False
+
+
+@pytest.mark.skipif(not menueleiste.verfuegbar(), reason="nur auf dem Mac mit pyobjc")
+def test_the_menu_opens_and_quits(monkeypatch):
+    """Das Menue selbst, ohne Symbol in der Leiste: das zeigte jeder Testlauf."""
+    import AppKit
+
+    class Server:
+        should_exit = False
+
+    geoeffnet = []
+    monkeypatch.setattr(menueleiste.webbrowser, "open", geoeffnet.append)
+    ziel = menueleiste._ziel().alloc().init()
+    ziel.adresse, ziel.server = "http://127.0.0.1:1/", Server()
+    menue = menueleiste._menue(ziel, "Finance OS")
+
+    titel = [menue.itemAtIndex_(i).title() for i in range(menue.numberOfItems())]
+    assert titel == ["Finance OS öffnen", "", "Beenden"]
+    assert menue.itemAtIndex_(1).isSeparatorItem()
+    for i in (0, 2):
+        punkt = menue.itemAtIndex_(i)
+        AppKit.NSApplication.sharedApplication().sendAction_to_from_(
+            punkt.action(), punkt.target(), punkt)
+    assert geoeffnet == ["http://127.0.0.1:1/"] and ziel.server.should_exit is True
+    # Ein SF Symbol, das dieses System kennt -- sonst stuende nur der Ersatz da.
+    assert AppKit.NSImage.imageWithSystemSymbolName_accessibilityDescription_(
+        menueleiste.SYMBOL, None) is not None

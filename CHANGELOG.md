@@ -15,6 +15,9 @@ macht daraus beim Veröffentlichen die neue Version.
   einer Meldung abgelehnt.
 - Mandatsreferenz und Gläubiger-ID eines CSV-Exports erreichen die Regeln,
   wie im PDF-Auszug.
+- Auf dem Mac steht Finance OS jetzt **in der Menüleiste** (ein Euro im
+  Kreis): „Finance OS öffnen“ holt die Seite zurück, wenn der Tab zu ist,
+  „Beenden“ beendet die App.
 
 ## 0.3.0 – 2026-09-29
 

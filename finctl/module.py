@@ -64,6 +64,7 @@ KERN = ("finctl/__init__.py", "finctl/pfade.py", "finctl/overlays.py",
 
 #: Die Oberflaeche und die Ablaeufe darueber. Darf alles importieren.
 APP = ("finctl/cli.py", "finctl/ops.py", "finctl/monatsabschluss.py", "finctl/starter.py",
+       "finctl/menueleiste.py",
        "finctl/web/")
 
 #: Seiten, die keinem Modul gehoeren.
