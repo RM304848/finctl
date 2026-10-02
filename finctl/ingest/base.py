@@ -43,8 +43,10 @@ class ParseResult:
     # Which date the printed balances follow. Most issuers reconcile on the
     # booking date, but Scalable's Kontostand lines are value-dated: interest
     # booked on the 1st with Wertstellung on the previous month's last day is
-    # already inside the opening balance. Reconciling such a statement on
-    # booking dates fails by exactly the value of those lines.
+    # already inside the opening balance, and so is everything value-dated on
+    # the 1st itself -- the opening is the balance at the end of that day.
+    # Reconciling such a statement on booking dates fails by exactly the
+    # value of those lines.
     reconcile_basis: str = "booking"        # 'booking' | 'value'
 
 

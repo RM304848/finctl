@@ -2477,8 +2477,15 @@ def test_a_parsed_account_is_judged_by_the_last_complete_month():
         # Septemberauszug existieren muesste.
         assert all(p.erledigt for p in zeilen), [p.name for p in zeilen if not p.erledigt]
 
-        # Ein Monat weiter, ohne neue Auszuege: jetzt fehlt der September.
-        spaeter = ma.konten(c, date(2026, 10, 5), "2026-10")
+        # Einen Monat nach dem juengsten Auszug, ohne neue: jetzt fehlt einer.
+        # Aus den Daten, nicht fest -- sonst kippt die Pruefung, sobald der
+        # naechste Monat fuer alle Konten eingelesen ist.
+        neuester = date.fromisoformat(c.execute(
+            "SELECT MAX(period_end) FROM statements WHERE status = 'imported'"
+        ).fetchone()[0])
+        monate = neuester.year * 12 + neuester.month + 1   # zwei Monate weiter
+        spaeter_tag = date(monate // 12, monate % 12 + 1, 5)
+        spaeter = ma.konten(c, spaeter_tag, spaeter_tag.strftime("%Y-%m"))
         assert any(not p.erledigt for p in spaeter)
 
         # Was fehlt, ersetzt den Beleg nicht: wie weit der Auszug reicht, steht

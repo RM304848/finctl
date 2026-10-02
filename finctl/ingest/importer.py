@@ -186,13 +186,15 @@ def reconcile(result: ParseResult) -> Reconciliation:
     header = result.header
 
     if result.reconcile_basis == "value":
-        # Count only what the printed balances actually moved: entries whose
-        # value date falls inside the period. Entries value-dated earlier are
-        # already in the opening balance, though they are still imported --
-        # this statement is the only place they appear.
+        # Count only what the printed balances actually moved. The opening
+        # "Kontostand am <erster Tag>" is the balance at the END of that day,
+        # so entries value-dated on or before it are already inside it --
+        # they are still imported, this statement is the only place they
+        # appear. Counting the first day too double-counts every transfer
+        # that arrives on the 1st.
         in_period = [
             txn for txn in result.transactions
-            if header.period_start <= (txn.value_date or txn.booking_date)
+            if header.period_start < (txn.value_date or txn.booking_date)
             <= header.period_end
         ]
     else:

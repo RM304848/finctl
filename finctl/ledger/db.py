@@ -180,14 +180,16 @@ def statement_chain_gaps(conn: sqlite3.Connection) -> list[dict]:
     # Some issuers (Scalable) print value-dated balances, so interest and tax
     # value-dated to the previous month's last day but booked on the 1st sit
     # inside the NEXT statement while already being counted in its opening
-    # balance. Those entries explain an apparent break and are not one.
+    # balance. The opening is the balance at the end of the period's first
+    # day, so entries value-dated on that day are inside it too. Those
+    # entries explain an apparent break and are not one.
     def carried_in(statement_id: int, period_start: str) -> int:
         row = conn.execute(
             """
             SELECT COALESCE(SUM(amount_cents), 0)
             FROM   transactions
             WHERE  statement_id = ? AND value_date IS NOT NULL
-                   AND value_date < ?
+                   AND value_date <= ?
             """,
             (statement_id, period_start),
         ).fetchone()
