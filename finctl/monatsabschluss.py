@@ -114,10 +114,10 @@ def konten(conn: sqlite3.Connection, heute: date, periode: str,
             a = b["as_of"]
             a = a if isinstance(a, date) else date.fromisoformat(str(a))
             # NUR WENN ER NEUER IST ALS DER AUSZUG. Ein Livestand zum selben
-            # Tag wiederholt nur den Auszugsschluss -- bei C24 und Sparda
-            # standen 60,57 und 573,62 zweimal da, einmal belegt und einmal
+            # Tag wiederholt nur den Auszugsschluss -- bei zwei Konten standen
+            # etwa 50,00 und 500,00 zweimal da, einmal belegt und einmal
             # getippt. Mit Betrag, weil der Zusatz sonst nicht sagt, WARUM er
-            # dasteht: bei DKB sind es 7.870 Verkaufserloes seit dem Auszug.
+            # dasteht: etwa 1.000 Verkaufserloes seit dem Auszug.
             if bis is None or a > bis:
                 from finctl.ledger.db import format_eur
 
