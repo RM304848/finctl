@@ -82,6 +82,11 @@ class Line:
     #: Nur bei Teilzeit: welche Werte ("anteil", "start") aus den Annahmen
     #: kommen, weil die Zeile selbst keine eigenen traegt.
     aus_annahmen: tuple[str, ...] = ()
+    #: Nur beim Wegfall: die Reihe verlaesst nur DIESES Konto, ausgegeben wird
+    #: weiter -- etwa Tanken, das von einer Karte auf eine andere zieht. Wirkt
+    #: dann nur in der Kontoprognose und nur auf `account_id`; die
+    #: Jahresrechnung misst den Haushalt und sieht keinen Unterschied.
+    nur_kontoprognose: bool = False
 
     def months(self, horizon_end: date) -> list[date]:
         """Every month this line touches, up to the horizon.
@@ -229,7 +234,9 @@ def load(spec: dict) -> list[Scenario]:
                 property_id=item.get("objekt") or None,
                 kosten_cents=int(item.get("verkaufskosten_cents") or 0),
                 anteil=(float(item["anteil"]) if item.get("anteil") is not None
-                        else None)))
+                        else None),
+                nur_kontoprognose=kind == "wegfall"
+                and bool(item.get("nur_kontoprognose"))))
             if kind == "teilzeit":
                 _teilzeit_aus_annahmen(lines[-1])
         pflicht = bool(raw.get("pflicht"))
@@ -355,6 +362,11 @@ def messung(conn, line: Line, f) -> dict:
         quelle = "zugeordnet"
     else:
         return leer
+    # Zieht eine Reihe nur von einem Konto weg, gehoert nur ihr Teil auf diesem
+    # Konto zur Zeile; auf den anderen laeuft sie weiter.
+    if line.nur_kontoprognose and line.account_id:
+        bedingung.append("t.account_id = ?")
+        args.append(line.account_id)
     # Neue Kosten zaehlen erst ab ihrem Start: was davor in der Kategorie lief,
     # ist etwas anderes.
     if line.kind == "betrag" and line.start and line.frequency != "einmalig":
@@ -416,7 +428,7 @@ def restbetrag_je_termin(line: Line, m: dict) -> int:
     Wahrheit reisst, und genau den liest die Dispo-Warnung.
     """
     n = m.get("monate") or 0
-    if line.kind in NUR_JAHRESRECHNUNG:
+    if line.kind in NUR_JAHRESRECHNUNG or line.nur_kontoprognose:
         return 0
     if line.kind == "wegfall":
         return round(-m["cents"] / n) if n else 0
@@ -446,6 +458,8 @@ def jahreswirkung(line: Line, m: dict, year: int, after_month: int,
     """Was die Zeile in einem projizierten Jahr beitraegt, im Kreis gerechnet."""
     if line.kind in NUR_JAHRESRECHNUNG:
         return 0              # wirkt ueber jahre.verkaeufe bzw. das Gehalt
+    if line.nur_kontoprognose:
+        return 0              # der Haushalt gibt weiter aus, nur anderswo
     n = m.get("monate") or 0
     if line.frequency == "einmalig":
         if line.buchungen:

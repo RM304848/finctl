@@ -248,6 +248,7 @@ function artWechsel(zid){
   // Teilzeit nur einen Anteil -- das Gehalt dazu wird gemessen.
   for (const f of ['l-objekt-', 'l-kosten-']) document.getElementById(f + zid).hidden = !verkauf;
   document.getElementById('l-anteil-' + zid).hidden = !teilzeit;
+  document.getElementById('l-nurkonto-' + zid).hidden = !wegfall;
   for (const f of ['e-kat-', 'e-konto-']) {
     const el = document.getElementById(f + zid);
     el.disabled = verkauf || teilzeit; el.style.opacity = el.disabled ? .45 : 1;
@@ -308,7 +309,8 @@ function neueZeile(kid){
   const body = {szenario: kid, art: art, label: g('e-label').value,
     kategorie: g('e-kat').value, konto: g('e-konto').value,
     frequenz: g('e-freq').value, start: g('e-von').value, ende: g('e-bis').value,
-    amount_cents: art === 'wegfall' ? null : betragMitRichtung('e-amt-' + zid, 'e-richtung-' + zid)};
+    amount_cents: art === 'wegfall' ? null : betragMitRichtung('e-amt-' + zid, 'e-richtung-' + zid),
+    nur_kontoprognose: art === 'wegfall' && g('e-nurkonto').checked};
   try { sessionStorage.setItem('planung-offen', ''); } catch(e) {}
   post('/api/szenario-zeile', body, true, 'meldung-' + zid);
 }
@@ -328,6 +330,8 @@ function saveZeile(id, i, zid, art){
   if (art !== 'wegfall') {
     body.frequenz = g('e-freq').value;
     body.amount_cents = betragMitRichtung('e-amt-' + zid, 'e-richtung-' + zid);
+  } else {
+    body.nur_kontoprognose = g('e-nurkonto').checked;
   }
   post('/api/szenario-zeile', body, true, 'meldung-' + zid);
 }

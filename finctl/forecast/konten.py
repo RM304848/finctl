@@ -271,6 +271,10 @@ def _planposten(conn, account: str, fcfg: dict, as_of: str, months: int) -> list
 
     out = []
     for row in _sz.dated_amounts(geladen, horizon):
+        # Ein Wegfall rechnet hier nicht mit seiner Jahresmessung, sondern in
+        # `wegfall_posten` mit dem, was diese Prognose fuer seine Reihe bucht.
+        if row["kind"] == "wegfall":
+            continue
         # A line with no account belongs to the operating account: that is
         # where a rate is debited unless stated otherwise, and dropping it
         # would make a plan look free.
@@ -286,6 +290,111 @@ def _planposten(conn, account: str, fcfg: dict, as_of: str, months: int) -> list
                                           "gemessen": gemessen[schluessel]},
                                          account)))
     return out
+
+
+def _klammern() -> list:
+    """Die Klammern aus szenarien.yaml, geladen -- oder keine."""
+    import yaml as _yaml
+
+    from finctl.forecast import szenarien as _sz
+
+    pfad = CONFIG_DIR / "szenarien.yaml"
+    if not pfad.exists():
+        return []
+    return _sz.load(_yaml.safe_load(pfad.read_text(encoding="utf-8")) or {})
+
+
+def wegfall_posten(conn, account: str, klammern: list, abgeleitet: list,
+                   ableiten, *, start, months: int,
+                   overrides: dict | None = None) -> list:
+    """Die eingeschalteten Wegfall-Zeilen als datierte Posten DIESES Kontos.
+
+    GENAU DAS, WAS DIE PROGNOSE FUER DIE REIHE BUCHT -- nicht mehr, nicht
+    weniger. Die Kontoprognose leitet ihre Posten anders her als die
+    Jahresrechnung: variable Kosten als Schnitt ueber sechs Monate,
+    Jahresposten an ihrem Termin. Bis 02.10.2026 zog ein Wegfall hier
+    trotzdem den Zwoelfmonatsschnitt der Jahresrechnung ab, und beides lief
+    auseinander: auf C24 standen 12,74 Kraftstoff gegen 6,37 Wegfall, und
+    eine Jahreszahlung von 9,99 gegen 5,49 in jedem Monat.
+
+    Deshalb wird die Ableitung einmal MIT und einmal OHNE die Reihe der
+    zugeordneten Buchungen gerechnet; der Unterschied je Monat ist der
+    Wegfall, ab seinem Start. Er hebt den fortgeschriebenen Posten auf, auch
+    wenn der nur einmal im Jahr faellt, und auf jedem Konto, auf dem die
+    Reihe liegt. Laeuft die Reihe aus dem Messfenster, wird der Unterschied
+    von selbst null.
+
+    Mit `nur_kontoprognose` gilt die Zeile nur fuer IHR Konto: die Reihe
+    zieht um, statt zu enden. Ihre Reihe kann auf anderen Konten weiterlaufen
+    -- dieselbe Gegenpartei in derselben Kategorie --, und dort bleibt sie.
+
+    `abgeleitet` sind die Posten, wie `abgeleitete_posten` sie liefert, ohne
+    Budgets; `ableiten(ohne)` rechnet sie ohne die genannten Buchungen.
+    Zwei Zeilen auf dieselbe Reihe ziehen sie einmal ab: jede nimmt nur, was
+    die vorigen noch nicht genommen haben.
+    """
+    from finctl.forecast import engine as fc
+    from finctl.forecast import szenarien as _sz
+    from finctl.forecast.herkunft import monat
+    from finctl.ledger import reihe as _reihe
+
+    overrides = overrides or {}
+    horizont = fc.add_months(start, months - 1)
+
+    def betrag(posten: list, wann) -> int:
+        # Wie `engine.project`: ein Override ist eine gesetzte Zahl.
+        return sum(overrides[p.label] if p.label in overrides
+                   else p.amount_in(wann, start)
+                   for p in posten if p.due_in(wann))
+
+    out = []
+    genommen: set[str] = set()
+    vorher = abgeleitet
+    for klammer in _sz.active(klammern):
+        for index, line in enumerate(klammer.lines):
+            if line.kind != "wegfall" or not line.buchungen or not line.start:
+                continue
+            if line.nur_kontoprognose and line.account_id != account:
+                continue
+            reihe = set(_reihe.hashes(conn, line.buchungen)) - genommen
+            if not reihe or not _auf_konto(conn, account, reihe):
+                continue
+            genommen |= reihe
+            nachher = ableiten(frozenset(genommen))
+            n = len(line.buchungen)
+            herkunft = {
+                "quelle": "plan", "verweis": f"{klammer.id}:{index}",
+                "kategorie": line.category_id,
+                "herleitung": (
+                    f"entfällt ab {monat(line.start)}: genau, was die Prognose "
+                    f"für diese Reihe auf {account} sonst bucht — "
+                    f"{n} zugeordnete Buchung{'' if n == 1 else 'en'}, "
+                    f"{len(reihe)} in der Reihe")}
+            for wann in line.months(horizont):
+                if wann < start:
+                    continue
+                differenz = betrag(vorher, wann) - betrag(nachher, wann)
+                if not differenz:
+                    continue
+                # Faellt eine Ausgabe weg, steht das vor den Kosten des Tages;
+                # faellt eine Einnahme weg, dort, wo sie gekommen waere.
+                out.append(fc.OneOff(
+                    label=f"{klammer.name}: {line.label}", account_id=account,
+                    month=wann, amount_cents=-differenz,
+                    reduces_cost=differenz < 0,
+                    day=None if differenz < 0 else fc.UNDATED_INCOME_DAY,
+                    herkunft=herkunft))
+            vorher = nachher
+    return out
+
+
+def _auf_konto(conn, account: str, hashes: set[str]) -> bool:
+    """Liegt wenigstens eine dieser Buchungen auf dem Konto?"""
+    platz = ",".join("?" * len(hashes))
+    return conn.execute(
+        f"SELECT 1 FROM transactions WHERE account_id = ? "
+        f"AND dedup_hash IN ({platz}) LIMIT 1",
+        (account, *sorted(hashes))).fetchone() is not None
 
 
 def _herkunft_konto(conn, fcfg: dict, recurring, one_offs, schedules,
@@ -349,7 +458,8 @@ def date_vor(tag):
 
 def abgeleitete_posten(conn, account: str, fcfg: dict,
                        erklaerte_abos: list | None = None, *,
-                       abwahl: bool = True, stichtag=None) -> list:
+                       abwahl: bool = True, stichtag=None,
+                       ohne_reihen: frozenset[str] = frozenset()) -> list:
     """Die aus dem Ledger abgeleiteten Posten eines Kontos.
 
     Eigene Funktion, weil die Prognosebasis auf /annahmen dieselben Posten zeigt, die die
@@ -357,6 +467,9 @@ def abgeleitete_posten(conn, account: str, fcfg: dict,
 
     `stichtag` (ein Monatserster) rechnet so, als waere heute dieser Tag:
     Fenster davor, keine Buchung ab dem Stichtag. Fuer den Treffer-Check.
+
+    `ohne_reihen` laesst diese Buchungen aus der Messung -- so rechnet
+    `wegfall_posten`, was eine Reihe in der Prognose ausmacht.
     """
 
     from finctl import abos as _ab
@@ -403,14 +516,13 @@ def abgeleitete_posten(conn, account: str, fcfg: dict,
         # construction -- 540 in by standing order, 540 out as the rate --
         # projected to -2.664. The household forecast fixed this long ago; the
         # per-account one never did.
-        # Things that have been STOPPED by a decision. The rolling window
-        # would eventually forget them, but "eventually" is six months of
-        # warning about spending that is not going to happen, and a forecast
-        # that keeps charging for a habit you have ended is one you stop
-        # believing.
+        #
+        # Was durch eine Entscheidung AUFHOERT, steht nicht hier, sondern als
+        # Wegfall-Zeile auf /planung oder als Kuendigung auf /abos -- siehe
+        # `wegfall_posten`. Bis 02.10.2026 stand es als `discontinued` in
+        # forecast.yaml und strich hier die ganze Kategorie: wirksam, aber im
+        # Frontend nirgends zu sehen.
         exclude=set(fcfg.get("exclude_from_recurring", []) or []) | {
-            d["category"] for d in (fcfg.get("discontinued") or [])
-            if d.get("account") in (None, account)} | {
             r["id"] for r in conn.execute(
                 "SELECT id FROM mgmt_categories WHERE parent_id = 'kredit'")} | (
             # Unter Prognosebasis abgewaehlt: gilt fuer BEIDE Rechnungen.
@@ -427,7 +539,8 @@ def abgeleitete_posten(conn, account: str, fcfg: dict,
               for cat, when in (fcfg.get("enden") or {}).items()},
         # Was in `abos.yaml` mit Termin erklaert ist, wird nicht zusaetzlich
         # gemessen -- sonst stuende derselbe Betrag zweimal da.
-        ohne=_ab.ausschluesse(conn, erklaerte_abos),
+        ohne=_ab.ausschluesse(conn, erklaerte_abos) + (
+            [{"dedup_hashes": sorted(ohne_reihen)}] if ohne_reihen else []),
         until=bis,
         # Variable Kosten als Schnitt ueber das Fenster, siehe derive_recurring.
         variabel_als_schnitt=str(fcfg.get("variable_kosten") or "") == "schnitt",
@@ -495,6 +608,7 @@ def account_forecast(conn, account: str, *, months: int = HORIZON_DEFAULT,
 
     erklaerte_abos = _ab.alle_vertraege()
     recurring = abgeleitete_posten(conn, account, fcfg, erklaerte_abos)
+    abgeleitet = list(recurring)       # ohne die Budgets, fuer wegfall_posten
 
     # Budgets, declared rather than derived. This is the model the spreadsheet
     # ran: a fixed allocation in, observed spending out. It has to be declared
@@ -561,6 +675,12 @@ def account_forecast(conn, account: str, *, months: int = HORIZON_DEFAULT,
     # ended up affecting the goals but not the projection.
 
     one_offs.extend(_planposten(conn, account, fcfg, as_of, months))
+    one_offs.extend(wegfall_posten(
+        conn, account, _klammern(), abgeleitet,
+        lambda ohne: abgeleitete_posten(conn, account, fcfg, erklaerte_abos,
+                                        ohne_reihen=ohne),
+        start=fc.add_months(_date.fromisoformat(as_of).replace(day=1), 1),
+        months=months, overrides=_income_overrides(fcfg)))
 
     # Die erklaerten Abos, mit ihrem TERMIN statt als Zwoelftel. Genau das
     # unterscheidet diese Ansicht von einem Median: die 84,00 gehen an einem

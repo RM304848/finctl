@@ -140,47 +140,6 @@ def test_a_servicing_account_does_not_pay_its_loan_twice():
     assert derive_recurring(db, "s", exclude={"kredit/zinsen"}) == []
 
 
-def test_a_discontinued_habit_is_dropped_from_the_baseline():
-    """A decision the rolling window cannot see for six months.
-
-    The joint-account top-ups through Trade Republic were replaced by a larger
-    standing order. Extrapolating them would charge for both, and a forecast
-    that keeps billing you for a habit you ended is one you stop believing.
-    """
-    import yaml
-
-    spec = yaml.safe_load(open("config/forecast.yaml", encoding="utf-8"))
-    stopped = spec.get("discontinued") or []
-    assert stopped, "config/forecast.yaml carries no discontinued list"
-    for entry in stopped:
-        # Each one has to say what, when and why -- otherwise it is just a
-        # number quietly removed from a forecast.
-        assert entry.get("category")
-        assert entry.get("from")
-        assert entry.get("reason")
-
-
-def test_discontinued_is_scoped_to_the_account_that_stopped():
-    """The standing order still runs on DKB; only the ad-hoc channel is shut."""
-    import sqlite3
-
-    from finctl import kontenregeln as kr
-    from finctl import ops
-
-    eingestellt = [e for e in kr.wirksam().get("discontinued") or [] if e.get("account")]
-    if not eingestellt:
-        pytest.skip("nichts eingestellt in forecast.yaml")
-    db = sqlite3.connect("data/finance.db")
-    db.row_factory = sqlite3.Row
-    try:
-        zu = ops.account_forecast(db, eingestellt[0]["account"], months=3)
-        betrieb = ops.account_forecast(db, _konto_mit_rolle("operating"), months=3)
-    finally:
-        db.close()
-    # Das Betriebskonto zahlt weiter; nur der eingestellte Kanal ist zu.
-    assert betrieb["rows"] and zu["rows"]
-
-
 def test_only_the_operating_account_sweeps(tmp_path):
     """Abraeumen ist ein Uebertrag, und ein Uebertrag hat zwei Seiten.
 

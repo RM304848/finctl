@@ -521,22 +521,21 @@ lässt ein kaum begonnenes Depot halb fertig aussehen.
 
 Alles, was noch nicht im Ledger steht, als **Klammern** mit beliebig vielen Positionen.
 
-- **Verpflichtungen** sind eingegangen und gelten in jeder Projektion; **Pläne** sind
-  Optionen und lassen sich schalten. Der Schalter bewegt Kontenvorschau, Jahresrechnung
-  und Ziele gemeinsam.
+- **Verpflichtungen** gelten in jeder Projektion; **Pläne** sind Optionen und lassen
+  sich schalten. Der Schalter bewegt Kontenvorschau, Jahresrechnung und Ziele gemeinsam.
 - Eine Position ist ein **Betrag** oder ein **Wegfall**. Ein neues Auto kostet nicht
   seine Rate, sondern die Rate minus dem, was der alte Wagen kostet.
 - **Teilzeit**: Anteil und Beginn aus den Annahmen, die Klammer schaltet sie ein.
 - Beträge werden **ohne Vorzeichen** eingetragen, die Richtung ist eine Auswahl.
-- Gemessen wird über die **zugeordneten Buchungen**, nicht über die Kategorie und nie
-  eingetippt. Ein Haken genügt: dazu zählt die Reihe, also derselbe Empfänger in
-  derselben Kategorie. Ohne Zuordnung zieht ein Wegfall nichts ab — die Seite sagt das
-  oben an.
-- Eine Zeile wirkt nur mit dem Teil, der **noch nicht im Ledger steht**. Was schon
-  gebucht ist, steckt im Median und wird abgezogen; ein Wegfall schrumpft, sobald das
-  Messfenster über ihn hinweggelaufen ist. Beide Rechnungen tun das gleich.
-- Projiziert wird **ab dem Monat nach dem letzten Kontoauszug**, damit Eingetretenes
-  nicht doppelt zählt.
+- Gemessen wird über die **zugeordneten Buchungen**, nie eingetippt. Ein Haken genügt:
+  dazu zählt die Reihe, derselbe Empfänger in derselben Kategorie. Ohne Zuordnung zieht
+  ein Wegfall nichts ab.
+- Ein Wegfall nimmt in jeder Rechnung genau heraus, was sie für die Reihe fortschreibt.
+  **Nur Kontoprognose** heißt: die Reihe verlässt nur dieses Konto, ausgegeben wird
+  weiter — die Jahresrechnung bleibt unberührt.
+- Eine Zeile wirkt nur mit dem Teil, der **noch nicht im Ledger steht**; ein Wegfall
+  schrumpft, sobald das Messfenster über ihn hinweggelaufen ist.
+- Projiziert wird **ab dem Monat nach dem letzten Kontoauszug**.
 - Sind zwei Pläne gleichzeitig an, summiert die Prognose sie. Varianten derselben
   Entscheidung gehören einzeln eingeschaltet.
 

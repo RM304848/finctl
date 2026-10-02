@@ -656,7 +656,7 @@ def _vertragsenden(conn: sqlite3.Connection, f, geladen: list,
         return []
     schon = {b["dedup_hash"]
              for s in _sz.active(geladen) for line in s.lines
-             if line.kind == "wegfall"
+             if line.kind == "wegfall" and not line.nur_kontoprognose
              for b in (_sz.messung(conn, line, f).get("buchungen") or [])}
     block_je_kategorie = {k: block for block, kats in base.items() for k in kats}
 

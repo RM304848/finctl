@@ -389,14 +389,59 @@ def _teilzeitzeile(body: dict, label: str):
     return eintrag
 
 
+def _planzeile(body: dict, label: str, freq: str):
+    """Eine Betrags- oder Wegfallzeile aus dem Formular, geprueft."""
+    from finctl.forecast import szenarien as _sz
+
+    if freq not in _sz.FREQUENCIES:
+        return JSONResponse({"error": f"unbekannte Frequenz {freq}"},
+                            status_code=400)
+    art = body.get("art") or "betrag"
+    if art not in _sz_kinds():
+        return JSONResponse({"error": f"unbekannte Art {art}"}, status_code=400)
+    # Ein Wegfall trägt keinen Betrag: der wird gemessen. Einen zu
+    # verlangen hiesse, genau die Behauptung einzuladen, die er vermeidet.
+    if art == "betrag" and body.get("amount_cents") in (None, ""):
+        return JSONResponse({"error": "Betrag fehlt"}, status_code=400)
+    if not (body.get("start") or "").strip():
+        return JSONResponse({"error": "Startdatum fehlt"}, status_code=400)
+    # A category is REQUIRED on every line. Without it a scenario is a
+    # lump sum with a name, and the moment it is switched on the forecast
+    # gains money movements that no report can place. It is also what lets
+    # a planned obligation and a scenario line be the same thing.
+    kategorie = (body.get("kategorie") or "").strip()
+    if not kategorie:
+        return JSONResponse({"error": "Kategorie fehlt"}, status_code=400)
+    entry = {"label": label, "art": art,
+             "amount_cents": int(body["amount_cents"] or 0)
+                             if art == "betrag" else 0,
+             "frequenz": "monatlich" if art == "wegfall" else freq,
+             "start": str(body["start"]).strip(),
+             "kategorie": kategorie}
+    # Which account it is debited from. Optional, and the fallback is the
+    # operating account -- but saying it matters, because Konten warns per
+    # account and per day. A rate charged to Trade Republic that the model
+    # books against DKB shows no breach where a real one would happen.
+    if (body.get("konto") or "").strip():
+        entry["konto"] = str(body["konto"]).strip()
+    if (body.get("ende") or "").strip() and freq != "einmalig":
+        entry["ende"] = str(body["ende"]).strip()
+    # Ein Wegfall, der nur ein Konto verlaesst, braucht genau dieses Konto:
+    # ohne es wuerde er still auf dem Betriebskonto gesucht.
+    if art == "wegfall" and body.get("nur_kontoprognose"):
+        if "konto" not in entry:
+            return JSONResponse({"error": "Konto fehlt: welches Konto verlässt "
+                                          "die Reihe?"}, status_code=400)
+        entry["nur_kontoprognose"] = True
+    return entry
+
+
 _SONDERZEILEN = {"verkauf": _verkaufszeile, "teilzeit": _teilzeitzeile}
 
 
 @router.post("/api/szenario-zeile")
 async def api_szenario_zeile(request: Request):
     """Add or remove one cost line inside a scenario."""
-    from finctl.forecast import szenarien as _sz
-
     body = await request.json()
     spec = _read_szenarien()
     # Die Klammer kommt als Kennung ODER als Name -- das Feld ist ein Textfeld
@@ -447,41 +492,10 @@ async def api_szenario_zeile(request: Request):
             target["zeilen"] = lines
             _write_szenarien(spec)
             return {"ok": True, "count": len(lines)}
-        if freq not in _sz.FREQUENCIES:
-            return JSONResponse({"error": f"unbekannte Frequenz {freq}"},
-                                status_code=400)
-        art = body.get("art") or "betrag"
-        if art not in _sz_kinds():
-            return JSONResponse({"error": f"unbekannte Art {art}"}, status_code=400)
-        # Ein Wegfall trägt keinen Betrag: der wird gemessen. Einen zu
-        # verlangen hiesse, genau die Behauptung einzuladen, die er vermeidet.
-        if art == "betrag" and body.get("amount_cents") in (None, ""):
-            return JSONResponse({"error": "Betrag fehlt"}, status_code=400)
-        if not (body.get("start") or "").strip():
-            return JSONResponse({"error": "Startdatum fehlt"}, status_code=400)
-        # A category is REQUIRED on every line. Without it a scenario is a
-        # lump sum with a name, and the moment it is switched on the forecast
-        # gains money movements that no report can place. It is also what lets
-        # a planned obligation and a scenario line be the same thing.
-        kategorie = (body.get("kategorie") or "").strip()
-        if not kategorie:
-            return JSONResponse({"error": "Kategorie fehlt"}, status_code=400)
-        entry = {"label": label, "art": art,
-                 "amount_cents": int(body["amount_cents"] or 0)
-                                 if art == "betrag" else 0,
-                 "frequenz": "monatlich" if art == "wegfall" else freq,
-                 "start": str(body["start"]).strip(),
-                 "kategorie": kategorie}
-        # Which account it is debited from. Optional, and the fallback is the
-        # operating account -- but saying it matters, because Konten warns per
-        # account and per day. A rate charged to Trade Republic that the model
-        # books against DKB shows no breach where a real one would happen.
-        if (body.get("konto") or "").strip():
-            entry["konto"] = str(body["konto"]).strip()
-        if (body.get("ende") or "").strip() and freq != "einmalig":
-            entry["ende"] = str(body["ende"]).strip()
-        if (body.get("konto") or "").strip():
-            entry["konto"] = str(body["konto"]).strip()
+        entry = _planzeile(body, label, freq)
+        if isinstance(entry, JSONResponse):
+            return entry
+        art = entry["art"]
         # ERSETZEN statt anhaengen, wenn ein Index mitkommt. Eine Annahme zu
         # korrigieren darf nicht heissen, die Zeile zu loeschen und neu
         # anzulegen -- dabei verliert sie ihre Stellung in der Klammer, und

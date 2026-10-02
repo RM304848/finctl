@@ -37,13 +37,6 @@ account_roles:
     floor_from_loan: "001"
     note: Fuehrt nur die Rate von 001 aus.
 enden: {}
-discontinued:
-  - category: familie/gemeinschaftskonto
-    account: alltag
-    from: {M-6}
-    reason: >
-      Nachforderungen fuers Gemeinschaftskonto vom Alltagskonto sind
-      eingestellt; der Dauerauftrag vom Girokonto laeuft weiter.
 cashflow_ohne_objekt:
   klammer: ferienhaus
   ziel_cents: 0
