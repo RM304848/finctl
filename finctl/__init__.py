@@ -5,4 +5,4 @@ liest sie von hier, die App zeigt sie an, und `werkzeuge/release.py`
 schreibt sie. Zwei Stellen liefen auseinander, sobald eine vergessen wird.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

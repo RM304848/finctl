@@ -6,6 +6,8 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+## 0.4.0 – 2026-10-02
+
 - **DKB-CSV** ist an einem echten Export geprüft und berichtigt: Ganze
   Beträge ohne Komma (`2.000`) wurden als 2,00 € gelesen, jetzt als
   2.000,00 €. Der Zeitraum kommt aus der Zeile „Zeitraum:“.
