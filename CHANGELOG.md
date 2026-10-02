@@ -6,6 +6,8 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+## 0.4.1 – 2026-10-02
+
 - **Prognose, tiefster Stand im Monat:** Eine Planzeile, die eine
   fortgeschriebene Position derselben Kategorie aufhebt (etwa „keine
   Zinsen“ gegen die Zinsen), steht jetzt am selben Tag wie diese Position.
