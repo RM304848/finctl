@@ -6,6 +6,21 @@ macht daraus beim Veröffentlichen die neue Version.
 
 ## Unveröffentlicht
 
+- **Prognose, tiefster Stand im Monat:** Eine Planzeile, die eine
+  fortgeschriebene Position derselben Kategorie aufhebt (etwa „keine
+  Zinsen“ gegen die Zinsen), steht jetzt am selben Tag wie diese Position.
+  Bisher lag sie am anderen Ende des Monats, und der tiefste Stand fiel
+  jeden Monat um ihren Betrag zu tief aus.
+- **Wegfall** nimmt in der Kontoprognose genau heraus, was die Prognose für
+  die Reihe bucht – auch bei Jahresposten und auf jedem Konto, auf dem sie
+  liegt –, statt eines Durchschnitts der letzten zwölf Monate.
+- Neu an der Wegfall-Zeile auf /planung: der Haken **„nur Kontoprognose“**.
+  Für Ausgaben, die nur das Konto wechseln: Die Reihe verlässt das Konto
+  der Zeile, die Jahresrechnung bleibt unberührt.
+- `discontinued` in `forecast.yaml` gibt es nicht mehr. Was durch eine
+  Entscheidung aufhört, steht als Wegfall auf /planung oder als Kündigung
+  auf /abos. Wer `discontinued` benutzt hat, trägt diese Posten dort ein.
+
 ## 0.4.0 – 2026-10-02
 
 - **DKB-CSV** ist an einem echten Export geprüft und berichtigt: Ganze
