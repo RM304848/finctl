@@ -281,10 +281,13 @@ const feld = n => document.getElementById('f-' + n);
 
 // Zwei Felder sind abgeleitet, nicht getippt: eine Untergrenze aus der
 // Kreditrate waechst mit ihr, und abraeumen kann nur das Betriebskonto -- fuer
-// jeden anderen Uebertrag gibt es keine Gegenbuchung.
+// jeden anderen Uebertrag gibt es keine Gegenbuchung. Gesperrt zeigt das
+// Abraeumziel deshalb "—": ein Wert darin rechnet nicht, Speichern loescht ihn.
 function sperren(){
   feld('floor').disabled = feld('loanfloor').checked;
-  feld('sweep').disabled = feld('role').value !== 'operating';
+  const sweep = feld('sweep');
+  sweep.disabled = feld('role').value !== 'operating';
+  sweep.value = sweep.disabled ? '' : (sweep.dataset.wert || '');
 }
 
 function oeffne(id){
@@ -307,6 +310,7 @@ function oeffne(id){
     .filter(o => o.id !== id)
     .map(o => `<option value="${o.id}"${r.sweep_to === o.id ? ' selected' : ''}>${o.id}</option>`)
     .join('');
+  feld('sweep').dataset.wert = r.sweep_to || '';
   feld('fill').checked = r.auffuellen !== false;
   feld('loanfloor').checked = !!r.floor_from_loan;
   feld('note').value = r.note || '';

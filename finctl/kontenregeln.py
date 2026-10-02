@@ -140,6 +140,12 @@ def setzen(konto: str, felder: dict) -> dict:
             eintrag.pop(feld, None)
         else:
             eintrag[feld] = wert.strip() if FELDER[feld] == "text" else wert
+    # Abraeumen kann nur das Betriebskonto: nur fuer dessen Uebertrag baut die
+    # Prognose die Gegenbuchung. Ein Ziel an einem anderen Konto rechnet
+    # nichts, stand aber auf /konten als Regel da -- und das gesperrte Feld
+    # liess es nicht mehr loeschen.
+    if eintrag.get("role", basis_rolle.get("role")) != "operating":
+        eintrag.pop("sweep_to", None)
     if eintrag:
         rollen[konto] = eintrag
     else:

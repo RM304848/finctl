@@ -224,6 +224,36 @@ def test_only_the_operating_account_sweeps(tmp_path):
     assert views[betrieb]["sweep_total_cents"] > 0, "das Betriebskonto raeumt ab"
     assert views[anderes]["sweep_total_cents"] == 0, (
         f"{anderes} raeumt ab, ohne dass das Geld irgendwo ankommt")
+    # Und /konten zeigt dort kein Ziel, als waere es eine Regel.
+    assert not views[anderes]["sweeps_to"]
+
+
+def test_saving_a_non_operating_account_drops_its_sweep_target():
+    """Das Abraeumziel ist auf /konten nur fuer das Betriebskonto offen.
+
+    Stand an einem anderen Konto noch eines in forecast_custom.yaml, war es
+    gesperrt und liess sich nicht mehr loeschen -- obwohl es nichts rechnete.
+    """
+    from pathlib import Path
+
+    from finctl import kontenregeln as kr
+
+    regeln = kr.wirksam().get("account_roles") or {}
+    konto = next((k for k, v in regeln.items()
+                  if (v or {}).get("role") not in (None, "operating")), None)
+    if konto is None:
+        pytest.skip("kein Konto ausser dem Betriebskonto")
+    ziel = next(k for k in regeln if k != konto)
+    pfad = kr.CONFIG_DIR / kr.EIGEN
+    vorher = pfad.read_bytes() if pfad.exists() else None
+    try:
+        kr.setzen(konto, {"sweep_to": ziel})
+        assert "sweep_to" not in (kr.overlay()["account_roles"].get(konto) or {})
+    finally:
+        if vorher is None:
+            Path(pfad).unlink(missing_ok=True)
+        else:
+            pfad.write_bytes(vorher)
 
 
 def test_the_ceiling_leaves_room_for_a_median_month():

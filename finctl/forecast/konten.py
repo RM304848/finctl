@@ -799,7 +799,9 @@ def household_accounts(conn, *, months: int = HORIZON_DEFAULT) -> list[dict]:
         # Auffuellung wurde abgeraeumt, ohne nicht.
         view = (run(a["id"], extra=extra, allow_sweep=False) if extra
                 else base[a["id"]])
-        out.append({**a, **view,
+        # Und deshalb auch kein Ziel in der Sicht: die Seite zeigte sonst
+        # „0 € → Ziel" als Regel, die nie etwas bewegt.
+        out.append({**a, **view, "sweeps_to": None,
                     "topped_up_cents": sum(o.amount_cents for o in topups.get(a["id"], []))})
     return out
 
