@@ -3673,6 +3673,34 @@ def test_rueckblick_has_a_flow_tab_that_balances():
     assert 'class="fluss-liste"' in html
 
 
+def test_the_flow_shows_one_month_of_the_year():
+    """Ein Monat statt des ganzen Jahres: die Knoten fuehren zu seinen Buchungen."""
+    import html as _h
+    import re
+    import sqlite3
+
+    db = sqlite3.connect("data/finance.db")
+    try:
+        monat = db.execute("SELECT substr(MAX(booking_date),1,7) FROM transactions").fetchone()[0]
+    finally:
+        db.close()
+    if not monat:
+        pytest.skip("no ledger present")
+
+    html = client.get("/rueckblick", params={"ansicht": "fluss", "year": monat[:4],
+                                             "monat": monat}).text
+    assert f"— {monat}</span></h1>" in html
+    assert re.search(rf'href="[^"]*monat={monat}[^"]*" class="on"', html)
+    svg = html[html.index('<svg class="fluss"'):html.index("</svg>")]
+    links = [_h.unescape(h) for h in re.findall(r'<a href="(/transactions\?[^"]+)"', svg)]
+    assert links and all(f"start={monat}-01" in h for h in links)
+
+    # Ein Monat aus einem anderen Jahr zeigt das gewaehlte Jahr ganz.
+    jahr = client.get("/rueckblick", params={"ansicht": "fluss", "year": monat[:4],
+                                             "monat": "1900-01"}).text
+    assert f"start={monat[:4]}-01-01" in _h.unescape(jahr)
+
+
 def test_the_forecast_flow_names_plans_and_loans_as_reasons():
     """Annahmen, Abschnitt Fluss: ein Jahr der Extrapolation nach GRUND.
 

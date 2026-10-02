@@ -4,7 +4,7 @@
 {% import "_reiter.html" as rt %}
 <h1>Rückblick <span class="muted zusatz">
   {%- if ansicht == 'vorjahr' %}{% if jahre %} — {{ jahre|first }} bis {{ neuestes }}{% endif %}
-  {%- elif ansicht == 'fluss' %} — {{ year }}{% if bis %} bis {{ bis }}{% endif %}
+  {%- elif ansicht == 'fluss' %} — {% if monat %}{{ monat }}{% else %}{{ year }}{% if bis %} bis {{ bis }}{% endif %}{% endif %}
   {%- else %} — {{ 'Saldo' if alle else '' }} {{ monthly|euro }} / Monat{% endif %}</span></h1>
 {{ rt.reiter(reiter, ansicht) }}
 {% from "_auswahl.html" import auswahl %}
@@ -76,6 +76,7 @@
 {% elif ansicht == 'fluss' %}
 {# Woher und wohin in einem Bild; gezeichnet in _fluss.html. #}
 {{ auswahl(request, 'year', 'Jahr', years, year) }}
+{{ auswahl(request, 'monat', 'Monat', [('', 'ganzes Jahr')] + monate, monat) }}
 {{ auswahl(request, 'konto', 'Konto', [('', 'alle')] + konten, '' if konto == 'all' else konto) }}
 {{ auswahl(request, 'basis', 'Basis', basis_optionen, 'alles' if basis == 'alles' else '') }}
 {% set f = fluss %}

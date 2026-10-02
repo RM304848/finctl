@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar as _calendar
 import contextlib
 import datetime as _dtm
 import sqlite3
@@ -38,12 +39,12 @@ RUECKBLICK = {"fluss": "Fluss", "alle": "Alle Kategorien", "fixkosten": "Fixkost
 
 @router.get("/rueckblick", response_class=HTMLResponse)
 def rueckblick(request: Request, ansicht: str = "fluss", year: str = "",
-               basis: str = "laufend", konto: str = "all"):
+               basis: str = "laufend", konto: str = "all", monat: str = ""):
     ansicht = ansicht if ansicht in RUECKBLICK else "fluss"
     if ansicht == "vorjahr":
         daten = _vergleich(basis)
     elif ansicht == "fluss":
-        daten = _fluss(year, konto, basis)
+        daten = _fluss(year, konto, basis, monat)
     else:
         daten = _kosten(year or "all", ansicht == "alle", konto)
     reiter = [{"id": k, "label": name, "href": adresse(request, ansicht=k)}
@@ -52,8 +53,11 @@ def rueckblick(request: Request, ansicht: str = "fluss", year: str = "",
         **daten, "ansicht": ansicht, "reiter": reiter})
 
 
-def _fluss(year: str, konto: str, basis: str) -> dict:
+def _fluss(year: str, konto: str, basis: str, monat: str = "") -> dict:
     """Woher das Geld eines Jahres kam und wohin es ging, als Flussdiagramm.
+
+    Oder eines Monats daraus: `monat` als `2026-09`. Ein Monat, der nicht im
+    gewaehlten Jahr liegt -- nach einem Wechsel des Jahres --, zeigt das Jahr.
 
     Netto je Subkategorie wie ueberall im Rueckblick: eine Erstattung mindert
     ihre Position. Was netto hereinkommt, ist links eine Quelle (je
@@ -80,7 +84,12 @@ def _fluss(year: str, konto: str, basis: str) -> dict:
         year = year if year in years else (years[0] if years else str(_d.today().year))
         konten = [r[0] for r in c.execute(
             "SELECT DISTINCT account_id FROM transactions ORDER BY 1")]
-        umfeld, args = "", [year]
+        monate = [r[0] for r in c.execute(
+            "SELECT DISTINCT substr(booking_date,1,7) FROM transactions "
+            "WHERE substr(booking_date,1,4) = ? ORDER BY 1", (year,))]
+        monat = monat if monat in monate else ""
+        spanne = monat or year
+        umfeld, args = "", [len(spanne), spanne]
         if konto and konto != "all":
             umfeld, args = " AND t.account_id = ?", [*args, konto]
         zeilen = [dict(r) for r in c.execute(f"""
@@ -94,7 +103,7 @@ def _fluss(year: str, konto: str, basis: str) -> dict:
             LEFT JOIN   mgmt_categories cat ON cat.id = s.mgmt_category_id
             LEFT JOIN   mgmt_categories p   ON p.id = cat.parent_id
             WHERE       COALESCE(cat.kind,'') <> 'transfer'
-              AND       substr(t.booking_date,1,4) = ?{umfeld}
+              AND       substr(t.booking_date,1,?) = ?{umfeld}
             GROUP BY    COALESCE(p.id, cat.id, '__none__'), COALESCE(cat.id, '__none__')
             """, args)]
         bis = c.execute("SELECT MAX(booking_date) FROM transactions "
@@ -102,7 +111,11 @@ def _fluss(year: str, konto: str, basis: str) -> dict:
     finally:
         c.close()
 
-    filter_ = [("start", f"{year}-01-01"), ("end", f"{year}-12-31")]
+    if monat:
+        letzter = _calendar.monthrange(int(year), int(monat[5:7]))[1]
+        filter_ = [("start", f"{monat}-01"), ("end", f"{monat}-{letzter:02d}")]
+    else:
+        filter_ = [("start", f"{year}-01-01"), ("end", f"{year}-12-31")]
     if konto and konto != "all":
         filter_.append(("account", konto))
 
@@ -127,7 +140,8 @@ def _fluss(year: str, konto: str, basis: str) -> dict:
                 rest_raus="auf den Konten geblieben" if konten_rest else "Überschuss",
                 rest_rein="von den Konten genommen" if konten_rest else "Fehlbetrag",
                 rest_href="/monatsabschluss#konten" if konten_rest else ""),
-            "year": year, "years": years, "konto": konto or "all", "konten": konten,
+            "year": year, "years": years, "monat": monat, "monate": monate,
+            "konto": konto or "all", "konten": konten,
             "basis": basis, "bis": bis[:7] if bis[:4] == str(_d.today().year) else ""}
 
 
