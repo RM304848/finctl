@@ -281,6 +281,7 @@ def _planposten(conn, account: str, fcfg: dict, as_of: str, months: int) -> list
         out.append(fc.OneOff(
             label=row["label"], account_id=account, month=row["month"],
             amount_cents=betrag, reduces_cost=row.get("reduces_cost", False),
+            category=row["category_id"],
             herkunft=_herkunft_planzeile({**row, "amount_cents": betrag,
                                           "gemessen": gemessen[schluessel]},
                                          account)))

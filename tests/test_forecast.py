@@ -825,6 +825,56 @@ def test_an_ordinary_receipt_still_arrives_after_the_costs():
     assert p.rows[0].closing_cents == 100000
 
 
+def test_a_correction_sits_next_to_what_it_corrects():
+    """Eine Planzeile, die eine fortgeschriebene Position aufhebt, darf den
+    Tiefpunkt nicht bewegen.
+
+    Nach Vorzeichen einsortiert stand "keine Zinsen" am 1. und die Zinsen am
+    28., "keine Steuer" am 28. und die Steuer am 1. Am Monatsende war alles
+    null, aber der Tiefpunkt lag um beide Korrekturen zu tief -- jeden Monat.
+    """
+    from datetime import date
+
+    from finctl.forecast.engine import OneOff, RecurringItem, project
+
+    monat = date(2026, 11, 1)
+    zinsen = RecurringItem(label="zinsen", account_id="a", amount_cents=10000,
+                           category="einkommen/zinsen")
+    steuer = RecurringItem(label="steuer", account_id="a", amount_cents=-1000,
+                           category="steuern/kapitalertragsteuer")
+    keine_zinsen = OneOff(label="keine Zinsen", account_id="a", month=monat,
+                          amount_cents=-10000, category="einkommen/zinsen")
+    keine_steuer = OneOff(label="keine Steuer", account_id="a", month=monat,
+                          amount_cents=1000, category="steuern/kapitalertragsteuer")
+
+    p = project(account_id="a", opening_cents=100000, start=monat, months=1,
+                recurring=[zinsen, steuer], one_offs=[keine_zinsen, keine_steuer])
+
+    assert p.rows[0].closing_cents == 100000
+    assert p.rows[0].trough_cents == 100000
+
+
+def test_more_of_the_same_category_keeps_the_pessimistic_order():
+    """Gleiches Vorzeichen ist keine Korrektur: eine zusaetzliche Gutschrift in
+    einer Einnahmekategorie kommt weiter spaet, nach den Kosten."""
+    from datetime import date
+
+    from finctl.forecast.engine import OneOff, RecurringItem, project
+
+    monat = date(2026, 11, 1)
+    miete = RecurringItem(label="miete", account_id="a", amount_cents=-50000,
+                          category="wohnen/miete")
+    zinsen = RecurringItem(label="zinsen", account_id="a", amount_cents=1000,
+                           category="einkommen/zinsen")
+    mehr = OneOff(label="Bonuszins", account_id="a", month=monat,
+                  amount_cents=50000, category="einkommen/zinsen")
+
+    p = project(account_id="a", opening_cents=100000, start=monat, months=1,
+                recurring=[miete, zinsen], one_offs=[mehr])
+
+    assert p.rows[0].trough_cents == 50000
+
+
 def test_a_wegfall_still_saves_money_in_year_nineteen():
     """Die Jahresrechnung loeste Wegfall-Zeilen nicht auf, die Monatsrechnung schon.
 

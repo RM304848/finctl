@@ -181,6 +181,10 @@ class OneOff:
     day: int | None = None          # None -> sequenced pessimistically
     #: Positiv, aber eine Kostenminderung -- siehe Klassendoku.
     reduces_cost: bool = False
+    #: Die Kategorie der Planzeile. Laeuft ein undatierter Posten gegen eine
+    #: fortgeschriebene Position derselben Kategorie, steht er neben ihr --
+    #: siehe `_korrektur_tage`.
+    category: str | None = None
     #: Woher der Betrag kommt, wie bei RecurringItem.
     herkunft: dict | None = None
 
@@ -745,6 +749,50 @@ def _herkunft_jahresposten(kategorie: str, bloecke, betrag: int, takt: int,
     return {"quelle": "gemessen", "herleitung": text, "verweis": kategorie}
 
 
+def _korrektur_tage(recurring: list[RecurringItem]) -> dict[tuple[str, bool], int]:
+    """Wo eine undatierte Korrektur im Monat steht: neben der Position, die sie korrigiert.
+
+    Schluessel ist (Kategorie, Korrektur positiv?). Eine Planzeile mit
+    entgegengesetztem Vorzeichen in derselben Kategorie nimmt einen Teil der
+    fortgeschriebenen Position zurueck. Nach Vorzeichen einsortiert stand sie
+    am falschen Ende des Monats: "keine Zinsen" (negativ) am 1., die Zinsen
+    selbst am 28. Am Monatsende hoben sich beide auf, aber der Tiefpunkt sah
+    die Korrektur ohne das, was sie aufhebt, und lag Monat fuer Monat um
+    ihren Betrag zu tief.
+
+    Gleiches Vorzeichen ist keine Korrektur, sondern mehr vom Selben, und
+    bleibt bei der pessimistischen Reihenfolge.
+    """
+    tage: dict[tuple[str, bool], int] = {}
+    for item in recurring:
+        if item.category and item.amount_cents:
+            kosten = item.amount_cents < 0
+            tage[(item.category, kosten)] = (UNDATED_COST_DAY if kosten
+                                             else UNDATED_INCOME_DAY)
+    return tage
+
+
+def _platz(event: OneOff, korrektur_tage: dict[tuple[str, bool], int]) -> tuple[int, bool]:
+    """Tag im Monat und ob der Posten vor den Kosten dieses Tages steht."""
+    positiv = event.amount_cents > 0
+    if event.day is not None:
+        # EIN DATIERTER EINGANG STEHT VOR DEN KOSTEN SEINES TAGES.
+        # Die Auffuellung am 1. existiert, damit die Kosten vom 1.
+        # gedeckt sind. Nach ihnen einsortiert, bildete sich der
+        # Tiefpunkt vor dem Geld: Trade Republic fiel mit Auffuellung
+        # auf -735 und die Warnung blieb stehen, obwohl die Regel sie
+        # beheben sollte. Undatierte Eingaenge bleiben am 28.
+        return event.day, positiv
+    gegen = korrektur_tage.get((getattr(event, "category", None), positiv))
+    if gegen is not None:
+        # Eine Korrektur steht neben dem, was sie korrigiert. Die Minderung
+        # einer Ausgabe kommt vor ihr, die Minderung einer Einnahme nach ihr
+        # -- die Einnahme wurde frueher eingereiht.
+        return gegen, positiv
+    kosten = event.amount_cents < 0 or getattr(event, "reduces_cost", False)
+    return (UNDATED_COST_DAY if kosten else UNDATED_INCOME_DAY), False
+
+
 def project(
     *,
     account_id: str,
@@ -771,6 +819,7 @@ def project(
     balance = opening_cents
     events = one_offs or []
     overrides = income_overrides or {}
+    korrektur_tage = _korrektur_tage(recurring)
 
     for offset in range(months):
         month = add_months(start.replace(day=1), offset)
@@ -821,20 +870,10 @@ def project(
             if event.account_id != account_id:
                 continue
             if event.month.year == month.year and event.month.month == month.month:
-                day = event.day
-                if day is None:
-                    day = (UNDATED_COST_DAY
-                           if event.amount_cents < 0 or getattr(event, "reduces_cost", False)
-                           else UNDATED_INCOME_DAY)
-                # EIN DATIERTER EINGANG STEHT VOR DEN KOSTEN SEINES TAGES.
-                # Die Auffuellung am 1. existiert, damit die Kosten vom 1.
-                # gedeckt sind. Nach ihnen einsortiert, bildete sich der
-                # Tiefpunkt vor dem Geld: Trade Republic fiel mit Auffuellung
-                # auf -735 und die Warnung blieb stehen, obwohl die Regel sie
-                # beheben sollte. Undatierte Eingaenge bleiben am 28.
+                day, zuerst = _platz(event, korrektur_tage)
                 add(day, event.amount_cents, event.label,
                     cost_side=getattr(event, "reduces_cost", False),
-                    zuerst=event.day is not None and event.amount_cents > 0)
+                    zuerst=zuerst)
 
         # The trough is the running minimum through the month in date order --
         # not simply "balance after every cost". Ordering is what distinguishes

@@ -52,7 +52,7 @@ ZU_VERZWEIGT = {
     "finctl/abos.py::abrechnung": 11,
     "finctl/cli.py::init": 17,
     "finctl/forecast/abgleich.py::planned": 11,
-    "finctl/forecast/engine.py::project": 16,
+    "finctl/forecast/engine.py::project": 15,
     "finctl/forecast/jahre.py::project": 13,
     "finctl/forecast/konten.py::_anzeigenamen": 11,
     "finctl/forecast/konten.py::account_forecast": 12,
