@@ -18,6 +18,34 @@ macht daraus beim Veröffentlichen die neue Version.
 - Auf dem Mac steht Finance OS jetzt **in der Menüleiste** (ein Euro im
   Kreis): „Finance OS öffnen“ holt die Seite zurück, wenn der Tab zu ist,
   „Beenden“ beendet die App.
+- **Rückblick → Fluss** zeigt auf Wunsch einen einzelnen Monat statt des
+  ganzen Jahres; die Knoten führen zu den Buchungen dieses Monats.
+- **Rückblick → Vorjahr** zeigt jedes Jahr nebeneinander, mit der
+  Veränderung gegen das Jahr davor. Verglichen werden nur Monate, die in
+  beiden Jahren abgeschlossen sind: kein Teiljahr gegen ein volles, und der
+  laufende Monat nie.
+- **Transaktionen** und **Buchungen zuordnen** haben eine Zeile „Zeitraum“
+  (dieser Monat, letzter Monat, 90 Tage, dieses Jahr, letztes Jahr). Jede
+  Wahl bei Zeitraum, Konto und Quelle sagt vorher, wie viele Buchungen übrig
+  blieben; was nichts übrig ließe, ist blass.
+- **Monatsabschluss**: Einnahmen, Ausgaben und Saldo führen zum
+  Vorjahresvergleich. Neu ist „Bald fällig“ aus Verträgen und Krediten –
+  größere Zahlungen 30 Tage vorher, das Ende einer Zinsbindung ein Jahr
+  vorher –, als Kalenderdatei (.ics) je Frist oder alle zusammen.
+- Fehlt einem Konto der Vormonat, nennt der Monatsabschluss trotzdem, bis
+  wann der letzte Auszug reicht.
+- Die Diagramme auf **Konten** zeichnet jetzt der Server: mit Legende,
+  Tooltip (auch per Tastatur) und einer Tabelle mit denselben Werten.
+- **CSV-Exporte** reichen so weit, wie die Bank im Kopf der Datei sagt,
+  nicht nur bis zur letzten Buchung – ein ganzer Monat gilt damit als
+  vollständig. Passt der genannte Zeitraum nicht zu den Buchungen, gelten
+  die Buchungen, mit einer Meldung.
+- **Sparda**: Der CSV-Export wird über das Atruvia-Profil eingelesen.
+- **Scalable**: Auszüge mit einer Buchung am Monatsersten wurden abgelehnt,
+  weil der Anfangsstand sie schon enthält. Jetzt passen sie.
+- Kürzere Seiten: Monatsabschluss, Rückblick und Transaktionen tragen
+  keine erklärenden Unterzeilen mehr; wann ein Stand aktuell ist, steht
+  beim Haken.
 
 ## 0.3.0 – 2026-09-29
 
